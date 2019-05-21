@@ -50,6 +50,8 @@ def generate_sites_from_shapefile(paths):
     zones = zones[['Site','Area','Population','Longitude','Latitude']]
     zones.sort_values(['Site'], inplace=True)
     zones.reset_index(inplace=True, drop=True)
+	
+    zones.to_csv(paths["model_regions"]+'Sites.csv', index=False, sep=';', decimal=',')
     
 	### Eventually move this part to special modules that create urbs / evrys models!
     # Preparing output for evrys
@@ -70,7 +72,6 @@ def generate_sites_from_shapefile(paths):
     zones_urbs = zones[['Site', 'Area']].rename(columns={'Site':'Name', 'Area':'area'})
     zones_urbs['area'] = zones_urbs['area']*1000000 # in m²
     
-    zones.to_csv(paths["model_regions"]+'Sites.csv', index=False, sep=';', decimal=',')
     zones_evrys.to_csv(paths["evrys"]+'Sites_evrys.csv', index=False, sep=';', decimal=',')
     zones_urbs.to_csv(paths["urbs"]+'Sites_urbs.csv', index=False, sep=';', decimal=',')
 	
@@ -326,20 +327,29 @@ def generate_load_timeseries(paths, param):
     for i in stat_sub.index:
         stat_sub.loc[i, ['Region', 'Country']] = i.split('_')
 
-# Calculate the hourly load for each subregion
-load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist()+ ['Region', 'Country'])
-load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
-for sr in load_subregions.index:
-    c = load_subregions.loc[sr, 'Country']
-    # For residential:
-    load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + stat_sub.loc[sr, 'RES'] * load_landuse.loc[c,'RES']
-    for lu in landuse_types:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + stat_sub.loc[sr, lu] * load_landuse.loc[c, lu]        
-
+    # Calculate the hourly load for each subregion
+    load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist()+ ['Region', 'Country'])
+    load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
+    for sr in load_subregions.index:
+        c = load_subregions.loc[sr, 'Country']
+        # For residential:
+        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + stat_sub.loc[sr, 'RES'] * load_landuse.loc[c,'RES']
+        for lu in landuse_types:
+            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + stat_sub.loc[sr, lu] * load_landuse.loc[c, lu]        
+    ### TO BE CONTINUED
+	
 
 if __name__ == '__main__':
     paths, param = initialization()
     #generate_sites_from_shapefile(paths)
     generate_intermittent_supply_timeseries(paths, param)
     generate_load_timeseries(paths, param)
-    
+    #generate_commodities(paths, param) # corresponds to 04
+    #distribute_renewable_capacities(paths, param) # corresponds to 05a
+    #clean_processes_and_storage_data(paths, param) # corresponds to 05b I think
+    #generate_processes(paths, param) # corresponds to 05c
+    #generate_storage(paths, param) # corresponds to 05d
+    #clean_grid_data(paths, param) # corresponds to 06a
+    #generate_aggregated_grid(paths, param) # corresponds to 06b
+    #generate_urbs_model(paths, param)
+    #generate_evrys_model(paths, param)
