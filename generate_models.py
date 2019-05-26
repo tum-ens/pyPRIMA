@@ -1,22 +1,28 @@
 import os
+import numpy as np
+import pandas as pd
+import shapely
+# import hdf5storage
+import fiona
+import geopandas as gpd
+from osgeo import gdal, ogr
 # from data_functions import *
 # from model_functions import *
-import numpy as np
+
 # from scipy.ndimage import convolve
 # import datetime
-import geopandas as gpd
-import pandas as pd
+
+
 # from rasterio import windows
 # from shapely.geometry import mapping, Point
-# import fiona
-import hdf5storage
+#
 # from multiprocessing import Pool
 # from itertools import product
 # import h5netcdf
 # import cProfile
 # import pstats
-# import shapely
-# from osgeo import gdal, ogr
+#
+
 # import osr
 from helping_functions import *
 
@@ -42,7 +48,7 @@ def generate_sites_from_shapefile(paths):
     # Remove duplicates
     df = regions.set_index('NAME_SHORT')
     df = df.loc[((df.index.duplicated(keep=False)) & (df['Population'] > 0)) | (
-                (~df.index.duplicated(keep=False)) & (df['Population'] == 0))]
+            (~df.index.duplicated(keep=False)) & (df['Population'] == 0))]
     df.reset_index(inplace=True)
     regions = df.copy()
 
@@ -55,7 +61,7 @@ def generate_sites_from_shapefile(paths):
 
     zones.to_csv(paths["model_regions"] + 'Sites.csv', index=False, sep=';', decimal=',')
 
-    ### Eventually move this part to special modules that create urbs / evrys models!
+    # Eventually move this part to special modules that create urbs / evrys models!
     # Preparing output for evrys
     zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
     zones_evrys['slacknode'] = 0
@@ -82,13 +88,13 @@ def generate_sites_from_shapefile(paths):
 
 def generate_intermittent_supply_timeseries(paths, param):
     '''
-	description
-	'''
+    description
+    '''
 
 
 def generate_load_timeseries(paths, param):
     '''
-	The goal of this script is to extract and preprocess data to be used as load timeseries for every site modeled in evrys and urbs. The data is extracted from excel spreadsheets and raster maps, and output into two .csv files. The data needs to be disaggregated sectorially and spatially before being aggregated again into regions, formatted, and exported. 
+    The goal of this script is to extract and preprocess data to be used as load timeseries for every site modeled in evrys and urbs. The data is extracted from excel spreadsheets and raster maps, and output into two .csv files. The data needs to be disaggregated sectorially and spatially before being aggregated again into regions, formatted, and exported.
 # 
 # 
 # ## Requirements:
@@ -201,8 +207,10 @@ def generate_load_timeseries(paths, param):
 #     - name: demand_urbs2015.csv
 #     - information: t, XX.Elec
     '''
+
     # Sector land use allocation
-    # The land use coefficients found in the assumptions table are normalized over each sector, and the results are stored in the table 'sector_lu'
+    # The land use coefficients found in the assumptions table are normalized over each sector, and the results are
+    #  stored in the table 'sector_lu'
     sector_lu = pd.read_excel(paths["assumptions"], sheet_name='Landuse', index_col=0, usecols=[0, 2, 3, 4])
     landuse_types = [str(i) for i in sector_lu.index]
     sector_lu = sector_lu.transpose().div(np.repeat(sector_lu.sum(axis=0)[:, None], len(sector_lu), axis=1))
@@ -223,6 +231,7 @@ def generate_load_timeseries(paths, param):
         df_load_countries = clean_load_data(paths, param, countries)
 
         # ADD IF statement to jump to urbs/evrys, if countries = desired resolution
+        # I didn't get it *
 
         # Get sectoral profiles
         profiles = get_sectoral_profiles(paths, param)
@@ -243,13 +252,18 @@ def generate_load_timeseries(paths, param):
         # Prepare an empty table of the hourly load for the five sectors in each countries.
         df_sectors = pd.DataFrame(0, index=df_load_countries.index, columns=pd.MultiIndex.from_product(
             [df_load_countries.columns.tolist(), sec + ['RES']], names=['Country', 'Sector']))
-        # Copy the load profiles for each sector in the columns of each coutry, and multiply each sector by the share defined in 'sec_share'. 
+
+        # Copy the load profiles for each sector in the columns of each coutry, and multiply each sector by the share
+        # defined in 'sec_share'.
         # Note that at the moment the values are the same for all countries
+
         for c in df_load_countries.columns:
             for s in sec + ['RES']:
                 df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[c, s]
 
-        # Normalize the loads profiles over all sectors by the hour ei. The Sum of the loads of all sectors = 1 for each hour
+        # Normalize the loads profiles over all sectors by the hour ei. The Sum of the loads of all sectors = 1
+        # for each hour
+
         df_scaling = df_sectors.groupby(level=0, axis=1).sum()
         for c in df_load_countries.columns:
             for s in sec + ['RES']:
@@ -274,10 +288,10 @@ def generate_load_timeseries(paths, param):
         stat = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["LU"], 'landuse'))
         stat.rename(columns={'NAME_SHORT': 'Country'}, inplace=True)
         stat.set_index('Country', inplace=True)
-        ### TODO: move list of landuse types to config?
+        # TODO: move list of landuse types to config? # Done ?
         stat = stat.loc[:,
-               ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']].fillna(0)
-        stat = stat[['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']]
+               param["load"]["LU_type"]].fillna(0)
+        stat = stat[param["load"]["LU_type"]]
 
         # Join the two dataframes
         stat = stat.join(stat_pop[['RES']])
@@ -295,8 +309,8 @@ def generate_load_timeseries(paths, param):
             load_landuse.loc[c, 'RES'] = load_landuse.loc[c, 'RES'] + df_sectors[(c, 'RES')] / stat.loc[c, 'RES']
             for lu in landuse_types:  # Land use types
                 for s in sec:  # other sectors
-                    load_landuse.loc[c, lu] = load_landuse.loc[c, lu] + sector_lu.loc[s, int(lu)] * df_sectors[(c, s)] / \
-                                              stat.loc[c, s]
+                    load_landuse.loc[c, lu] = load_landuse.loc[c, lu] + sector_lu.loc[s, int(lu)] * df_sectors[(c, s)]\
+                                              / stat.loc[c, s]
 
         # Save the data into HDF5 files for faster execution
         df_sectors.to_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', index=True, header=True)
@@ -306,15 +320,19 @@ def generate_load_timeseries(paths, param):
         load_landuse.to_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index=True)
         print("files saved: " + paths["load"] + 'load_landuse.csv')
 
-    # Read CSV files		
+    # A bit wasteful, maybe implement .CSV creation in helping_function !!!!
+    # Read CSV files
     df_sectors = pd.read_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',')
     load_sector = pd.read_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',')
     load_landuse = pd.read_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',')
 
-    # Split regions into subregions (a region can overlap with many countries, but a subregion belongs to only one country)
+    # Split regions into subregions
+    # (a region can overlap with many countries, but a subregion belongs to only one country)
+
     intersection_regions_countries(paths)
 
     # Count number of pixels for each subregion
+
     # Population
     stat_pop_sub = pd.DataFrame.from_dict(
         zonal_stats(paths["model_regions"] + 'intersection.shp', paths["POP"], 'population'))
@@ -326,7 +344,7 @@ def generate_load_timeseries(paths, param):
     stat_sub.rename(columns={'NAME_SHORT': 'Subregion'}, inplace=True)
     stat_sub.set_index('Subregion', inplace=True)
     stat_sub.fillna(0, inplace=True)
-    stat_sub = stat_sub[['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']]
+    stat_sub = stat_sub[param["load"]["LU_type"]]
 
     # Join the two dataframes
     stat_sub = stat_sub.join(stat_pop_sub[['RES']])
@@ -348,12 +366,21 @@ def generate_load_timeseries(paths, param):
         for lu in landuse_types:
             load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + \
                                                                  stat_sub.loc[sr, lu] * load_landuse.loc[c, lu]
+    load_regions = load_subregions.groupby(['Region', 'Country']).sum()
+    load_regions.reset_index(inplace=True)
+    load_regions.reset_index(['Region'], inplace=True)
+
+    for s in sec + ['RES']:
+        zonal_weighting(paths["Countries"], paths["LU"], load_sector, stat, s)
+
+
+
             ### TO BE CONTINUED
 
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)
+    generate_sites_from_shapefile(paths)
     generate_intermittent_supply_timeseries(paths, param)
     generate_load_timeseries(paths, param)
     # generate_commodities(paths, param) # corresponds to 04

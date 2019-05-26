@@ -1,6 +1,7 @@
 # import datetime
 # import numpy as np
 import os
+from sys import platform
 
 ###########################
 #### User preferences #####
@@ -36,7 +37,8 @@ load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/F
         "degree_of_eff": 1,
         # Distribution factors for load from country to regional level
         "distribution_type": 'sectors_landuse',
-        "sectors": ['COM', 'IND', 'AGR']
+        "sectors": ['COM', 'IND', 'AGR'],
+        "LU_type": ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']
         }
 
 param["load"] = load
@@ -46,7 +48,17 @@ param["load"] = load
 ###########################
 
 fs = os.path.sep
-root = os.path.dirname(os.path.abspath(__file__)) + fs + ".." + fs
+git_folder = os.path.dirname(os.path.abspath(__file__))
+
+if platform.startswith('win'):
+    # Windows Root Folder
+    from pathlib import Path
+    root = str(Path(git_folder).parent) + fs
+elif platform.startswith('linux'):
+    # Linux Root Folder
+    root = git_folder + fs + ".." + fs
+
+
 region = param["region"]
 region = param["region"]
 model_regions = param["model_regions"]
@@ -62,6 +74,7 @@ paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
 PathTemp = root + "02 Intermediate files" + fs + "Files " + region + fs + "Maps" + fs + region
 paths["LU"] = PathTemp + "_Landuse.tif"  # Land use types
 paths["POP"] = PathTemp + "_Population.tif"  # Population
+
 
 # Assumptions
 paths["assumptions"] = root + "00 Assumptions" + fs + "assumptions_const.xlsx"

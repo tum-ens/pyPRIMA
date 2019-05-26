@@ -1,7 +1,10 @@
 import pandas as pd
+import geopandas as gpd
 from osgeo import gdal, ogr
 from osgeo.gdalconst import *
 import numpy as np
+import shapely
+from shapely import geometry
 import sys
 import datetime
 
@@ -150,9 +153,10 @@ def get_sectoral_profiles(paths, param):
 
 def intersection_regions_countries(paths):
     '''
-	description
-	'''
-    # load shapefiles, and create spatial indexs for both files
+    description
+    '''
+
+    # load shapefiles, and create spatial indexes for both files
     border_region = gpd.GeoDataFrame.from_file(paths["SHP"])
     border_region['geometry'] = border_region.buffer(0)
     border_country = gpd.GeoDataFrame.from_file(paths["countries"])
@@ -168,8 +172,8 @@ def intersection_regions_countries(paths):
     i = 0
     list_length = len(data)
     while i < list_length:
-        if (data[i]['geometry'].geom_type == 'Polygon'):
-            data[i]['geometry'] = shapely.geometry.multipolygon.MultiPolygon([data[i]['geometry']])
+        if data[i]['geometry'].geom_type == 'Polygon':
+            data[i]['geometry'] = geometry.multipolygon.MultiPolygon([data[i]['geometry']])
         if not (data[i]['geometry'].geom_type == 'Polygon' or data[i]['geometry'].geom_type == 'MultiPolygon'):
             del data[i]
             list_length = list_length - 1
@@ -326,3 +330,51 @@ def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global
     vds = None
     rds = None
     return stats
+
+
+def zonal_weighting(shp_path, raster_path, df_load, df_stat, s):
+    shp = ogr.Open(shp_path, 1)
+    raster = gdal.Open(raster_path)
+    lyr = shp.GetLayer()
+
+    # Create memory target raster
+    target_ds = gdal.GetDriverByName('GTiff').Create("something",
+                                                     raster.RasterXsize,
+                                                     raster.RasterYsize,
+                                                     1, gdal.GDT_Float32)
+    target_ds.SetGeoTransform(raster.GeoTransform())
+    target_ds.setProjection(raster.GetProjection())
+
+    # NoData Value
+    mem_band = target_ds.GetRasterBand(1)
+    mem_band.Fill(0)
+    mem_band.SetNoDataValue(0)
+
+    # Add a new field
+    if not field_exists('Weight_'+ s, shp_path):
+        new_field = ogr.FieldDefn('Weight_' + s, ogr.OFTReal)
+        lyr.CreateField(new_field)
+
+    for feat in lyr:
+        country = feat.GetField('NAME_SHORT')[:2]
+        if s == 'RES':
+            feat.SetField('Weight_' + s, df_load[country, s] / df_stat.loc[country, 'RES'])
+        else:
+            feat.SetField('weight_' + s, df_load[country, s] / df_stat.loc[country, s])
+        lyr.SetFeature(feat)
+        feat = None
+
+    # Rasterize zone polygon to raster
+    gdal.RasterizeLayer(target_ds, [1], lyr, None, None, [0], ['ALL_TOUCHED=FALSE', 'ATTRIBUTE=Weight_' + s[:3]])
+    return
+
+
+def field_exists(field_name, shp_path):
+    shp = ogr.Open(shp_path, 0)
+    lyr = shp.GetLayer()
+    lyr_dfn = lyr.GetLayerDefn()
+
+    exists = False
+    for i in range(lyr_dfn.GetFieldCount()):
+        exists = exists or (field_name == lyr_dfn.GetFieldDefn(i).GetName())
+    return exists
