@@ -1,21 +1,37 @@
+from osgeo import gdal, ogr
+from osgeo.gdalconst import GA_ReadOnly
 import pandas as pd
 import geopandas as gpd
-from osgeo import gdal, ogr
-from osgeo.gdalconst import *
 import numpy as np
 import shapely
 from shapely import geometry
 import sys
 import datetime
+import inspect
+import os
 
 gdal.PushErrorHandler('CPLQuietErrorHandler')
 
 
 def clean_load_data(paths, param, countries):
-    # Get dataframe with timeseries
-    df_raw = pd.read_excel(paths["load_ts"], header=0, skiprows=[0, 1, 2], sep=',', decimal='.')
-    # Filter by year
-    df_year = df_raw.loc[df_raw['Year'] == param["year"]]
+    """
+
+    :param paths:
+    :param param:
+    :param countries:
+    :return:
+    """
+    timecheck('Start')
+    # avoid reading the excel file each time(to be removed)
+    if not os.path.isfile('savetimeseries_temp.hdf'):
+        # Get dataframe with timeseries
+        print('reading excel file (might take a bit of time)\n')
+        df_raw = pd.read_excel(paths["load_ts"], header=0, skiprows=[0, 1, 2], sep=',', decimal='.')
+        print('done')
+        # Filter by year
+        df_year = df_raw.loc[df_raw['Year'] == param["year"]]
+    else:
+        df_year = pd.read_hdf('savetimeseries_temp.hdf', 'df')
 
     # Scale based on coverage ratio
     df_scaled = df_year.copy()
@@ -43,7 +59,9 @@ def clean_load_data(paths, param, countries):
     for i in missing_countries.keys():
         df_completed.loc[:, i] = df_completed.loc[:, replacement] / df_completed[replacement].sum() * missing_countries[
             i]
+
     # Select only countries needed
+
     df_filtered = df_completed[countries['Country'].unique()]
 
     # Fill missing data by values from the day before, adjusted based on the trend of the previous five hours
@@ -52,6 +70,7 @@ def clean_load_data(paths, param, countries):
         df_filled.iloc[i, j] = df_filled.iloc[i - 5:i, j].sum() / df_filled.iloc[i - 5 - 24:i - 24, j].sum() * \
                                df_filled.iloc[i - 24, j].sum()
 
+    timecheck('End')
     return df_filled
 
 
@@ -59,6 +78,7 @@ def get_sectoral_profiles(paths, param):
     '''
     Read and store the load profile for each sector in the table 'profiles'.
     '''
+    timecheck('Start')
     dict_daytype = param["load"]["dict_daytype"]
     dict_season = param["load"]["dict_season"]
 
@@ -97,7 +117,10 @@ def get_sectoral_profiles(paths, param):
         commercial_profile_raw = pd.read_csv(paths["profiles"]["COM"], sep='[;]', engine='python', decimal=',',
                                              skiprows=[0, 99], header=[0, 1],
                                              skipinitialspace=True)
-        commercial_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+        # commercial_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+        #                                        'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
+        #                               inplace=True)
+        commercial_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
                                                'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
                                       inplace=True)
         # Aggregate from 15 min --> hourly load
@@ -118,7 +141,10 @@ def get_sectoral_profiles(paths, param):
         agricultural_profile_raw = pd.read_csv(paths["profiles"]["AGR"], sep='[;]', engine='python', decimal=',',
                                                skiprows=[0, 99], header=[0, 1],
                                                skipinitialspace=True)
-        agricultural_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+        # agricultural_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+        #                                         'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
+        #                                 inplace=True)
+        agricultural_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
                                                  'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
                                         inplace=True)
         # Aggregate from 15 min --> hourly load
@@ -148,6 +174,7 @@ def get_sectoral_profiles(paths, param):
         # Normalize the load over the year, ei. integral over the year of all loads for each individual sector is 1
         profiles['STR'] = streets_profile / streets_profile.sum()
 
+    timecheck('End')
     return profiles
 
 
@@ -159,7 +186,7 @@ def intersection_regions_countries(paths):
     # load shapefiles, and create spatial indexes for both files
     border_region = gpd.GeoDataFrame.from_file(paths["SHP"])
     border_region['geometry'] = border_region.buffer(0)
-    border_country = gpd.GeoDataFrame.from_file(paths["countries"])
+    border_country = gpd.GeoDataFrame.from_file(paths["Countries"])
     data = []
     for index, region in border_region.iterrows():
         for index2, country in border_country.iterrows():
@@ -198,7 +225,8 @@ def bbox_to_pixel_offsets(gt, bbox):
 
     xsize = x2 - x1
     ysize = y2 - y1
-    return (x1, y1, xsize, ysize)
+
+    return x1, y1, xsize, ysize
 
 
 def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global_src_extent=False):
@@ -217,6 +245,7 @@ def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global
       -h --help     Show this screen.
       --version     Show version.
     """
+
     rds = gdal.Open(raster_path, GA_ReadOnly)
     assert (rds)
     rb = rds.GetRasterBand(1)
@@ -329,10 +358,12 @@ def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global
 
     vds = None
     rds = None
+
     return stats
 
 
 def zonal_weighting(shp_path, raster_path, df_load, df_stat, s):
+
     shp = ogr.Open(shp_path, 1)
     raster = gdal.Open(raster_path)
     lyr = shp.GetLayer()
@@ -366,10 +397,12 @@ def zonal_weighting(shp_path, raster_path, df_load, df_stat, s):
 
     # Rasterize zone polygon to raster
     gdal.RasterizeLayer(target_ds, [1], lyr, None, None, [0], ['ALL_TOUCHED=FALSE', 'ATTRIBUTE=Weight_' + s[:3]])
+
     return
 
 
 def field_exists(field_name, shp_path):
+
     shp = ogr.Open(shp_path, 0)
     lyr = shp.GetLayer()
     lyr_dfn = lyr.GetLayerDefn()
@@ -377,4 +410,26 @@ def field_exists(field_name, shp_path):
     exists = False
     for i in range(lyr_dfn.GetFieldCount()):
         exists = exists or (field_name == lyr_dfn.GetFieldDefn(i).GetName())
+
     return exists
+
+
+def timecheck(*args):
+
+    if len(args) == 0:
+        print(inspect.stack()[1].function + str(datetime.datetime.now().strftime(": %H:%M:%S:%f")))
+
+    elif len(args) == 1:
+        print(inspect.stack()[1].function + ' - ' + str(args[0])
+              + str(datetime.datetime.now().strftime(": %H:%M:%S:%f")))
+
+    else:
+        raise Exception('Too many arguments have been passed.\nExpected: zero or one \nPassed: ' + format(len(args)))
+
+
+def display_progress(message, progress_stat):
+    length = progress_stat[0]
+    status = progress_stat[1]
+    sys.stdout.write('\r')
+    sys.stdout.write(message + ' ' + '[%-50s] %d%%' % ('=' * ((status * 50) // length), (status * 100) // length))
+    sys.stdout.flush()

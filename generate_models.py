@@ -1,31 +1,7 @@
 import os
-import numpy as np
-import pandas as pd
-import shapely
-# import hdf5storage
-import fiona
-import geopandas as gpd
-from osgeo import gdal, ogr
-# from data_functions import *
-# from model_functions import *
-
-# from scipy.ndimage import convolve
-# import datetime
-
-
-# from rasterio import windows
-# from shapely.geometry import mapping, Point
-#
-# from multiprocessing import Pool
-# from itertools import product
-# import h5netcdf
-# import cProfile
-# import pstats
-#
-
-# import osr
 from helping_functions import *
-
+from scipy.ndimage import convolve
+import datetime
 
 def initialization():
     # timecheck('Start')
@@ -39,6 +15,7 @@ def generate_sites_from_shapefile(paths):
     '''
     description
     '''
+
     # Read the shapefile containing the map data
     regions = gpd.read_file(paths["SHP"])
     for i in regions.index:
@@ -208,6 +185,8 @@ def generate_load_timeseries(paths, param):
 #     - information: t, XX.Elec
     '''
 
+    timecheck('Start')
+
     # Sector land use allocation
     # The land use coefficients found in the assumptions table are normalized over each sector, and the results are
     #  stored in the table 'sector_lu'
@@ -219,9 +198,9 @@ def generate_load_timeseries(paths, param):
 
     # Share of sectors in electricity demand
     sec_share = pd.read_csv(paths["sector_shares"], sep=';', decimal=',', index_col=0)
+    stat = None
 
-    if not (os.path.isfile(paths["load"] + 'df_sectors.csv') and os.path.isfile(
-            paths["load"] + 'load_sector.csv') and os.path.isfile(paths["load"] + 'load_landuse.csv')):
+    if not os.path.isfile(paths["load"]):
         countries = gpd.read_file(paths["Countries"])
         countries = countries.drop(countries[countries["Population"] == 0].index)
         countries = countries[['NAME_SHORT', 'Population']].rename(
@@ -253,7 +232,7 @@ def generate_load_timeseries(paths, param):
         df_sectors = pd.DataFrame(0, index=df_load_countries.index, columns=pd.MultiIndex.from_product(
             [df_load_countries.columns.tolist(), sec + ['RES']], names=['Country', 'Sector']))
 
-        # Copy the load profiles for each sector in the columns of each coutry, and multiply each sector by the share
+        # Copy the load profiles for each sector in the columns of each country, and multiply each sector by the share
         # defined in 'sec_share'.
         # Note that at the moment the values are the same for all countries
 
@@ -288,10 +267,7 @@ def generate_load_timeseries(paths, param):
         stat = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["LU"], 'landuse'))
         stat.rename(columns={'NAME_SHORT': 'Country'}, inplace=True)
         stat.set_index('Country', inplace=True)
-        # TODO: move list of landuse types to config? # Done ?
-        stat = stat.loc[:,
-               param["load"]["LU_type"]].fillna(0)
-        stat = stat[param["load"]["LU_type"]]
+        stat = stat.loc[:, landuse_types].fillna(0)
 
         # Join the two dataframes
         stat = stat.join(stat_pop[['RES']])
@@ -305,30 +281,39 @@ def generate_load_timeseries(paths, param):
         rows.append('RES')
         m_index = pd.MultiIndex.from_product([stat.index.tolist(), rows], names=['Country', 'Land use'])
         load_landuse = pd.DataFrame(0, index=m_index, columns=df_sectors.index)
+        status = 0
+        length = len(stat.index.tolist())*len(landuse_types) * len(sec)
+        display_progress("Computing regions load", (length, status))
         for c in stat.index.tolist():  # Countries
-            load_landuse.loc[c, 'RES'] = load_landuse.loc[c, 'RES'] + df_sectors[(c, 'RES')] / stat.loc[c, 'RES']
+            load_landuse.loc[c, 'RES'] = load_landuse.loc[c, 'RES'] \
+                                         + df_sectors[(c, 'RES')] \
+                                         / stat.loc[c, 'RES']
             for lu in landuse_types:  # Land use types
                 for s in sec:  # other sectors
-                    load_landuse.loc[c, lu] = load_landuse.loc[c, lu] + sector_lu.loc[s, int(lu)] * df_sectors[(c, s)]\
+                    load_landuse.loc[c, lu] = load_landuse.loc[c, lu] \
+                                              + sector_lu.loc[s, int(lu)] \
+                                              * df_sectors[(c, s)] \
                                               / stat.loc[c, s]
+                    status = status + 1
+                    display_progress("Computing regions load", (length, status))
 
         # Save the data into HDF5 files for faster execution
-        df_sectors.to_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', index=True, header=True)
-        print("files saved: " + paths["load"] + 'df_sectors.csv')
-        load_sector.to_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index=True, header=True)
-        print("files saved: " + paths["load"] + 'load_sector.csv')
-        load_landuse.to_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index=True)
-        print("files saved: " + paths["load"] + 'load_landuse.csv')
+        df_sectors.to_hdf(paths["load"], key='df_sector')
+        print("Dataframe df_sector saved: " + paths["load"] + "/df_sector")
+        load_sector.to_hdf(paths["load"], key='df_load_sector')
+        print("Dataframe load_sector saved: " + paths["load"] + "/df_load_sector")
+        load_landuse.to_hdf(paths["load"] , key='df_load_landuse')
+        print("Dataframe load_landuse saved: " + paths["load"] + "/df_load_landuse")
 
     # A bit wasteful, maybe implement .CSV creation in helping_function !!!!
+
     # Read CSV files
-    df_sectors = pd.read_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',')
-    load_sector = pd.read_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',')
-    load_landuse = pd.read_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',')
+    df_sectors = pd.read_hdf(paths["load"], key='df_sector')
+    load_sector = pd.read_hdf(paths["load"], key='df_load_sector')
+    load_landuse = pd.read_hdf(paths["load"], key='df_load_landuse')
 
     # Split regions into subregions
     # (a region can overlap with many countries, but a subregion belongs to only one country)
-
     intersection_regions_countries(paths)
 
     # Count number of pixels for each subregion
@@ -343,8 +328,8 @@ def generate_load_timeseries(paths, param):
     stat_sub = pd.DataFrame.from_dict(zonal_stats(paths["model_regions"] + 'intersection.shp', paths["LU"], 'landuse'))
     stat_sub.rename(columns={'NAME_SHORT': 'Subregion'}, inplace=True)
     stat_sub.set_index('Subregion', inplace=True)
-    stat_sub.fillna(0, inplace=True)
-    stat_sub = stat_sub[param["load"]["LU_type"]]
+
+    stat_sub = stat_sub.loc[:, landuse_types].fillna(0)
 
     # Join the two dataframes
     stat_sub = stat_sub.join(stat_pop_sub[['RES']])
@@ -358,24 +343,103 @@ def generate_load_timeseries(paths, param):
     # Calculate the hourly load for each subregion
     load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist() + ['Region', 'Country'])
     load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
+    status = 0
+    length = len(load_subregions.index) * len(landuse_types)
+
+    display_progress("Computing sub regions load:", (length, status))
+
     for sr in load_subregions.index:
         c = load_subregions.loc[sr, 'Country']
         # For residential:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + \
-                                                             stat_sub.loc[sr, 'RES'] * load_landuse.loc[c, 'RES']
+        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                             + stat_sub.loc[sr, 'RES'] \
+                                                             * load_landuse.loc[c, 'RES']
         for lu in landuse_types:
-            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] + \
-                                                                 stat_sub.loc[sr, lu] * load_landuse.loc[c, lu]
+            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                                 + stat_sub.loc[sr, lu] \
+                                                                 * load_landuse.loc[c, lu]
+            # show_progress
+            status = status + 1
+            display_progress("Computing sub regions load", (length, status))
+
     load_regions = load_subregions.groupby(['Region', 'Country']).sum()
     load_regions.reset_index(inplace=True)
-    load_regions.reset_index(['Region'], inplace=True)
+    load_regions.set_index(['Region'], inplace=True)
 
     for s in sec + ['RES']:
         zonal_weighting(paths["Countries"], paths["LU"], load_sector, stat, s)
 
+    # Export to evrys/urbs
 
+    # Aggregate subregions
+    load_regions.reset_index(inplace=True)
+    load_regions = load_regions.groupby(['Region']).sum()
 
-            ### TO BE CONTINUED
+    # Calculate the sum (yearly consumption) in a separate vector
+    yearly_load = load_regions.sum(axis=1)
+
+    # Calculte the ratio of the hourly load to the yearly load
+    df_normed = load_regions / np.tile(yearly_load.as_matrix(), (8760, 1)).transpose()
+
+    # Prepare the output in the desired format
+    df_output = pd.DataFrame(list(df_normed.index)*8760, columns=['sit'])
+    df_output['value'] = np.reshape(df_normed.as_matrix(), -1, order='F')
+    df_output['t'] = df_output.index // len(df_normed) + 1
+    df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
+
+    df_evrys = df_output[['t', 'sit', 'co', 'value']]  # .rename(columns={'Region': 'sit'})
+
+    # Transform the yearly load into a dataframe
+    df_load = pd.DataFrame()
+
+    df_load['annual'] = yearly_load
+
+    # Preparation of dataframe
+    df_load = df_load.reset_index()
+    df_load = df_load.rename(columns={'Region': 'sit'})
+
+    # Merging load dataframes and calculation of total demand
+    df_load['total'] = param["load"]["degree_of_eff"] * df_load['annual']
+
+    if param["load"]["distribution_type"] == 'population_GDP':
+        try:
+            # Calculate regional information for load destribution
+            demand_des_sum = demand_des.groupby(['Countries']).sum()
+            demand_des_sum = demand_des_sum.reset_index().rename(columns={'GDP': 'GDP_Sum', 'Population': 'Population_Sum'})
+
+            # Merging of regional information, annual load and normalized load
+            df_help = pd.merge(df_load, demand_des_sum, how='inner', on=['Countries'])
+            df_merged = pd.merge(df_output, demand_des, how='inner', on=['Site'])
+            df_merged = df_merged.rename(columns={'Countries_x': 'Countries'})
+            df_merged = pd.merge(df_merged, df_help, how='inner', on=['Countries'])
+
+            # Calculation of the distributed load per region
+            df_merged['value_normal'] = df_merged['value'] * df_merged['total'] * (
+                        factor_GDP * df_merged['GDP'] / df_merged['GDP_Sum'] + factor_Pop * df_merged['Population'] /
+                        df_merged['Population_Sum'])
+        except:
+            raise Exception('Demand_des not implemented')
+    else:
+        df_merged = pd.merge(df_output, df_load, how='outer', on=['sit'])
+        df_merged['value_normal'] = df_merged['value'] * df_merged['total']
+
+    # Calculation of the absolute load per country
+    df_absolute = df_merged  # .reset_index()[['t','Countries','value_normal']]
+
+    # Rename the countries
+    df_absolute['sitco'] = df_absolute['sit'] + '.Elec'
+
+    df_urbs = df_absolute.pivot(index='t', columns='sitco', values='value_normal')
+    df_urbs = df_urbs.reset_index()
+
+    # Yearly consumption for each zone
+    Load_EU = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
+
+    # Output
+    Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
+    df_evrys.to_csv(paths["df_evrys"], sep=',', index=False)
+    df_urbs.to_csv(paths["df_urbs"], sep=';', decimal=',', index=False)
+    timecheck('End')
 
 
 if __name__ == '__main__':

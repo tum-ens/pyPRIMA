@@ -29,7 +29,7 @@ load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/F
                            'SE': 'SE', 'SI': 'SI', 'SK': 'SK'},
         # Replacement of missing countries with profile (replacement) and annual values
         "replacement": 'MK',
-        "missing_countries": {'AL': 6376000, 'KS': 2887000},  # in MWh
+        "missing_countries": {'AL': 6376000, 'KS': 2887000, 'UK': 6376000, 'EL': 2887000},  # in MWh
         # Additional load from traffic and heating sector
         "degree_of_elec_traff": 1,
         "degree_of_elec_heat": 1,
@@ -37,8 +37,7 @@ load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/F
         "degree_of_eff": 1,
         # Distribution factors for load from country to regional level
         "distribution_type": 'sectors_landuse',
-        "sectors": ['COM', 'IND', 'AGR'],
-        "LU_type": ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']
+        "sectors": ['COM', 'IND', 'AGR']
         }
 
 param["load"] = load
@@ -67,8 +66,10 @@ paths = {}
 
 # Shapefiles
 PathTemp = root + "01 Raw inputs" + fs + "Maps" + fs + "Shapefiles" + fs
-paths["SHP"] = PathTemp + "Germany_with_EEZ.shp"
-paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
+# paths["SHP"] = PathTemp + "Germany_with_EEZ.shp"
+# paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
+paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"
+paths["SHP"] = paths["Countries"]
 
 # Rasters
 PathTemp = root + "02 Intermediate files" + fs + "Files " + region + fs + "Maps" + fs + region
@@ -91,10 +92,14 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      }
 
 # Ouput Folders
-paths["load"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
+paths["load"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + "load_Files.hdf"
 paths["model_regions"] = root + "02 Intermediate files" + fs + "Files " + region + fs + model_regions + fs
 paths["urbs"] = paths["model_regions"] + "urbs" + fs
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
+paths["load_EU"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
+paths["df_evrys"] = paths["evrys"] + 'demand_evrys' + '%04d' % (param["year"]) + '.csv'
+paths["df_urbs"] = paths["urbs"] + 'demand_urbs' + '%04d' % (param["year"]) + '.csv'
+
 if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])
 if not os.path.isdir(paths["evrys"]):
