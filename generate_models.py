@@ -1,13 +1,14 @@
 import os
 from helping_functions import *
+import openpyxl
 from scipy.ndimage import convolve
 import datetime
 
-def initialization():
-    # timecheck('Start')
-    # import param and paths
-    from config import paths, param
 
+def initialization():
+    timecheck('Start')
+    from config import paths, param
+    timecheck('End')
     return paths, param
 
 
@@ -15,6 +16,7 @@ def generate_sites_from_shapefile(paths):
     '''
     description
     '''
+    timecheck('Start')
 
     # Read the shapefile containing the map data
     regions = gpd.read_file(paths["SHP"])
@@ -24,8 +26,8 @@ def generate_sites_from_shapefile(paths):
 
     # Remove duplicates
     df = regions.set_index('NAME_SHORT')
-    df = df.loc[((df.index.duplicated(keep=False)) & (df['Population'] > 0)) | (
-            (~df.index.duplicated(keep=False)) & (df['Population'] == 0))]
+    df = df.loc[((~df.index.duplicated(keep=False)) & (df['Population'] > 0)) |
+                ((df.index.duplicated(keep=False)) & (~df['Population'] == 0))]
     df.reset_index(inplace=True)
     regions = df.copy()
 
@@ -61,6 +63,7 @@ def generate_sites_from_shapefile(paths):
 
     zones_evrys.to_csv(paths["evrys"] + 'Sites_evrys.csv', index=False, sep=';', decimal=',')
     zones_urbs.to_csv(paths["urbs"] + 'Sites_urbs.csv', index=False, sep=';', decimal=',')
+    timecheck('End')
 
 
 def generate_intermittent_supply_timeseries(paths, param):
@@ -234,19 +237,6 @@ def generate_load_timeseries(paths, param):
 
         # Get sectoral profiles
         profiles = get_sectoral_profiles(paths, param)
-
-        # Plot figures?
-        # plt.figure(figsize=(10,7))
-        # plt.plot(range(169), profiles.loc[0:168,'RES'], 'r',
-        #         range(169), profiles.loc[0:168,'IND'], 'k',
-        #         range(169), profiles.loc[0:168,'COM'], 'b',
-        #         range(169), profiles.loc[0:168,'AGR'], 'g--',
-        #         range(169), profiles.loc[0:168,'STR'], 'y--',
-        #         linewidth=2)
-        # plt.legend(['RES', 'IND', 'COM', 'AGR'])
-        # plt.xlabel('Hours',fontsize=15)
-        # plt.ylabel('Load p.u. yearly sectoral load', fontsize=15)
-        # plt.title('First week', fontsize=15)
 
         # Prepare an empty table of the hourly load for the five sectors in each countries.
         df_sectors = pd.DataFrame(0, index=df_load_countries.index, columns=pd.MultiIndex.from_product(
