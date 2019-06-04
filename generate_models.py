@@ -200,6 +200,26 @@ def generate_load_timeseries(paths, param):
     sec_share = pd.read_csv(paths["sector_shares"], sep=';', decimal=',', index_col=0)
     stat = None
 
+    # Count pixels of each land use type and create weighting factors for each country:
+    # Population
+    stat_pop = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["POP"], 'population'))
+    stat_pop.rename(columns={'NAME_SHORT': 'Country', 'sum': 'RES'}, inplace=True)
+    stat_pop.set_index('Country', inplace=True)
+
+    # Land use
+    stat = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["LU"], 'landuse'))
+    stat.rename(columns={'NAME_SHORT': 'Country'}, inplace=True)
+    stat.set_index('Country', inplace=True)
+    stat = stat.loc[:, landuse_types].fillna(0)
+
+    # Join the two dataframes
+    stat = stat.join(stat_pop[['RES']])
+
+    # Weighting by sector
+    for s in sec:
+        for i in stat.index:
+            stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
+
     if not os.path.isfile(paths["load"]):
         countries = gpd.read_file(paths["Countries"])
         countries = countries.drop(countries[countries["Population"] == 0].index)
@@ -257,26 +277,6 @@ def generate_load_timeseries(paths, param):
         # Calculate the yearly load per sector and country
         load_sector = df_sectors.sum(axis=0).rename('Load in MWh')
 
-        # Count pixels of each land use type and create weighting factors for each country:
-        # Population
-        stat_pop = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["POP"], 'population'))
-        stat_pop.rename(columns={'NAME_SHORT': 'Country', 'sum': 'RES'}, inplace=True)
-        stat_pop.set_index('Country', inplace=True)
-
-        # Land use
-        stat = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["LU"], 'landuse'))
-        stat.rename(columns={'NAME_SHORT': 'Country'}, inplace=True)
-        stat.set_index('Country', inplace=True)
-        stat = stat.loc[:, landuse_types].fillna(0)
-
-        # Join the two dataframes
-        stat = stat.join(stat_pop[['RES']])
-
-        # Weighting by sector
-        for s in sec:
-            for i in stat.index:
-                stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
-
         rows = landuse_types.copy()
         rows.append('RES')
         m_index = pd.MultiIndex.from_product([stat.index.tolist(), rows], names=['Country', 'Land use'])
@@ -299,11 +299,11 @@ def generate_load_timeseries(paths, param):
 
         # Save the data into HDF5 files for faster execution
         df_sectors.to_hdf(paths["load"], key='df_sector')
-        print("Dataframe df_sector saved: " + paths["load"] + "/df_sector")
+        print("\nDataframe df_sector saved: " + paths["load"] + "\\df_sector")
         load_sector.to_hdf(paths["load"], key='df_load_sector')
-        print("Dataframe load_sector saved: " + paths["load"] + "/df_load_sector")
-        load_landuse.to_hdf(paths["load"] , key='df_load_landuse')
-        print("Dataframe load_landuse saved: " + paths["load"] + "/df_load_landuse")
+        print("Dataframe load_sector saved: " + paths["load"] + "\\df_load_sector")
+        load_landuse.to_hdf(paths["load"], key='df_load_landuse')
+        print("Dataframe load_landuse saved: " + paths["load"] + "\\df_load_landuse")
 
     # A bit wasteful, maybe implement .CSV creation in helping_function !!!!
 
@@ -341,33 +341,37 @@ def generate_load_timeseries(paths, param):
         stat_sub.loc[i, ['Region', 'Country']] = i.split('_')
 
     # Calculate the hourly load for each subregion
-    load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist() + ['Region', 'Country'])
-    load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
-    status = 0
-    length = len(load_subregions.index) * len(landuse_types)
+    if not os.path.isfile("load_subregion.hdf"):
+        load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist() + ['Region', 'Country'])
+        load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
+        status = 0
+        length = len(load_subregions.index) * len(landuse_types)
 
-    display_progress("Computing sub regions load:", (length, status))
+        display_progress("Computing sub regions load:", (length, status))
 
-    for sr in load_subregions.index:
-        c = load_subregions.loc[sr, 'Country']
-        # For residential:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
-                                                             + stat_sub.loc[sr, 'RES'] \
-                                                             * load_landuse.loc[c, 'RES']
-        for lu in landuse_types:
+        for sr in load_subregions.index:
+            c = load_subregions.loc[sr, 'Country']
+            # For residential:
             load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
-                                                                 + stat_sub.loc[sr, lu] \
-                                                                 * load_landuse.loc[c, lu]
-            # show_progress
-            status = status + 1
-            display_progress("Computing sub regions load", (length, status))
+                                                                 + stat_sub.loc[sr, 'RES'] \
+                                                                 * load_landuse.loc[c, 'RES']
+            for lu in landuse_types:
+                load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                                     + stat_sub.loc[sr, lu] \
+                                                                     * load_landuse.loc[c, lu]
+                # show_progress
+                status = status + 1
+                display_progress("Computing sub regions load", (length, status))
 
-    load_regions = load_subregions.groupby(['Region', 'Country']).sum()
-    load_regions.reset_index(inplace=True)
-    load_regions.set_index(['Region'], inplace=True)
+        load_regions = load_subregions.groupby(['Region', 'Country']).sum()
+        load_regions.reset_index(inplace=True)
+        load_regions.set_index(['Region'], inplace=True)
+        load_regions.to_hdf('load_subregion.hdf', 'df')
+    else:
+        load_regions = pd.read_hdf('load_subregion.hdf', 'df')
 
     for s in sec + ['RES']:
-        zonal_weighting(paths["Countries"], paths["LU"], load_sector, stat, s)
+        zonal_weighting(paths, load_sector, stat, s)
 
     # Export to evrys/urbs
 

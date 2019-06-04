@@ -92,13 +92,15 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      }
 
 # Ouput Folders
-paths["load"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + "load_Files.hdf"
+paths["load_folder"] =root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
+paths["load"] = paths["load_folder"] + "load_Files.hdf"
 paths["model_regions"] = root + "02 Intermediate files" + fs + "Files " + region + fs + model_regions + fs
 paths["urbs"] = paths["model_regions"] + "urbs" + fs
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
 paths["load_EU"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
 paths["df_evrys"] = paths["evrys"] + 'demand_evrys' + '%04d' % (param["year"]) + '.csv'
 paths["df_urbs"] = paths["urbs"] + 'demand_urbs' + '%04d' % (param["year"]) + '.csv'
+
 
 if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])

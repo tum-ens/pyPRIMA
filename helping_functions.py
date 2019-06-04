@@ -362,27 +362,29 @@ def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global
     return stats
 
 
-def zonal_weighting(shp_path, raster_path, df_load, df_stat, s):
+def zonal_weighting(paths, df_load, df_stat, s):
 
+    shp_path = paths["Countries"]
+    raster_path = paths["LU"]
     shp = ogr.Open(shp_path, 1)
     raster = gdal.Open(raster_path)
     lyr = shp.GetLayer()
 
     # Create memory target raster
-    target_ds = gdal.GetDriverByName('GTiff').Create("something",
-                                                     raster.RasterXsize,
-                                                     raster.RasterYsize,
+    target_ds = gdal.GetDriverByName('GTiff').Create(paths["load_folder"] + 'Europe_' + s + '_load_pax.tif',
+                                                     raster.RasterXSize,
+                                                     raster.RasterYSize,
                                                      1, gdal.GDT_Float32)
-    target_ds.SetGeoTransform(raster.GeoTransform())
-    target_ds.setProjection(raster.GetProjection())
+    target_ds.SetGeoTransform(raster.GetGeoTransform())
+    target_ds.SetProjection(raster.GetProjection())
 
-    # NoData Value
+    # NoData value
     mem_band = target_ds.GetRasterBand(1)
     mem_band.Fill(0)
     mem_band.SetNoDataValue(0)
 
     # Add a new field
-    if not field_exists('Weight_'+ s, shp_path):
+    if not field_exists('Weight_' + s, shp_path):
         new_field = ogr.FieldDefn('Weight_' + s, ogr.OFTReal)
         lyr.CreateField(new_field)
 
@@ -391,7 +393,7 @@ def zonal_weighting(shp_path, raster_path, df_load, df_stat, s):
         if s == 'RES':
             feat.SetField('Weight_' + s, df_load[country, s] / df_stat.loc[country, 'RES'])
         else:
-            feat.SetField('weight_' + s, df_load[country, s] / df_stat.loc[country, s])
+            feat.SetField('Weight_' + s, df_load[country, s] / df_stat.loc[country, s])
         lyr.SetFeature(feat)
         feat = None
 
