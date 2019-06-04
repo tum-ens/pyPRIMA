@@ -383,11 +383,11 @@ def generate_load_timeseries(paths, param):
     yearly_load = load_regions.sum(axis=1)
 
     # Calculte the ratio of the hourly load to the yearly load
-    df_normed = load_regions / np.tile(yearly_load.as_matrix(), (8760, 1)).transpose()
+    df_normed = load_regions / np.tile(yearly_load.to_numpy(), (8760, 1)).transpose()
 
     # Prepare the output in the desired format
     df_output = pd.DataFrame(list(df_normed.index)*8760, columns=['sit'])
-    df_output['value'] = np.reshape(df_normed.as_matrix(), -1, order='F')
+    df_output['value'] = np.reshape(df_normed.to_numpy(), -1, order='F')
     df_output['t'] = df_output.index // len(df_normed) + 1
     df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
 
