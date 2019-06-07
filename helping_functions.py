@@ -30,6 +30,7 @@ def clean_load_data(paths, param, countries):
         print('done')
         # Filter by year
         df_year = df_raw.loc[df_raw['Year'] == param["year"]]
+        df_year.to_hdf('savetimeseries_temp.hdf', 'df')
     else:
         df_year = pd.read_hdf('savetimeseries_temp.hdf', 'df')
 
@@ -52,8 +53,11 @@ def clean_load_data(paths, param, countries):
     df_renamed = df_renamed.groupby(['Country']).sum()
     df_renamed.reset_index(inplace=True)
 
+    # Reshape Renamed_df
+    df_reshaped_renamed = pd.DataFrame(df_renamed.loc[:, df_renamed.columns != 'Country'].T.to_numpy(), columns=df_renamed['Country'])
+
     # Create time series for missing countries
-    df_completed = df_reshaped.copy()
+    df_completed = df_reshaped_renamed.copy()
     missing_countries = param["load"]["missing_countries"]
     replacement = param["load"]["replacement"]
     for i in missing_countries.keys():
@@ -371,7 +375,7 @@ def zonal_weighting(paths, df_load, df_stat, s):
     lyr = shp.GetLayer()
 
     # Create memory target raster
-    target_ds = gdal.GetDriverByName('GTiff').Create(paths["load_folder"] + 'Europe_' + s + '_load_pax.tif',
+    target_ds = gdal.GetDriverByName('GTiff').Create(paths["load"] + 'Europe_' + s + '_load_pax.tif',
                                                      raster.RasterXSize,
                                                      raster.RasterYSize,
                                                      1, gdal.GDT_Float32)
@@ -399,8 +403,6 @@ def zonal_weighting(paths, df_load, df_stat, s):
 
     # Rasterize zone polygon to raster
     gdal.RasterizeLayer(target_ds, [1], lyr, None, None, [0], ['ALL_TOUCHED=FALSE', 'ATTRIBUTE=Weight_' + s[:3]])
-
-    return
 
 
 def field_exists(field_name, shp_path):
@@ -435,3 +437,5 @@ def display_progress(message, progress_stat):
     sys.stdout.write('\r')
     sys.stdout.write(message + ' ' + '[%-50s] %d%%' % ('=' * ((status * 50) // length), (status * 100) // length))
     sys.stdout.flush()
+    if status == length:
+        print('\n')

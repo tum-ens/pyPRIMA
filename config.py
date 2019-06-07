@@ -29,7 +29,7 @@ load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/F
                            'SE': 'SE', 'SI': 'SI', 'SK': 'SK'},
         # Replacement of missing countries with profile (replacement) and annual values
         "replacement": 'MK',
-        "missing_countries": {'AL': 6376000, 'KS': 2887000, 'UK': 6376000, 'EL': 2887000},  # in MWh
+        "missing_countries": {'AL': 6376000, 'KS': 2887000},  # in MWh
         # Additional load from traffic and heating sector
         "degree_of_elec_traff": 1,
         "degree_of_elec_heat": 1,
@@ -91,15 +91,20 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      'STR': PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",
                      }
 
+# Model template
+paths["urbs_template"] = 'Urbs_excel template.xlsx'
+
 # Ouput Folders
-paths["load_folder"] =root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
-paths["load"] = paths["load_folder"] + "load_Files.hdf"
+# 02 - load
+paths["load"] =root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
 paths["model_regions"] = root + "02 Intermediate files" + fs + "Files " + region + fs + model_regions + fs
+paths["load_EU"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
+
 paths["urbs"] = paths["model_regions"] + "urbs" + fs
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
-paths["load_EU"] = root + "02 Intermediate files" + fs + "Files " + region + fs + "Load" + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
-paths["df_evrys"] = paths["evrys"] + 'demand_evrys' + '%04d' % (param["year"]) + '.csv'
-paths["df_urbs"] = paths["urbs"] + 'demand_urbs' + '%04d' % (param["year"]) + '.csv'
+
+paths["urbs_model"] = param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
+paths["urbs_model_hdf"] = paths["urbs"] + "model_data.hdf"
 
 
 if not os.path.isdir(paths["urbs"]):

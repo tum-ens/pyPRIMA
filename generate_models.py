@@ -1,5 +1,6 @@
 import os
 from helping_functions import *
+import shutil
 import openpyxl
 from scipy.ndimage import convolve
 import datetime
@@ -40,7 +41,6 @@ def generate_sites_from_shapefile(paths):
 
     zones.to_csv(paths["model_regions"] + 'Sites.csv', index=False, sep=';', decimal=',')
 
-    # Eventually move this part to special modules that create urbs / evrys models!
     # Preparing output for evrys
     zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
     zones_evrys['slacknode'] = 0
@@ -63,6 +63,7 @@ def generate_sites_from_shapefile(paths):
 
     zones_evrys.to_csv(paths["evrys"] + 'Sites_evrys.csv', index=False, sep=';', decimal=',')
     zones_urbs.to_csv(paths["urbs"] + 'Sites_urbs.csv', index=False, sep=';', decimal=',')
+
     timecheck('End')
 
 
@@ -223,7 +224,10 @@ def generate_load_timeseries(paths, param):
         for i in stat.index:
             stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
 
-    if not os.path.isfile(paths["load"]):
+    if not (os.path.isfile(paths["load"] + 'df_sectors.csv') and
+            os.path.isfile(paths["load"] + 'load_sector.csv') and
+            os.path.isfile(paths["load"] + 'load_landuse.csv')):
+
         countries = gpd.read_file(paths["Countries"])
         countries = countries.drop(countries[countries["Population"] == 0].index)
         countries = countries[['NAME_SHORT', 'Population']].rename(
@@ -272,7 +276,7 @@ def generate_load_timeseries(paths, param):
         m_index = pd.MultiIndex.from_product([stat.index.tolist(), rows], names=['Country', 'Land use'])
         load_landuse = pd.DataFrame(0, index=m_index, columns=df_sectors.index)
         status = 0
-        length = len(stat.index.tolist())*len(landuse_types) * len(sec)
+        length = len(stat.index.tolist()) * len(landuse_types) * len(sec)
         display_progress("Computing regions load", (length, status))
         for c in stat.index.tolist():  # Countries
             load_landuse.loc[c, 'RES'] = load_landuse.loc[c, 'RES'] \
@@ -288,19 +292,17 @@ def generate_load_timeseries(paths, param):
                     display_progress("Computing regions load", (length, status))
 
         # Save the data into HDF5 files for faster execution
-        df_sectors.to_hdf(paths["load"], key='df_sector')
-        print("\nDataframe df_sector saved: " + paths["load"] + "\\df_sector")
-        load_sector.to_hdf(paths["load"], key='df_load_sector')
-        print("Dataframe load_sector saved: " + paths["load"] + "\\df_load_sector")
-        load_landuse.to_hdf(paths["load"], key='df_load_landuse')
-        print("Dataframe load_landuse saved: " + paths["load"] + "\\df_load_landuse")
-
-    # A bit wasteful, maybe implement .CSV creation in helping_function !!!!
+        df_sectors.to_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', index=False, header=True)
+        print("Dataframe df_sector saved: " + paths["load"] + 'df_sector.csv')
+        load_sector.to_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index=True, header=True)
+        print("Dataframe load_sector saved: " + paths["load"] + 'load_sector.csv')
+        load_landuse.to_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index=True)
+        print("Dataframe load_landuse saved: " + paths["load"] + 'load_landuse.csv')
 
     # Read CSV files
-    df_sectors = pd.read_hdf(paths["load"], key='df_sector')
-    load_sector = pd.read_hdf(paths["load"], key='df_load_sector')
-    load_landuse = pd.read_hdf(paths["load"], key='df_load_landuse')
+    df_sectors = pd.read_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', header=[0, 1])
+    load_sector = pd.read_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
+    load_landuse = pd.read_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index_col=[0, 1])
 
     # Split regions into subregions
     # (a region can overlap with many countries, but a subregion belongs to only one country)
@@ -331,34 +333,33 @@ def generate_load_timeseries(paths, param):
         stat_sub.loc[i, ['Region', 'Country']] = i.split('_')
 
     # Calculate the hourly load for each subregion
-    if not os.path.isfile("load_subregion.hdf"):
-        load_subregions = pd.DataFrame(0, index=stat_sub.index, columns=df_sectors.index.tolist() + ['Region', 'Country'])
-        load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
-        status = 0
-        length = len(load_subregions.index) * len(landuse_types)
 
-        display_progress("Computing sub regions load:", (length, status))
+    load_subregions = pd.DataFrame(0, index=stat_sub.index,
+                                       columns=df_sectors.index.tolist() + ['Region', 'Country'])
+    load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
+    status = 0
+    length = len(load_subregions.index) * len(landuse_types)
 
-        for sr in load_subregions.index:
-            c = load_subregions.loc[sr, 'Country']
-            # For residential:
-            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
-                                                                 + stat_sub.loc[sr, 'RES'] \
-                                                                 * load_landuse.loc[c, 'RES']
-            for lu in landuse_types:
-                load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+    display_progress("Computing sub regions load:", (length, status))
+
+    for sr in load_subregions.index:
+        c = load_subregions.loc[sr, 'Country']
+        # For residential:
+        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
+                                                                 + stat_sub.loc[sr, 'RES']\
+                                                                 * load_landuse.loc[c, 'RES'].to_numpy()
+        for lu in landuse_types:
+            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
                                                                      + stat_sub.loc[sr, lu] \
-                                                                     * load_landuse.loc[c, lu]
-                # show_progress
-                status = status + 1
-                display_progress("Computing sub regions load", (length, status))
+                                                                     * load_landuse.loc[c, lu].to_numpy()
+            # show_progress
+            status = status + 1
+            display_progress("Computing sub regions load", (length, status))
 
-        load_regions = load_subregions.groupby(['Region', 'Country']).sum()
-        load_regions.reset_index(inplace=True)
-        load_regions.set_index(['Region'], inplace=True)
-        load_regions.to_hdf('load_subregion.hdf', 'df')
-    else:
-        load_regions = pd.read_hdf('load_subregion.hdf', 'df')
+    load_regions = load_subregions.groupby(['Region', 'Country']).sum()
+    load_regions.reset_index(inplace=True)
+    load_regions.set_index(['Region'], inplace=True)
+    load_regions.to_hdf('load_subregion.hdf', 'df')
 
     for s in sec + ['RES']:
         zonal_weighting(paths, load_sector, stat, s)
@@ -376,7 +377,7 @@ def generate_load_timeseries(paths, param):
     df_normed = load_regions / np.tile(yearly_load.to_numpy(), (8760, 1)).transpose()
 
     # Prepare the output in the desired format
-    df_output = pd.DataFrame(list(df_normed.index)*8760, columns=['sit'])
+    df_output = pd.DataFrame(list(df_normed.index) * 8760, columns=['sit'])
     df_output['value'] = np.reshape(df_normed.to_numpy(), -1, order='F')
     df_output['t'] = df_output.index // len(df_normed) + 1
     df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
@@ -399,7 +400,8 @@ def generate_load_timeseries(paths, param):
         try:
             # Calculate regional information for load destribution
             demand_des_sum = demand_des.groupby(['Countries']).sum()
-            demand_des_sum = demand_des_sum.reset_index().rename(columns={'GDP': 'GDP_Sum', 'Population': 'Population_Sum'})
+            demand_des_sum = demand_des_sum.reset_index().rename(
+                columns={'GDP': 'GDP_Sum', 'Population': 'Population_Sum'})
 
             # Merging of regional information, annual load and normalized load
             df_help = pd.merge(df_load, demand_des_sum, how='inner', on=['Countries'])
@@ -409,8 +411,8 @@ def generate_load_timeseries(paths, param):
 
             # Calculation of the distributed load per region
             df_merged['value_normal'] = df_merged['value'] * df_merged['total'] * (
-                        factor_GDP * df_merged['GDP'] / df_merged['GDP_Sum'] + factor_Pop * df_merged['Population'] /
-                        df_merged['Population_Sum'])
+                    factor_GDP * df_merged['GDP'] / df_merged['GDP_Sum'] + factor_Pop * df_merged['Population'] /
+                    df_merged['Population_Sum'])
         except:
             raise Exception('Demand_des not implemented')
     else:
@@ -431,22 +433,102 @@ def generate_load_timeseries(paths, param):
 
     # Output
     Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
-    df_evrys.to_csv(paths["df_evrys"], sep=',', index=False)
-    df_urbs.to_csv(paths["df_urbs"], sep=';', decimal=',', index=False)
+    df_evrys.to_csv(paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv', sep=',', index=False)
+    df_urbs.to_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',', index=False)
+    timecheck('End')
+
+
+def generate_commodities(paths, param):
+
+    timecheck('Start')
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
+    commodities = list(assumptions['Commodity'].unique())
+
+    dict_price_instate = dict(zip(assumptions['Commodity'], assumptions['price mid']))
+    dict_price_outofstate = dict(zip(assumptions['Commodity'], assumptions['price out-of-state']))
+    dict_type_evrys = dict(zip(assumptions['Commodity'], assumptions['Type_evrys']))
+    dict_type_urbs = dict(zip(assumptions['Commodity'], assumptions['Type_urbs']))
+    dict_annual = dict(zip(assumptions['Commodity'], assumptions['annual']))
+    dict_co_max = dict(zip(assumptions['Commodity'], assumptions['max']))
+    dict_maxperstep = dict(zip(assumptions['Commodity'], assumptions['maxperstep']))
+
+    # Read the CSV containing the list of sites
+    sites = pd.read_csv(paths["model_regions"] + 'Sites.csv', sep=';', decimal=',')
+
+    # Read the CSV containing the annual load
+    load = pd.read_csv(paths["load_EU"], index_col=['sit'])
+
+    # Prepare output tables for evrys and urbs
+
+    output_evrys = pd.DataFrame(columns=['Site', 'Co', 'price', 'annual', 'losses', 'type'], dtype=np.float64)
+    output_urbs = pd.DataFrame(columns=['Site', 'Commodity', 'Type', 'price', 'max', 'maxperstep'])
+
+    # Fill tables
+    for s in sites["Site"]:
+        for c in commodities:
+            if c == 'Elec':
+                if s in load.index:
+                    annual = load.loc[s][0]
+                else:
+                    annual = 0
+            else:
+                annual = dict_annual[c]
+            if len(s) >= 2:
+                output_evrys = output_evrys.append(
+                    {'Site': s, 'Co': c, 'price': dict_price_instate[c], 'annual': annual, 'losses': 0,
+                     'type': dict_type_evrys[c]}, ignore_index=True)
+                output_urbs = output_urbs.append(
+                    {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_instate[c],
+                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+            else:
+                output_evrys = output_evrys.append(
+                    {'Site': s, 'Co': c, 'price': dict_price_outofstate[c], 'annual': annual, 'losses': 0,
+                     'type': dict_type_evrys[c]}, ignore_index=True)
+                output_urbs = output_urbs.append(
+                    {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
+                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+
+    output_evrys.to_csv(paths["evrys"] + 'Commodities_evrys.csv', index=False, sep=';', decimal=',')
+    output_urbs.to_csv(paths["urbs"] + 'Commodities_urbs.csv', index=False, sep=';', decimal=',')
+
+    timecheck('End')
+
+
+def generate_urbs_model(paths, param):
+    """
+    Read model's .csv fileS, and create relevant dataframes.
+    Writes dataframes to urbs and evrys input excel files.
+    """
+    timecheck('Start')
+
+    # Prepare blank excel file
+    output = pd.ExcelWriter(paths["urbs_model"], mode='w')
+
+    # Read and Format zones
+    site_urbs = pd.read_csv(paths["urbs"] + 'Sites_urbs.csv', sep=';', decimal=',')
+
+    # Write Sites
+
+    site_urbs.to_excel(output, "Site")
+    # Read load
+    load_urbs = pd.read_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',')
+    load_urbs.to_excel(output, "Demand")
+
+    # TO IMPLEMENT FOR EVRYS TOO
     timecheck('End')
 
 
 if __name__ == '__main__':
     paths, param = initialization()
-    generate_sites_from_shapefile(paths)
-    generate_intermittent_supply_timeseries(paths, param)
-    generate_load_timeseries(paths, param)
-    # generate_commodities(paths, param) # corresponds to 04
+    # generate_sites_from_shapefile(paths)
+    # generate_intermittent_supply_timeseries(paths, param)
+    # generate_load_timeseries(paths, param)
+    generate_commodities(paths, param) # corresponds to 04
     # distribute_renewable_capacities(paths, param) # corresponds to 05a
     # clean_processes_and_storage_data(paths, param) # corresponds to 05b I think
     # generate_processes(paths, param) # corresponds to 05c
     # generate_storage(paths, param) # corresponds to 05d
     # clean_grid_data(paths, param) # corresponds to 06a
     # generate_aggregated_grid(paths, param) # corresponds to 06b
-    # generate_urbs_model(paths, param)
+    generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)
