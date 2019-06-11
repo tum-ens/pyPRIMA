@@ -9,6 +9,32 @@ import datetime
 def initialization():
     timecheck('Start')
     from config import paths, param
+    res_weather = param["res_weather"]
+    res_desired = param["res_desired"]
+
+    # read shapefile of regions
+    regions_shp = gpd.read_file(paths["SHP"])
+    # Extract onshore and offshore areas separately
+    param["regions_land"] = regions_shp.drop(regions_shp[regions_shp["Population"] == 0].index)
+    param["regions_eez"] = regions_shp.drop(regions_shp[regions_shp["Population"] != 0].index)
+    # Recombine the maps in this order: onshore then offshore
+
+    regions_all = gpd.GeoDataFrame(pd.concat([param["regions_land"], param["regions_eez"]],
+                                             ignore_index=True), crs=param["regions_land"].crs)
+
+    param["nRegions_land"] = len(param["regions_land"])
+    param["nRegions_eez"] = len(param["regions_eez"])
+
+    nRegions = param["nRegions_land"] + param["nRegions_eez"]
+    Crd_regions = np.zeros((nRegions, 4))
+    for reg in range(0, nRegions):
+        # Box coordinates for MERRA2 data
+        r = regions_all.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions[reg, :] = crd_merra(box, res_weather)
+    Crd_all = np.array([max(Crd_regions[:, 0]), max(Crd_regions[:, 1]), min(Crd_regions[:, 2]), min(Crd_regions[:, 3])])
+    param["Crd_regions"] = Crd_regions
+    param["Crd_all"] = Crd_all
     timecheck('End')
     return paths, param
 
@@ -335,7 +361,7 @@ def generate_load_timeseries(paths, param):
     # Calculate the hourly load for each subregion
 
     load_subregions = pd.DataFrame(0, index=stat_sub.index,
-                                       columns=df_sectors.index.tolist() + ['Region', 'Country'])
+                                   columns=df_sectors.index.tolist() + ['Region', 'Country'])
     load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
     status = 0
     length = len(load_subregions.index) * len(landuse_types)
@@ -345,13 +371,13 @@ def generate_load_timeseries(paths, param):
     for sr in load_subregions.index:
         c = load_subregions.loc[sr, 'Country']
         # For residential:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
-                                                                 + stat_sub.loc[sr, 'RES']\
-                                                                 * load_landuse.loc[c, 'RES'].to_numpy()
+        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                             + stat_sub.loc[sr, 'RES'] \
+                                                             * load_landuse.loc[c, 'RES'].to_numpy()
         for lu in landuse_types:
-            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
-                                                                     + stat_sub.loc[sr, lu] \
-                                                                     * load_landuse.loc[c, lu].to_numpy()
+            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                                 + stat_sub.loc[sr, lu] \
+                                                                 * load_landuse.loc[c, lu].to_numpy()
             # show_progress
             status = status + 1
             display_progress("Computing sub regions load", (length, status))
@@ -439,8 +465,8 @@ def generate_load_timeseries(paths, param):
 
 
 def generate_commodities(paths, param):
-
     timecheck('Start')
+
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
     commodities = list(assumptions['Commodity'].unique())
 
@@ -494,39 +520,285 @@ def generate_commodities(paths, param):
     timecheck('End')
 
 
+def distribute_renewable_capacities(paths, param):
+
+    # Shapefile with countries
+    countries = gpd.read_file(paths["Countries"])
+
+    # Countries to be considered
+    sites = pd.DataFrame(countries[['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Site'}))
+    sites = sites.sort_values(by=['Site'], axis=0)['Site'].unique()
+
+    # Read input file, extracted from IRENA
+    data_raw = pd.read_excel(paths["IRENA"], skiprows=[0, 1, 2, 3, 4, 5, 6])
+
+    # Add missing country names
+    for i in np.arange(1, len(data_raw.index)):
+        if data_raw.isnull().loc[i, 'Country/area'] is True:
+            data_raw.loc[i, 'Country/area'] = data_raw.loc[i - 1, 'Country/area']
+
+    # Select technologies needed in urbs and rename them
+    data_raw = data_raw.loc[data_raw["Technology"].isin(param["dist_ren"]["renewables"])].reset_index(drop=True)
+    data_raw["Technology"] = data_raw["Technology"].replace(param["dist_ren"]["renewables"])
+    data_raw = data_raw.rename(columns={'Country/area': 'Site', 'Technology': 'Process', 2015: 'inst-cap'})
+
+    # Create new dataframe with needed information, rename sites and extract chosen sites
+    data = data_raw[["Site", "Process", "inst-cap"]]
+    data = data.replace({"site": param["dist_ren"]["country_names"]}).fillna(value=0)
+    data = data.loc[data["site"].isin(sites)].reset_index(drop=True)
+
+    # Group by and sum
+    data = data.groupby(["Site", "Process"]).sum().reset_index()
+
+    # Estimate number of units
+    units = param["dist_ren"]["units"]
+    for p in data["process"].unique():
+        data.loc[data["Process"] == p, "Unit"] = data.loc[data["Process"] == p, "inst-cap"] // units[p] \
+                                                 + (data.loc[data["Process"] == p, "inst_cap"] % units[p] > 0)
+    for p in data["Process"].unique():
+        x = y = c = []
+        for counter in range(0, len(countries) - 1):
+            print(counter)
+            if float(data.loc[(data["site"] == countries.loc[counter, "NAME_SHORT"]) & (
+                    data["Process"] == p), 'inst-cap']) == 0:
+                continue
+            if (countries.loc[counter, "Population"]) & (p == 'WindOff'):
+                continue
+            if (countries.loc[counter, "Population"] == 0) & (p != 'WindOff'):
+                continue
+            name, x_off, y_off, potential = rasclip(paths["rasters"][p], paths["Countries"], counter)
+            raster_shape = potential.shape
+            potential = potential.flatten()
+
+            # Calculate the part of the probability that is based on the potential
+            potential_nan = np.isnan(potential) | (potential == 0)
+            potential = (potential - np.nanmin(potential)) / (np.nanmax(potential) - np.nanmin(potential))
+            potential[potential_nan] = 0
+
+            # Calculate the random part of the probability
+            potential_random = np.random.random_sample(potential.shape)
+            potential_random[potential_nan] = 0
+
+            # Combine the two parts
+            potential_new = (1 - param["dist_ren"]["randomness"]) * potential \
+                            + param["dist_ren"]["randomness"] * potential_random
+
+            # Sort elements based on their probability and keep the indices
+            ind_sort = np.argsort(potential_new, axis=None)  # Ascending
+            ind_needed = ind_sort[-int(data.loc[(data["Site"] == name) & (data["Process"] == p), "units"].values):]
+
+            # Free memory
+            del ind_sort, potential, potential_nan, potential_random
+
+            # Get the coordinates of the power plants and their respective capacities
+            power_plants = [units[p]] * len(ind_needed)
+            if data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[p] > 0:
+                power_plants[-1] = data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[
+                    p]
+            y_pp, x_pp = np.unravel_index(ind_needed, raster_shape)
+            x = x + ((x_pp + x_off + 0.5) * param["res_desired"][1] + param["Crd_all"][3]).tolist()
+            y = y + (param["Crd_all"][0] - (y_pp + y_off + 0.5) * param["res_desired"][0]).tolist()
+            c = c + potential_new[ind_needed].tolist()  # Power_plants
+
+            del potential_new
+
+        # Create map
+        map_power_plants(p, x, y, c, paths)
+
+
+def clean_processes_and_storage_data(paths, param):
+
+    timecheck("Start")
+    assumptions = pd.read_excel(paths["assumptions"], sheetname='Process')
+
+    depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
+    year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
+    year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+
+    # Get data from fresna database
+    Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
+                          usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    Process.rename(columns={'Capacity': 'inst-cap', 'YearCommissioned': 'year', 'lat': 'Latitude', 'lon': 'Longitude'},
+                   inplace=True)
+    print('Number of power plants: ', len(Process))
+
+    # ### Process name
+
+    # Use the name of the processes in OPSD as a standard name
+    Process['Pro'] = Process['OPSD']
+
+    # If the name is missing in OPSD, use the name in other databases
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'CARMA']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'ENTSOE']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'GEO']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'WRI']
+
+    # Add suffix to duplicate names
+    Process['Pro'] = Process['Pro'] + Process.groupby(['Pro']).cumcount().astype(str).replace('0', '')
+
+    # Remove spaces from the name and replace them with underscores
+    Process['Pro'] = [Process.loc[i, 'Pro'].replace(' ', '_') for i in Process.index]
+
+    # Remove useless columns
+    Process.drop(['CARMA', 'ENTSOE', 'GEO', 'OPSD', 'WRI'], axis=1, inplace=True)
+
+    print('Number of power plants with distinct names: ', len(Process['Pro'].unique()))
+
+    # ### Type
+
+    Process['CoIn'] = np.nan
+    for i in Process.index:
+        # Get the pumped storage facilities
+        if Process.loc[i, 'Technology'] in ['Pumped Storage', 'Pumped Storage With Natural Inflow',
+                                            'Pumped Storage, Pumped Storage With Natural Inflow, Reservoir',
+                                            'Pumped Storage, Reservoir', 'Pumped Storage, Run-Of-River']:
+            Process.loc[i, 'CoIn'] = 'PumSt'
+
+        # Get the tidal power plants
+        if Process.loc[i, 'Technology'] == 'Tidal':
+            Process.loc[i, 'CoIn'] = 'Tidal'
+
+        # Assign an input commodity
+        if pd.isnull(Process.loc[i, 'CoIn']):
+            Process.loc[i, 'CoIn'] = param["clean_pro_sto"]["proc_dict"][Process.loc[i, 'Fueltype']]
+
+        # Distinguish between small and large hydro
+        if (Process.loc[i, 'CoIn'] == 'Hydro_Small') and (Process.loc[i, 'inst-cap'] > 30):
+            Process.loc[i, 'CoIn'] = 'Hydro_Large'
+
+    # Remove useless columns
+    Process.drop(['Fueltype', 'Technology', 'Set'], axis=1, inplace=True)
+
+    # Remove renewable power plants (except Tidal and Geothermal)
+    Process.set_index('CoIn', inplace=True)
+    Process.drop(list(set(Process.index.unique()) & set(param["clean_pro_sto"]["renewable_powerplants"])),
+                 axis=0, inplace=True)
+
+    Process.reset_index(inplace=True)
+
+    print('Possible processes: ', Process['CoIn'].unique())
+
+    # ### Include renewable power plants
+
+    for pp in param["clean_pro_sto"]["renewable_powerplants"]:
+        # Shapefile with power plants
+        pp_shapefile = gpd.read_file(paths["PPs_"] + pp + '.shp')
+        pp_df = pd.DataFrame(pp_shapefile.rename(columns={'CapacityMW': 'inst-cap'}))
+        pp_df['Longitude'] = [pp_df.loc[i, 'geometry'].x for i in pp_df.index]
+        pp_df['Latitude'] = [pp_df.loc[i, 'geometry'].y for i in pp_df.index]
+        pp_df['CoIn'] = pp
+        pp_df['Pro'] = [pp + '_' + str(i) for i in pp_df.index]
+        pp_df.drop(['geometry'], axis=1, inplace=True)
+        Process = Process.append(pp_df, ignore_index=True)
+
+    print('Possible processes: ', Process['CoIn'].unique())
+
+    # ### Year
+
+    # Assign a dummy year for missing entries (will be changed later)
+    for c in Process['CoIn'].unique():
+        if c in param["clean_pro_sto"]["storage"]:
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_mu'] = 1980
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_stdev'] = 5
+        else:
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_mu'] = year_mu[c]
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_stdev'] = year_stdev[c]
+
+    Process.loc[Process['year'].isnull(), 'year'] = np.floor(
+        np.random.normal(Process.loc[Process['year'].isnull(), 'year_mu'],
+                         Process.loc[Process['year'].isnull(), 'year_stdev']))
+
+    # Process['year'].fillna(year_ref, inplace=True)
+
+    # Drop recently built plants (after the reference year)
+    Process = Process[(Process['year'] <= param["year"])]
+
+    # ### Coordinates
+
+    P_missing = Process[Process['Longitude'].isnull()].copy()
+    P_located = Process[~Process['Longitude'].isnull()].copy()
+
+    # Assign dummy coordinates within the same country (will be changed later)
+    for country in P_missing['Country'].unique():
+        P_missing.loc[P_missing['Country'] == country, 'Latitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 2]
+        P_missing.loc[P_missing['Country'] == country, 'Longitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 3]
+
+    Process = P_located.append(P_missing)
+    Process = Process[Process['Longitude'] > -11]
+
+    # ### Consider lifetime of power plants
+
+    if param["year"] > param["clean_pro_sto"]["year_ref"]:
+        for c in Process['CoIn'].unique():
+            if c in param["clean_pro_sto"]["storage"]:
+                Process.loc[Process['CoIn'] == c, 'lifetime'] = 60
+            else:
+                Process.loc[Process['CoIn'] == c, 'lifetime'] = depreciation[c]
+        print(len(Process.loc[(Process['lifetime'] + Process['year']) < param["year"]]), ' processes will be deleted')
+        Process.drop(Process.loc[(Process['lifetime'] + Process['year']) < param["year"]].index, inplace=True)
+
+    # ### Site
+
+    # Create point geometries (shapely)
+    Process['geometry'] = list(zip(Process.Longitude, Process.Latitude))
+    Process['geometry'] = Process['geometry'].apply(Point)
+
+    P_located = gpd.GeoDataFrame(Process, geometry='geometry', crs='')
+    P_located.crs = {'init': 'epsg:4326'}
+
+    # Define the output commodity
+    P_located['CoOut'] = 'Elec'
+    P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
+    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
+
+    # Save the GeoDataFrame
+    P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+
+    timecheck("End")
+
+
+def generate_processes(paths, param):
+
+    return 1
+
+
 def generate_urbs_model(paths, param):
     """
-    Read model's .csv fileS, and create relevant dataframes.
+    Read model's .csv files, and create relevant dataframes.
     Writes dataframes to urbs and evrys input excel files.
     """
     timecheck('Start')
 
-    # Prepare blank excel file
-    output = pd.ExcelWriter(paths["urbs_model"], mode='w')
+    # ## To be done later when all modules are implemented ## #
 
-    # Read and Format zones
-    site_urbs = pd.read_csv(paths["urbs"] + 'Sites_urbs.csv', sep=';', decimal=',')
-
-    # Write Sites
-
-    site_urbs.to_excel(output, "Site")
-    # Read load
-    load_urbs = pd.read_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',')
-    load_urbs.to_excel(output, "Demand")
-
-    # TO IMPLEMENT FOR EVRYS TOO
+    # # Prepare blank excel file
+    # output = pd.ExcelWriter(paths["urbs_model"], mode='w')
+    #
+    # # Read and Format zones
+    # site_urbs = pd.read_csv(paths["urbs"] + 'Sites_urbs.csv', sep=';', decimal=',')
+    #
+    # # Write Sites
+    #
+    # site_urbs.to_excel(output, "Site")
+    # # Read load
+    # load_urbs = pd.read_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',')
+    # load_urbs.to_excel(output, "Demand")
+    #
+    # # TO IMPLEMENT FOR EVRYS TOO
     timecheck('End')
 
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)
-    # generate_intermittent_supply_timeseries(paths, param)
-    # generate_load_timeseries(paths, param)
-    generate_commodities(paths, param) # corresponds to 04
-    # distribute_renewable_capacities(paths, param) # corresponds to 05a
-    # clean_processes_and_storage_data(paths, param) # corresponds to 05b I think
-    # generate_processes(paths, param) # corresponds to 05c
+    # generate_sites_from_shapefile(paths) - done
+    # generate_intermittent_supply_timeseries(paths, param) - separate module
+    # generate_load_timeseries(paths, param) - done
+    # generate_commodities(paths, param) # corresponds to 04 - done
+    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done (still need testing)
+    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done (still needs testing)
+    generate_processes(paths, param)  # corresponds to 05c
     # generate_storage(paths, param) # corresponds to 05d
     # clean_grid_data(paths, param) # corresponds to 06a
     # generate_aggregated_grid(paths, param) # corresponds to 06b

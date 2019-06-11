@@ -1,10 +1,10 @@
-from osgeo import gdal, ogr
+from osgeo import gdal, ogr, gdalnumeric
 from osgeo.gdalconst import GA_ReadOnly
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-import shapely
 from shapely import geometry
+from shapely.geometry import Point
 import sys
 import datetime
 import inspect
@@ -418,6 +418,148 @@ def field_exists(field_name, shp_path):
     return exists
 
 
+# 05a_Distribution_Renewable_powerplants
+
+# ## Functions:
+
+# https://pcjericks.github.io/py-gdalogr-cookbook/raster_layers.html#clip-a-geotiff-with-shapefile
+
+def world2Pixel(geoMatrix, x, y):
+    """
+    Uses a gdal geomatrix (gdal.GetGeoTransform()) to calculate
+    the pixel location of a geospatial coordinate
+    """
+    ulX = geoMatrix[0]
+    ulY = geoMatrix[3]
+    xDist = geoMatrix[1]
+    yDist = geoMatrix[5]
+    rtnX = geoMatrix[2]
+    rtnY = geoMatrix[4]
+    pixel = int((x - ulX) / xDist)
+    line = int((ulY - y) / xDist)
+    return (pixel, line)
+
+
+def rasclip(raster_path, shapefile_path, counter):
+    # Load the source data as a gdalnumeric array
+    srcArray = gdalnumeric.LoadFile(raster_path)
+
+    # Also load as a gdal image to get geotransform
+    # (world file) info
+    srcImage = gdal.Open(raster_path)
+    geoTrans = srcImage.GetGeoTransform()
+
+    # Create an OGR layer from a boundary shapefile
+    shapef = ogr.Open(shapefile_path)
+    lyr = shapef.GetLayer(os.path.split(os.path.splitext(shapefile_path)[0])[1])
+
+    # Filter based on FID
+    lyr.SetAttributeFilter("FID = {}".format(counter))
+    poly = lyr.GetNextFeature()
+
+    # Convert the polygon extent to image pixel coordinates
+    minX, maxX, minY, maxY = poly.GetGeometryRef().GetEnvelope()
+    ulX, ulY = world2Pixel(geoTrans, minX, maxY)
+    lrX, lrY = world2Pixel(geoTrans, maxX, minY)
+
+    # Calculate the pixel size of the new image
+    pxWidth = int(lrX - ulX)
+    pxHeight = int(lrY - ulY)
+
+    clip = srcArray[ulY:lrY, ulX:lrX]
+
+    # Create pixel offset to pass to new image Projection info
+    xoffset = ulX
+    yoffset = ulY
+    # print("Xoffset, Yoffset = ( %f, %f )" % ( xoffset, yoffset ))
+
+    # Create a second (modified) layer
+    outdriver = ogr.GetDriverByName('MEMORY')
+    source = outdriver.CreateDataSource('memData')
+    # outdriver = ogr.GetDriverByName('ESRI Shapefile')
+    # source = outdriver.CreateDataSource(mypath+'00 Inputs/maps/dummy.shp')
+    lyr2 = source.CopyLayer(lyr, 'dummy', ['OVERWRITE=YES'])
+    featureDefn = lyr2.GetLayerDefn()
+    # create a new ogr geometry
+    geom = poly.GetGeometryRef().Buffer(-1 / 240)
+    # write the new feature
+    newFeature = ogr.Feature(featureDefn)
+    newFeature.SetGeometryDirectly(geom)
+    lyr2.CreateFeature(newFeature)
+    # here you can place layer.SyncToDisk() if you want
+    newFeature.Destroy()
+    # lyr2 = source.CopyLayer(lyr,'dummy',['OVERWRITE=YES'])
+    lyr2.ResetReading()
+    poly_old = lyr2.GetNextFeature()
+    lyr2.DeleteFeature(poly_old.GetFID())
+
+    # Create memory target raster
+    target_ds = gdal.GetDriverByName('MEM').Create('', srcImage.RasterXSize, srcImage.RasterYSize, 1, gdal.GDT_Byte)
+    target_ds.SetGeoTransform(geoTrans)
+    target_ds.SetProjection(srcImage.GetProjection())
+
+    # Rasterize zone polygon to raster
+    gdal.RasterizeLayer(target_ds, [1], lyr2, None, None, [1], ['ALL_TOUCHED=FALSE'])
+    mask = target_ds.ReadAsArray()
+    mask = mask[ulY:lrY, ulX:lrX]
+
+    # Clip the image using the mask
+    clip = np.multiply(clip, mask).astype(gdalnumeric.float64)
+    return poly.GetField('NAME_SHORT'), xoffset, yoffset, clip
+
+
+def map_power_plants(p, x, y, c, paths):
+    outSHPfn = paths["map_power_plants"] + p + '.shp'
+
+    # Create the output shapefile
+    shpDriver = ogr.GetDriverByName("ESRI Shapefile")
+    if os.path.exists(outSHPfn):
+        shpDriver.DeleteDataSource(outSHPfn)
+    outDataSource = shpDriver.CreateDataSource(outSHPfn)
+    outLayer = outDataSource.CreateLayer(outSHPfn, geom_type=ogr.wkbPoint)
+
+    # create point geometry
+    point = ogr.Geometry(ogr.wkbPoint)
+    # create a field
+    idField = ogr.FieldDefn('CapacityMW', ogr.OFTReal)
+    outLayer.CreateField(idField)
+    # Create the feature
+    featureDefn = outLayer.GetLayerDefn()
+
+    # Set values
+    for i in range(0, len(x)):
+        point.AddPoint(x[i], y[i])
+        outFeature = ogr.Feature(featureDefn)
+        outFeature.SetGeometry(point)
+        outFeature.SetField('CapacityMW', c[i])
+        outLayer.CreateFeature(outFeature)
+    outFeature = None
+
+
+def map_grid_plants(x, y, paths):
+    outSHPfn = paths["map_grid_plants"]
+
+    # Create the output shapefile
+    shpDriver = ogr.GetDriverByName("ESRI Shapefile")
+    if os.path.exists(outSHPfn):
+        shpDriver.DeleteDataSource(outSHPfn)
+    outDataSource = shpDriver.CreateDataSource(outSHPfn)
+    outLayer = outDataSource.CreateLayer(outSHPfn, geom_type=ogr.wkbPoint)
+
+    # create point geometry
+    point = ogr.Geometry(ogr.wkbPoint)
+    # Create the feature
+    featureDefn = outLayer.GetLayerDefn()
+
+    # Set values
+    for i in range(0, len(x)):
+        point.AddPoint(x[i], y[i])
+        outFeature = ogr.Feature(featureDefn)
+        outFeature.SetGeometry(point)
+        outLayer.CreateFeature(outFeature)
+    outFeature = None
+
+
 def timecheck(*args):
 
     if len(args) == 0:
@@ -439,3 +581,17 @@ def display_progress(message, progress_stat):
     sys.stdout.flush()
     if status == length:
         print('\n')
+
+
+def crd_merra(Crd_regions, res_weather):
+    ''' description '''
+    Crd = np.array([(np.ceil((Crd_regions[:, 0] - res_weather[0] / 2) / res_weather[0])
+                     * res_weather[0] + res_weather[0] / 2),
+                    (np.ceil((Crd_regions[:, 1] - res_weather[1] / 2) / res_weather[1])
+                     * res_weather[1] + res_weather[1] / 2),
+                    (np.floor((Crd_regions[:, 2] + res_weather[0] / 2) / res_weather[0])
+                     * res_weather[0] - res_weather[0] / 2),
+                    (np.floor((Crd_regions[:, 3] + res_weather[1] / 2) / res_weather[1])
+                     * res_weather[1] - res_weather[1] / 2)])
+    Crd = Crd.T
+    return Crd
