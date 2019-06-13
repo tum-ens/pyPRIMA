@@ -115,29 +115,30 @@ dist_ren = {"country_names": {'Albania': 'AL',
 
 param["dist_ren"] = dist_ren
 
-# Clean Process and storage data
-clean_pro_sto = {"year_ref": 2015,
-                 "proc_dict": {'Hard Coal': 'Coal',
-                               'Hydro': 'Hydro_Small',
-                               # Later, we will define Hydro_Large as power plants with capacity > 30MW
-                               'Nuclear': 'Nuclear',
-                               'Natural Gas': 'Gas',
-                               'Lignite': 'Lignite',
-                               'Oil': 'Oil',
-                               'Bioenergy': 'Biomass',
-                               'Other': 'Waste',
-                               'Waste': 'Waste',
-                               'Wind': 'WindOn',
-                               'Geothermal': 'Geothermal',
-                               'Solar': 'Solar'},
-                 "storage": ['PumSt', 'Battery'],
-                 "renewable_powerplants": ['Hydro_Large', 'Hydro_Small', 'WindOn', 'WindOff',
-                                           'Solar', 'Biomass', 'Biogas', 'Liquid biofuels']
-                 }
+# Clean Process and storage data, Process, and Storage
+pro_sto = {"year_ref": 2015,
+           "proc_dict": {'Hard Coal': 'Coal',
+                         'Hydro': 'Hydro_Small',
+                         # Later, we will define Hydro_Large as power plants with capacity > 30MW
+                         'Nuclear': 'Nuclear',
+                         'Natural Gas': 'Gas',
+                         'Lignite': 'Lignite',
+                         'Oil': 'Oil',
+                         'Bioenergy': 'Biomass',
+                         'Other': 'Waste',
+                         'Waste': 'Waste',
+                         'Wind': 'WindOn',
+                         'Geothermal': 'Geothermal',
+                         'Solar': 'Solar'},
+           "storage": ['PumSt', 'Battery'],
+           "renewable_powerplants": ['Hydro_Large', 'Hydro_Small', 'WindOn', 'WindOff',
+                                     'Solar', 'Biomass', 'Biogas', 'Liquid biofuels'],
+           "agg_thres": 20,
+            "wacc": 0.07
+           }
 
-param["clean_pro_sto"] = clean_pro_sto
+param["pro_sto"] = pro_sto
 
-# Generate process
 
 ###########################
 ##### Define Paths ########
@@ -188,9 +189,11 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      }
 
 # Clean Process and storage data
-paths["database"] = root + "01 Raw inputs" + fs + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+paths[
+    "database"] = root + "01 Raw inputs" + fs + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
-paths["pro_sto"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Processes_and_Storage_' + str(param["year"])+'.shp'
+paths["pro_sto"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Processes_and_Storage_' + str(
+    param["year"]) + '.shp'
 paths["PPs_"] = root + "02 Intermediate files" + fs + "Files " + region + fs
 
 # ## Renewable Capacities

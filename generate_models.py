@@ -7,7 +7,9 @@ import datetime
 
 
 def initialization():
+    ''' documentation '''
     timecheck('Start')
+
     from config import paths, param
     res_weather = param["res_weather"]
     res_desired = param["res_desired"]
@@ -35,6 +37,7 @@ def initialization():
     Crd_all = np.array([max(Crd_regions[:, 0]), max(Crd_regions[:, 1]), min(Crd_regions[:, 2]), min(Crd_regions[:, 3])])
     param["Crd_regions"] = Crd_regions
     param["Crd_all"] = Crd_all
+
     timecheck('End')
     return paths, param
 
@@ -461,10 +464,12 @@ def generate_load_timeseries(paths, param):
     Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
     df_evrys.to_csv(paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv', sep=',', index=False)
     df_urbs.to_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',', index=False)
+
     timecheck('End')
 
 
 def generate_commodities(paths, param):
+    ''' documentation '''
     timecheck('Start')
 
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
@@ -521,6 +526,8 @@ def generate_commodities(paths, param):
 
 
 def distribute_renewable_capacities(paths, param):
+    ''' documentation '''
+    timecheck("Start")
 
     # Shapefile with countries
     countries = gpd.read_file(paths["Countries"])
@@ -607,8 +614,9 @@ def distribute_renewable_capacities(paths, param):
 
 
 def clean_processes_and_storage_data(paths, param):
-
+    ''' documentation '''
     timecheck("Start")
+
     assumptions = pd.read_excel(paths["assumptions"], sheetname='Process')
 
     depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
@@ -660,7 +668,7 @@ def clean_processes_and_storage_data(paths, param):
 
         # Assign an input commodity
         if pd.isnull(Process.loc[i, 'CoIn']):
-            Process.loc[i, 'CoIn'] = param["clean_pro_sto"]["proc_dict"][Process.loc[i, 'Fueltype']]
+            Process.loc[i, 'CoIn'] = param["pro_sto"]["proc_dict"][Process.loc[i, 'Fueltype']]
 
         # Distinguish between small and large hydro
         if (Process.loc[i, 'CoIn'] == 'Hydro_Small') and (Process.loc[i, 'inst-cap'] > 30):
@@ -671,7 +679,7 @@ def clean_processes_and_storage_data(paths, param):
 
     # Remove renewable power plants (except Tidal and Geothermal)
     Process.set_index('CoIn', inplace=True)
-    Process.drop(list(set(Process.index.unique()) & set(param["clean_pro_sto"]["renewable_powerplants"])),
+    Process.drop(list(set(Process.index.unique()) & set(param["pro_sto"]["renewable_powerplants"])),
                  axis=0, inplace=True)
 
     Process.reset_index(inplace=True)
@@ -680,7 +688,7 @@ def clean_processes_and_storage_data(paths, param):
 
     # ### Include renewable power plants
 
-    for pp in param["clean_pro_sto"]["renewable_powerplants"]:
+    for pp in param["pro_sto"]["renewable_powerplants"]:
         # Shapefile with power plants
         pp_shapefile = gpd.read_file(paths["PPs_"] + pp + '.shp')
         pp_df = pd.DataFrame(pp_shapefile.rename(columns={'CapacityMW': 'inst-cap'}))
@@ -697,7 +705,7 @@ def clean_processes_and_storage_data(paths, param):
 
     # Assign a dummy year for missing entries (will be changed later)
     for c in Process['CoIn'].unique():
-        if c in param["clean_pro_sto"]["storage"]:
+        if c in param["pro_sto"]["storage"]:
             Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_mu'] = 1980
             Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_stdev'] = 5
         else:
@@ -732,7 +740,7 @@ def clean_processes_and_storage_data(paths, param):
 
     if param["year"] > param["clean_pro_sto"]["year_ref"]:
         for c in Process['CoIn'].unique():
-            if c in param["clean_pro_sto"]["storage"]:
+            if c in param["pro_sto"]["storage"]:
                 Process.loc[Process['CoIn'] == c, 'lifetime'] = 60
             else:
                 Process.loc[Process['CoIn'] == c, 'lifetime'] = depreciation[c]
@@ -760,8 +768,122 @@ def clean_processes_and_storage_data(paths, param):
 
 
 def generate_processes(paths, param):
+    ''' documentation '''
+    timecheck("Start")
 
-    return 1
+    assumptions = pd.read_excel(paths["assumptions"])
+
+    depreciation = dict(zip(assumptions["Process"], assumptions["depreciation"].astype(float)))
+    on_off = dict(zip(assumptions["Process"], assumptions["on-off"].astype(float)))
+
+    # Get data from the shapefile
+    pro_and_sto = gpd.read_file(paths["pro_sto"])
+
+    # Split the storage from the processes
+    process_raw = pro_and_sto[~pro_and_sto["coIn"].isin(param["pro_sto"]["storage"])]
+    print('Number of processes read: ' + str(len(process_raw)))
+
+    # Consider the lifetime of power plants
+    process_current = filter_life_time(param, process_raw, depreciation)
+
+    # Get Sites
+    process_located = get_sites(process_current, paths)
+    print('Number of processes after duplicate removal: ' + str(len(process_located)))
+
+    # Reduce the number of processes by aggregating the small and must-run power plants
+    process_compact = process_located.copy()
+    for c in process_compact["CoIn"].unique():
+        process_compact.loc[process_compact["CoIn"] == c, "on-off"] = on_off[c]
+
+    # Select small processes and group them
+    process_group = process_compact[(process_compact["inst-cap"] < param["pro_sto"]["aff_thres"])
+                                    | (process_compact["on-off"] == 0)]
+    process_group.groupby(["Site", "CoIn"], inplace=True)
+
+    # Define the attributes of the aggregates
+    small_cap = pd.DataFrame(process_group["inst-cap"].sum())
+    small_pro = pd.DataFrame(process_group["Pro"].first() + '_agg')
+    small_coout = pd.DataFrame(process_group["CoOut"].first())
+    small_year = pd.DataFrame(process_group["year"].min())
+
+    # Aggregate the small processes
+    process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+
+    # Recombine big processes with the aggregated small ones
+    process_compact = process_compact[(process_compact["inst-cap"] >= param["pro_sto"]["agg_thres"])
+                                      & (process_compact["on-off"] == 1)]
+    process_compact.append(process_small, ignore_index=True, inplace=True)
+    print("Number of compacted processes: " + str(len(process_compact)))
+
+    ########################################################
+    # Save process_compact for model specific processing ? #
+    ########################################################
+    timecheck("End")
+
+
+def generate_storage(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    # Read required assumptions
+    assumptions = pd.read_excel(paths["assumptions"])
+    depreciation = dict(zip(assumptions["Storage"], assumptions["depreciation"].astype(float)))
+
+    # Get data from the shapefile
+    pro_and_sto = gpd.read_file(paths["pro_sto"])
+
+    # Split the storages from the processes
+    storage_raw = pro_and_sto[pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
+    print('Number of storage units read: ' + str(len(storage_raw)))
+
+    # Consider lifetime of storage units
+    storage_current = filter_life_time(param, storage_raw, depreciation)
+
+    # Get sites
+    storage_located = get_sites(storage_current, paths)
+    print('Number of storage units after duplicate removal: ' + str(len(storage_located)))
+
+    # Reduce number of storage units by aggregating the small storage units
+    storage_compact = storage_located.copy()
+
+    # Select small processes and group them
+    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]]
+    storage_group.groupby(["Site", "CoIn"], inplace=True)
+
+    # Define the attributes of the aggregates
+    small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
+    small_pro = pd.DataFrame(storage_group["Pro"].first() + '_agg')
+    small_coout = pd.DataFrame(storage_group["CoOut"].first())
+    small_year = pd.DataFrame(storage_group["year"].min())
+
+    # Aggregate the small storage units
+    storage_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+
+    # Recombine big storage units with the aggregated small ones
+    storage_compact = storage_compact[storage_compact["inst-cap"] >= param["pro_sto"]["agg_thres"]]
+    storage_compact.append(storage_small, ignore_index=True, inplace=True)
+    print("Number of compacted storage units: " + str(len(storage_compact)))
+
+    #################################################################
+    # Lose of storage compact in this process, should be modified ? #
+    #################################################################
+
+    # Take the raw storage table and group by tuple of sites and storage type
+    storage_compact = storage_located[["site", "CoIn", "CoOut", "inst-cap"]]
+    storage_compact.rename(columns={'CoIn': 'sto', 'CoOut': 'Co'}, inplace=True)
+
+    # Define the attributes of the aggregates
+    inst_cap0 = storage_group["inst-cap"].sum().rename('inst-cap-pi')
+
+    co0 = storage_group["Co"].first()
+
+    # Combine the list of series into a dataframe
+    storage_compact = pd.DataFrame([inst_cap0, co0]).transpose().reset_index()
+
+    ########################################################
+    # Save storage_compact for model specific processing ? #
+    ########################################################
+    timecheck("End")
 
 
 def generate_urbs_model(paths, param):

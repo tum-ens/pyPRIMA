@@ -595,3 +595,40 @@ def crd_merra(Crd_regions, res_weather):
                      * res_weather[1] - res_weather[1] / 2)])
     Crd = Crd.T
     return Crd
+
+
+def filter_life_time(param, raw, depreciation):
+
+    if param["year"] > param["pro_sto"]["year_ref"]:
+        # Set depreciation period
+        for c in raw["CoIn"].unique():
+            raw.loc[raw["CoIn"] == c, "lifetime"] = depreciation[c]
+        lifetimeleft = raw["lifetime"] + raw["year"]
+        current = raw.drop(raw.loc[lifetimeleft < param["year"]].index)
+        print('Already depreciated processes:\n')
+        print(str(len(raw)-len(current)) + '# process have been removed')
+    else:
+        current = raw.copy()
+        print('Number of current processes: ' + str(len(current)))
+    return current
+
+
+def get_sites(current, paths):
+
+    # Get regions from shapefile
+    regions = gpd.read_file(paths["SHP"])
+    regions["geometry"] = regions.buffer(0)
+
+    # Spacial join
+    located = gpd.sjoin(current, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
+    located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
+
+    # Remove duplicates that lie in the border between land and sea
+    located.drop_duplicates(subset=["CoIn", "Pro", "inst-cap", "year", "Site"], inplace=True)
+
+    # Remove duplicates that lie in two different zones
+    located = located.loc[~located.index.duplicated(keep='last')]
+
+    located.dropna(axis=0, subset=["Site"], inplace=True)
+
+    return located
