@@ -632,3 +632,127 @@ def get_sites(current, paths):
     located.dropna(axis=0, subset=["Site"], inplace=True)
 
     return located
+
+
+def closest_polygon(geom, polygons):
+    """Returns polygon from polygons that is closest to geom.
+
+    Args:
+        geom: shapely geometry (used here: a point)
+        polygons: GeoDataFrame of non-overlapping (!) polygons
+
+    Returns:
+        The polygon from 'polygons' which is closest to 'geom'.
+    """
+    dist = np.inf
+    for poly in polygons.index:
+        if polygons.loc[poly].geometry.convex_hull.exterior.distance(geom) < dist:
+            dist = polygons.loc[poly].geometry.convex_hull.exterior.distance(geom)
+            closest = polygons.loc[poly]
+    return closest
+
+
+def containing_polygon(geom, polygons):
+    """Returns polygon from polygons that contains geom.
+
+    Args:
+        geom: shapely geometry (used here: a point)
+        polygons: GeoDataFrame of non-overlapping (!) polygons
+
+    Returns:
+        The polygon from 'polygons' which contains (in
+        the way shapely implements it) 'geom'. Throws
+        an error if more than one polygon contain 'geom'.
+        Returns 'None' if no polygon contains it.
+    """
+    try:
+        containing_polygons = polygons[polygons.contains(geom)]
+    except:
+        containing_polygons = []
+    if len(containing_polygons) == 0:
+        return closest_polygon(geom, polygons)
+    if len(containing_polygons) > 1:
+        print(containing_polygons)
+        # raise ValueError('geom lies in more than one polygon!')
+    return containing_polygons.iloc[0]
+
+
+def reverse_lines(df):
+    """Reverses the line direction if the starting point is alphabetically
+    after the end point.
+
+    Args:
+        df: dataframe with columns 'Region_start' and 'Region_end'.
+
+    Returns:
+        The same dataframe after the line direction has been reversed.
+    """
+    for idx in df.index:
+        if df.Region_start[idx] > df.Region_end[idx]:
+            df.loc[idx, ('Region_start')], df.loc[idx, ('Region_end')] = df.loc[idx, ('Region_end')], df.loc[
+                idx, ('Region_start')]
+    df_final = df
+    return df_final
+
+
+def string_to_int(mylist):
+    """This function converts list entries from strings to integers.
+
+    Args:
+        mylist: list eventually containing some integers interpreted
+        as string elements.
+
+    Returns:
+        The same list after the strings where converted to integers.
+    """
+    result = [int(i) for i in mylist]
+    return result
+
+
+def zero_free(mylist):
+    """This function deletes zero entries from a list.
+
+    Args:
+        mylist: list eventually containing zero entries.
+
+    Returns:
+        The same list after the zero entries where removed.
+    """
+    result = []
+    for j in np.arange(len(mylist)):
+        if mylist[j] > 0:
+            result = result + [mylist[j]]
+    return result
+
+
+def add_suffix(df, suffix):
+    # Check whether there is only one copy of the initial row, or more
+    if str(df.index_old.iloc[1]).find('_') > 0:  # There are more than one copy of the row
+        # Increment the suffix and replace the old one
+        suffix = suffix + 1
+        df.index_old.iloc[1] = df.index_old.iloc[1].replace('_' + str(suffix - 1), '_' + str(suffix))
+    else:  # No other copy has been created so far
+        # Reinitialize the suffix and concatenate it at the end of the old index
+        suffix = 1
+        df.index_old.iloc[1] = str(df.index_old.iloc[1]) + '_' + str(suffix)
+    return (df, suffix)
+
+
+def deduplicate_lines(df):
+    """ Aggregate bidirectional lines to single lines.
+
+    Given a th"""
+    # aggregate val of rows with (a,b,t) == (b,a,t)
+    idx = 0
+    while idx < len(df) - 1:
+        if (df.iloc[idx, 0] == df.iloc[idx + 1, 0]) & (
+                df.iloc[idx, 1] == df.iloc[idx + 1, 1]):  # & (df.iloc[idx,2] == df.iloc[idx+1,2]):
+            df.iloc[idx, 26] = df.iloc[idx, 26] + df.iloc[idx + 1, 26]  # Capacity MVA
+            df.iloc[idx, 23] = 1 / (1 / df.iloc[idx, 23] + 1 / df.iloc[idx + 1, 23])  # Specific resistance Ohm/km
+            df.iloc[idx, 13] = df.iloc[idx, 13] + df.iloc[idx + 1, 13]  # Length
+            df = df.drop(df.index[idx + 1])
+        else:
+            idx += 1
+
+    df_final = df
+    return df_final
