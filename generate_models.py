@@ -1,5 +1,5 @@
-import os
 from helping_functions import *
+import os
 import shutil
 import openpyxl
 from scipy.ndimage import convolve
@@ -920,8 +920,8 @@ if __name__ == '__main__':
     # generate_commodities(paths, param) # corresponds to 04 - done
     # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done (still need testing)
     # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done (still needs testing)
-    generate_processes(paths, param)  # corresponds to 05c
-    # generate_storage(paths, param) # corresponds to 05d
+    # generate_processes(paths, param)  # corresponds to 05c - done (still needs testing)
+    # generate_storage(paths, param) # corresponds to 05d - done (Weird code at the end)(still needs testing)
     # clean_grid_data(paths, param) # corresponds to 06a
     # generate_aggregated_grid(paths, param) # corresponds to 06b
     generate_urbs_model(paths, param)
