@@ -134,10 +134,27 @@ pro_sto = {"year_ref": 2015,
            "renewable_powerplants": ['Hydro_Large', 'Hydro_Small', 'WindOn', 'WindOff',
                                      'Solar', 'Biomass', 'Biogas', 'Liquid biofuels'],
            "agg_thres": 20,
-            "wacc": 0.07
+           "wacc": 0.07
            }
 
 param["pro_sto"] = pro_sto
+
+# Clean grid
+loadability = {"80": 3,
+               "100": 2.75,
+               "150": 2,
+               "200": 1.75,
+               "250": 1.5,
+               "300": 1.375,
+               "350": 1.25,
+               "400": 1.125,
+               "450": 1,
+               "500": 0.9,
+               "550": 0.85,
+               "600": 0.8,
+               "650": 0.77,
+               "700": 0.6}
+param["grid"]["loadaility"] = loadability
 
 
 ###########################
@@ -152,6 +169,7 @@ if platform.startswith('win'):
     from pathlib import Path
 
     root = str(Path(git_folder).parent) + fs
+
 elif platform.startswith('linux'):
     # Linux Root Folder
     root = git_folder + fs + ".." + fs
@@ -188,13 +206,22 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      'STR': PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",
                      }
 
-# Clean Process and storage data
+# Process and storage data
 paths[
-    "database"] = root + "01 Raw inputs" + fs + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+    "database"] = root + '01 Raw inputs' + fs + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
-paths["pro_sto"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Processes_and_Storage_' + str(
-    param["year"]) + '.shp'
-paths["PPs_"] = root + "02 Intermediate files" + fs + "Files " + region + fs
+paths["pro_sto"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Processes_and_Storage_' + \
+                   str(param["year"]) + '.shp'
+paths["PPs_"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+
+# Grid
+
+paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + fs + \
+                'gridkit_europe-highvoltage-links.csv'
+# paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_US' + fs + \
+#                 'gridkit_north_america-highvoltage-links.csv'
+
+paths["grid_shp"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Maps' + fs + 'grid_cleaned.shp'
 
 # ## Renewable Capacities
 # Rasters for wind and solar
@@ -214,9 +241,6 @@ paths["IRENA"] = root + '01 Raw inputs' + fs + 'Renewable energy' + fs + 'Renewa
 # outputs
 paths["map_power_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs
 paths["map_grid_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs + 'random_points.shp'
-
-# Model template (to be removed)
-paths["urbs_template"] = 'Urbs_excel template.xlsx'
 
 # Ouput Folders
 # 02 - load

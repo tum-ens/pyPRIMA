@@ -5,6 +5,7 @@ import geopandas as gpd
 import numpy as np
 from shapely import geometry
 from shapely.geometry import Point
+import shapefile as shp
 import sys
 import datetime
 import inspect
@@ -54,7 +55,8 @@ def clean_load_data(paths, param, countries):
     df_renamed.reset_index(inplace=True)
 
     # Reshape Renamed_df
-    df_reshaped_renamed = pd.DataFrame(df_renamed.loc[:, df_renamed.columns != 'Country'].T.to_numpy(), columns=df_renamed['Country'])
+    df_reshaped_renamed = pd.DataFrame(df_renamed.loc[:, df_renamed.columns != 'Country'].T.to_numpy(),
+                                       columns=df_renamed['Country'])
 
     # Create time series for missing countries
     df_completed = df_reshaped_renamed.copy()
@@ -367,7 +369,6 @@ def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global
 
 
 def zonal_weighting(paths, df_load, df_stat, s):
-
     shp_path = paths["Countries"]
     raster_path = paths["LU"]
     shp = ogr.Open(shp_path, 1)
@@ -406,7 +407,6 @@ def zonal_weighting(paths, df_load, df_stat, s):
 
 
 def field_exists(field_name, shp_path):
-
     shp = ogr.Open(shp_path, 0)
     lyr = shp.GetLayer()
     lyr_dfn = lyr.GetLayerDefn()
@@ -561,7 +561,6 @@ def map_grid_plants(x, y, paths):
 
 
 def timecheck(*args):
-
     if len(args) == 0:
         print(inspect.stack()[1].function + str(datetime.datetime.now().strftime(": %H:%M:%S:%f")))
 
@@ -598,7 +597,6 @@ def crd_merra(Crd_regions, res_weather):
 
 
 def filter_life_time(param, raw, depreciation):
-
     if param["year"] > param["pro_sto"]["year_ref"]:
         # Set depreciation period
         for c in raw["CoIn"].unique():
@@ -606,7 +604,7 @@ def filter_life_time(param, raw, depreciation):
         lifetimeleft = raw["lifetime"] + raw["year"]
         current = raw.drop(raw.loc[lifetimeleft < param["year"]].index)
         print('Already depreciated processes:\n')
-        print(str(len(raw)-len(current)) + '# process have been removed')
+        print(str(len(raw) - len(current)) + '# process have been removed')
     else:
         current = raw.copy()
         print('Number of current processes: ' + str(len(current)))
@@ -614,7 +612,6 @@ def filter_life_time(param, raw, depreciation):
 
 
 def get_sites(current, paths):
-
     # Get regions from shapefile
     regions = gpd.read_file(paths["SHP"])
     regions["geometry"] = regions.buffer(0)
@@ -756,3 +753,110 @@ def deduplicate_lines(df):
 
     df_final = df
     return df_final
+
+
+def match_wire_voltages(grid_sorted):
+
+    """
+    the columns 'voltage' and 'wires' may contain multiple values separated with a semicolon. The goal is to assign
+    a voltage to every circuit, whenever possible.
+
+    Algorithm:
+
+    [Case #1] If (n_voltages_count = 1), then every circuit is on that voltage level. We can replace the list
+    entries in 'wires' with their sum;
+    Else:
+    [Case #2] If (n_circuits_count = n_voltages_count), then update the value in the list 'wires' so that each
+    voltage level has only one circuit;
+    [Case #3] If (n_circuits_count < n_voltages_count), then ignore the exceeding voltages and update the value in
+    the list 'Circuits' so that each voltage level has only one circuit;
+    [Case #4] If (n_voltages_count < n_circuits), then assign the highest voltage to the rest of the circuits;
+    [Case #5] If (n_circuits < n_voltages_count) and (n_voltages_count < n_circuits_count), then ignore
+    the exceeding voltages so that each voltage level has as many circuits as in the list entries of 'wires'.
+
+    :param grid_sorted:
+    :return:
+    """
+
+    n_circuits = pd.Series(map(string_to_int, grid_sorted.wires.str.split(';')))
+    n_circuits_count = pd.Series(map(sum, n_circuits), index=grid_sorted.index)
+    n_circuits = pd.Series(map(len, n_circuits), index=grid_sorted.index)
+    n_voltages = pd.Series(map(zero_free, map(string_to_int, grid_sorted.voltage.str.split(';'))))
+    n_voltages_count = pd.Series(map(len, n_voltages), index=grid_sorted.index)
+    n_voltages = pd.Series(n_voltages, index=grid_sorted.index)
+    grid_sorted.voltage = n_voltages
+
+    # Case 1: (n_voltages_count = 1)
+    ind_excerpt = grid_sorted[n_voltages_count == 1].index
+    grid_clean = grid_sorted.loc[ind_excerpt]
+    grid_dirty = grid_sorted.loc[grid_sorted[n_voltages_count != 1].index]
+    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
+    grid_clean.loc[:, 'wires'] = n_circuits.loc[ind_excerpt]
+
+    # Reindex in order to avoid user warnings later
+    n_circuits_count = n_circuits_count.reindex(grid_dirty.index)
+    n_circuits = n_circuits.reindex(grid_dirty.index)
+    n_voltages_count = n_voltages_count.reindex(grid_dirty.index)
+    n_voltages = n_voltages.reindex(grid_dirty.index)
+
+    # Case 2: (n_circuits_count = n_voltages_count)
+    ind_excerpt = grid_dirty[n_circuits_count == n_voltages_count].index
+    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
+    grid_dirty.loc[ind_excerpt, 'wires'] = [';'.join(['1'] * n_circuits_count.loc[i]) for i in ind_excerpt]
+
+    # Case 3: (n_circuits_count < n_voltages_count)
+    ind_excerpt = grid_dirty[n_circuits_count < n_voltages_count].index
+    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
+    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
+    n_voltages.loc[ind_excerpt] = [grid_dirty.loc[i, 'voltage'][:n_circuits_count.loc[i]] for i in ind_excerpt]
+    grid_dirty.loc[ind_excerpt, 'voltage'] = n_voltages.loc[ind_excerpt]
+    grid_dirty.loc[ind_excerpt, 'wires'] = [';'.join(['1'] * n_circuits_count.loc[i]) for i in ind_excerpt]
+
+    # Case 4: (n_voltages_count < n_circuits)
+    ind_excerpt = grid_dirty[(n_voltages_count < n_circuits) & (n_voltages_count > 0)].index
+    missing_voltages = n_circuits.loc[ind_excerpt] - n_voltages_count.loc[ind_excerpt]
+    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
+    for i in ind_excerpt:
+        for j in np.arange(missing_voltages[i]):
+            n_voltages.loc[i].append(max(grid_dirty.loc[i, 'voltage']))
+            grid_dirty.loc[i, 'voltage'].append(max(grid_dirty.loc[i, 'voltage']))
+
+    # Case 5: (n_circuits < n_voltages_count) and (n_voltages_count < n_circuits_count)
+    ind_excerpt = grid_dirty[(n_circuits < n_voltages_count) & (n_voltages_count < n_circuits_count)].index
+    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
+    n_voltages.loc[ind_excerpt] = [grid_dirty.loc[i, 'voltage'][:n_circuits.loc[i]] for i in ind_excerpt]
+    grid_dirty.loc[ind_excerpt, 'voltage'] = n_voltages.loc[ind_excerpt]
+
+    # By now n_circuits = n_voltages_count, so that we can split the list entries of 'voltage' and 'wires'
+    # in exactly the same amount of rows:
+
+    suffix = 1  # When we create a new row, we will add a suffix to the old index
+
+    while len(grid_dirty):
+        # In case the first line is clean
+        if grid_dirty.wires.iloc[0].count(';') == 0:
+            grid_clean = grid_clean.append(grid_dirty.iloc[0], ignore_index=True)
+            grid_dirty = grid_dirty.drop(grid_dirty.index[[0]])
+        else:
+            # Append a copy of the first row of grid_dirty at the top of the same dataframe
+            grid_dirty = grid_dirty.iloc[0].to_frame().transpose().append(grid_dirty, ignore_index=True)
+            # Extract the first number of circuits from that row and remove the rest of the string
+            grid_dirty.wires.iloc[0] = grid_dirty.wires.iloc[0][:grid_dirty.wires.iloc[0].find(';')]
+            # Extract the first voltage level from that row and remove the rest of the list
+            grid_dirty.voltage.iloc[0] = grid_dirty.voltage.iloc[0][:1]
+
+            # Add the right suffix
+            grid_dirty, suffix = add_suffix(grid_dirty, suffix)
+
+            # Update the string in the original row
+            grid_dirty.wires.iloc[1] = grid_dirty.wires.iloc[1][grid_dirty.wires.iloc[1].find(';') + 1:]
+            grid_dirty.voltage.iloc[1] = grid_dirty.voltage.iloc[1][1:]
+
+            # Move the 'clean' row to grid_clean, and drop it from grid_dirty
+            grid_clean = grid_clean.append(grid_dirty.iloc[0], ignore_index=True)
+            grid_dirty = grid_dirty.drop(grid_dirty.index[[0]])
+
+    # Express voltage in kV
+    grid_clean.voltage = pd.Series([grid_clean.loc[i, 'voltage'][0] / 1000 for i in grid_clean.index],
+                                   index=grid_clean.index)
+    return grid_clean

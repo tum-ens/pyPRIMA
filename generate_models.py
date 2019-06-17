@@ -886,6 +886,144 @@ def generate_storage(paths, param):
     timecheck("End")
 
 
+def clean_grid_data(paths, param):
+
+    # Read CSV file containing the lines data
+    grid_raw = pd.read_csv(paths["grid"], header=0, sep=',', decimal='.')
+
+    # Extract the string with the coordinates from the last column
+
+    grid_raw["wkt_srid_4326"] = pd.Series(map(lambda s: s[21:-1], grid_raw["wkt_srid_4326"]), grid_raw.index)
+
+    # Extract the coordinates into a new dataframe with four columns for each coordinate
+    coordinates = pd.DataFrame(grid_raw["wkt_srid_4326"].str.split(' |,').tolist(),
+                               columns=['V1_long', 'V1_lat', 'V2_long', 'V2_lat'])
+
+    # Merge the original dataframe (grid_raw) with the one for the coordinates
+    grid_raw = grid_raw.merge(coordinates, how='outer', left_index=True, right_index=True)
+
+    # Drop the old column and the coordinates dataframe
+    grid_raw.drop('wkt_srid_4326', axis=1, inplace=True)
+    del coordinates
+
+    # Compte the columns voltage and wire if they have no value
+    grid_completed = grid_raw.copy()
+    grid_completed.loc[grid_completed["voltage"].isnull(), 'voltage'] = '220000'
+    grid_completed.loc[grid_completed["wires"].isnull(), 'wires'] = '2'
+
+    # Remove all the entries where the voltage is zero
+    n_voltages = map(zero_free, map(string_to_int, grid_completed.voltage.str.split(';')))
+    n_voltages_count = pd.Series(map(len, n_voltages), index=grid_completed.index)
+    grid_filtered = grid_completed[(n_voltages_count > 0)]
+
+    # Reset the indices
+    grid_sorted = grid_filtered.reset_index(drop=False)
+    grid_sorted.rename(columns={'index': 'index_old'}, inplace=True)
+
+    # Save the old indices as a series of objects
+    grid_sorted = grid_sorted.astype({'index_old': object})
+
+    # Match multiple entries for wires and voltage to one circuit
+    grid_clean = match_wire_voltages(grid_sorted)
+
+    # Special correction for the USA: DC and AC split
+    if os.path.basename(paths["grid"]) == 'gridkit_north_america-highvoltage-links.csv':
+        ind_excerpt = grid_clean[grid_clean.frequency == '60;0'].index
+        suffix = 1  # When we create a new row, we will add a suffix to the old index
+
+        grid_clean_f = grid_clean
+        for i in ind_excerpt:
+            # Append a copy of the ith row of grid at the end of the same dataframe
+            grid_clean_f = grid_clean_f.append(grid_clean_f.loc[i], ignore_index=True)
+            # Extract the first frequency from that row and remove the rest of the string
+            grid_clean_f.loc[i, 'frequency'] = grid_clean_f.loc[i, 'frequency'][
+                                                 :grid_clean_f.loc[i, 'frequency'].find(';')]
+            # Extract the last frequency from the last row and remove the rest of the string
+            grid_clean_f.frequency.iloc[-1] = grid_clean_f.frequency.iloc[-1][
+                                              grid_clean_f.frequency.iloc[-1].find(';') + 1:]
+
+            # Update the number of circuits in the ith row
+            grid_clean_f.wires.loc[i] = grid_clean_f.wires.loc[i] - 1
+            # Update the number of circuits in the last row
+            grid_clean_f.wires.iloc[-1] = 1
+
+            # Check whether there is only one copy of the ith row, or more
+            if str(grid_clean_f.index_old.iloc[-1]).find('_') > 0:  # There are more than one copy of the row
+                # Increment the suffix and replace the old one
+                suffix = suffix + 1
+                grid_clean_f.index_old.iloc[-1] = grid_clean_f.index_old.iloc[-1].replace('_' + str(suffix - 1),
+                                                                                          '_' + str(suffix))
+            else:  # No other copy has been created so far
+                # Reinitialize the suffix and concatenate it at the end of the old index
+                suffix = 1
+                grid_clean_f.index_old.iloc[-1] = str(grid_clean_f.index_old.iloc[-1]) + '_' + str(suffix)
+
+            # Set the voltage of the DC line
+            grid_clean_f.voltage.iloc[-1] = 500
+
+        # Replace empty values in the column frequency with 60 Hz
+        grid_clean_f.frequency.fillna(60, inplace=True)
+        grid_clean_f.loc[grid_clean_f.index, 'frequency'] = grid_clean_f.frequency.astype(int)
+    else:
+        grid_clean_f = grid_clean
+
+        # Replace empty values in the column frequency with 50 Hz
+        grid_clean_f.frequency.fillna(50, inplace=True)
+
+    grid_filled = grid_clean.copy()
+    grid_filled["length_m"] = grid_filled["length_m"].astype(float)
+
+    # Filling the values for X_ohmkm and calculating X_ohm
+    grid_filled.loc[grid_filled[grid_filled.voltage <= 230].index, 'x_ohmkm'] = 0.3315
+    grid_filled.loc[grid_filled[grid_filled.voltage > 230].index, 'x_ohmkm'] = 0.2613
+    grid_filled['X_ohm'] = grid_filled['x_ohmkm'] * grid_filled['length_m'] / 1000 / grid_filled['wires'].astype(float)
+
+    # Filling the values for the loadability c
+    loadability = param["grid"]["loadability"]
+    grid_filled.loc[grid_filled[grid_filled["length_m"] <= 80].index, 'loadability_c'] = loadability["80"]
+    grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["700"]
+    for len in np.arange(100, 750, 50, int):
+        grid_filled.loc[grid_filled[grid_filled["length_m"] > len &
+                                    grid_filled["length_m"] <= (len+50)].index, 'loadability_c'] = loadability[str(len)]
+
+    # Filling the values for SIL_MW and calculating Capacity_MVA
+    grid_filled.loc[grid_filled[grid_filled["voltage"] <= 230].index, 'SIL_MW'] = 230
+    grid_filled.loc[grid_filled[grid_filled["voltage"] > 230].index, 'SIL_MW'] = 670
+    grid_filled.loc[grid_filled.index, 'Capacity_MVA'] = \
+        pd.Series([s*c*int(w) for s, c, w in zip(grid_filled.SIL_MW, grid_filled.loadability_c, grid_filled.wires)],
+                  index=grid_filled.index)
+
+    # Sum the capacities of tines with same ID
+    grid_cleaned = grid_filled[['Capacity_MVA', 'l_id']].groupby(['l_id']).sum()
+    grid_cleaned = grid_cleaned.join(
+        grid_filled[['l_id', 'V1_long', 'V1_lat', 'V2_long', 'V2_lat', 'frequency', 'X_ohm']].set_index(['l_id']))
+    grid_cleaned.drop_duplicates(inplace=True)
+    grid_cleaned.reset_index(inplace=True)
+
+    # Clean entries in frequency
+    grid_cleaned.loc[grid_cleaned['frequency'] == '0', 'tr_type'] = 'DC_CAB'
+    grid_cleaned.loc[~(grid_cleaned['frequency'] == '0'), 'tr_type'] = 'AC_OHL'
+
+    # Drop column 'frequency'
+    grid_cleaned.drop(['frequency'], axis=1, inplace=True)
+
+    ########################################################
+    # Save grid_cleaned for model specific processing ? #
+    ########################################################
+
+    # Writing to shapefile
+    with shp.Writer(paths["grid_shp"], shapeType=3) as w:
+        w.autoBalance = 1
+        w.field('ID', 'N', 6, 0)
+        w.field('Cap_MVA', 'N', 8, 2)
+        w.field('Type', 'C', 6, 0)
+
+        for i in grid_cleaned.index:
+            w.line([[grid_cleaned.loc[i, ['V1_long', 'V1_lat']].astype(float),
+                     grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
+            w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
+
+
 def generate_urbs_model(paths, param):
     """
     Read model's .csv files, and create relevant dataframes.
@@ -922,7 +1060,7 @@ if __name__ == '__main__':
     # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done (still needs testing)
     # generate_processes(paths, param)  # corresponds to 05c - done (still needs testing)
     # generate_storage(paths, param) # corresponds to 05d - done (Weird code at the end)(still needs testing)
-    # clean_grid_data(paths, param) # corresponds to 06a
+    # clean_grid_data(paths, param) # corresponds to 06a - done ( still needs testing)
     # generate_aggregated_grid(paths, param) # corresponds to 06b
     generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)
