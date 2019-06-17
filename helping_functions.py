@@ -619,6 +619,7 @@ def get_sites(current, paths):
     regions["geometry"] = regions.buffer(0)
 
     # Spacial join
+    current.crs = regions[["NAME_SHORT", "geometry"]].crs
     located = gpd.sjoin(current, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
     located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
 
@@ -758,6 +759,7 @@ def deduplicate_lines(df):
 
 
 def match_wire_voltages(grid_sorted):
+    timecheck('Start')
     """
     the columns 'voltage' and 'wires' may contain multiple values separated with a semicolon. The goal is to assign
     a voltage to every circuit, whenever possible.
@@ -832,8 +834,11 @@ def match_wire_voltages(grid_sorted):
     # in exactly the same amount of rows:
 
     suffix = 1  # When we create a new row, we will add a suffix to the old index
-
+    status = 0
+    count = len(grid_dirty)
     while len(grid_dirty):
+        status = count - len(grid_dirty) + 1
+        display_progress("Cleaning GridKit progress: ", (count, status))
         # In case the first line is clean
         if grid_dirty.wires.iloc[0].count(';') == 0:
             grid_clean = grid_clean.append(grid_dirty.iloc[0], ignore_index=True)
@@ -860,4 +865,40 @@ def match_wire_voltages(grid_sorted):
     # Express voltage in kV
     grid_clean.voltage = pd.Series([grid_clean.loc[i, 'voltage'][0] / 1000 for i in grid_clean.index],
                                    index=grid_clean.index)
+    print(' \n')
+    timecheck('End')
     return grid_clean
+
+
+def set_loadability(grid_filled, param):
+    loadability = param["grid"]["loadability"]
+    grid_filled.loc[grid_filled[grid_filled.length_m <= float(80)].index, 'loadability_c'] = loadability["80"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 80) & (grid_filled.length_m <= 100)].index, 'loadability_c'] \
+        = loadability["100"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 100) & (grid_filled.length_m <= 150)].index, 'loadability_c'] \
+        = loadability["150"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 150) & (grid_filled.length_m <= 200)].index, 'loadability_c'] \
+        = loadability["200"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 200) & (grid_filled.length_m <= 250)].index, 'loadability_c'] \
+        = loadability["250"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 250) & (grid_filled.length_m <= 300)].index, 'loadability_c'] \
+        = loadability["300"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 300) & (grid_filled.length_m <= 350)].index, 'loadability_c'] \
+        = loadability["350"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 350) & (grid_filled.length_m <= 400)].index, 'loadability_c'] \
+        = loadability["400"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 400) & (grid_filled.length_m <= 450)].index, 'loadability_c'] \
+        = loadability["450"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 450) & (grid_filled.length_m <= 500)].index, 'loadability_c'] \
+        = loadability["500"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 500) & (grid_filled.length_m <= 550)].index, 'loadability_c'] \
+        = loadability["550"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 550) & (grid_filled.length_m <= 600)].index, 'loadability_c'] \
+        = loadability["600"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 600) & (grid_filled.length_m <= 650)].index, 'loadability_c'] \
+        = loadability["650"]
+    grid_filled.loc[grid_filled[(grid_filled.length_m > 650) & (grid_filled.length_m <= 700)].index, 'loadability_c'] \
+        = loadability["700"]
+    grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["750"]
+
+    return grid_filled

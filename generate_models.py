@@ -11,8 +11,8 @@ def initialization():
     timecheck('Start')
 
     from config import paths, param
-    res_weather = param["res_weather"]
-    res_desired = param["res_desired"]
+    res_weather = param["dist_ren"]["res_weather"]
+    res_desired = param["dist_ren"]["res_desired"]
 
     # read shapefile of regions
     regions_shp = gpd.read_file(paths["SHP"])
@@ -617,7 +617,7 @@ def clean_processes_and_storage_data(paths, param):
     ''' documentation '''
     timecheck("Start")
 
-    assumptions = pd.read_excel(paths["assumptions"], sheetname='Process')
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
 
     depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
     year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
@@ -697,9 +697,7 @@ def clean_processes_and_storage_data(paths, param):
         pp_df['CoIn'] = pp
         pp_df['Pro'] = [pp + '_' + str(i) for i in pp_df.index]
         pp_df.drop(['geometry'], axis=1, inplace=True)
-        Process = Process.append(pp_df, ignore_index=True)
-
-    print('Possible processes: ', Process['CoIn'].unique())
+        Process = Process.append(pp_df, ignore_index=True, sort=True)
 
     # ### Year
 
@@ -738,7 +736,7 @@ def clean_processes_and_storage_data(paths, param):
 
     # ### Consider lifetime of power plants
 
-    if param["year"] > param["clean_pro_sto"]["year_ref"]:
+    if param["year"] > param["pro_sto"]["year_ref"]:
         for c in Process['CoIn'].unique():
             if c in param["pro_sto"]["storage"]:
                 Process.loc[Process['CoIn'] == c, 'lifetime'] = 60
@@ -762,7 +760,11 @@ def clean_processes_and_storage_data(paths, param):
     P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
 
     # Save the GeoDataFrame
-    P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+    if not os.path.isfile(paths["pro_sto"]):
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+    else:
+        os.remove(paths["pro_sto"])
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
 
     timecheck("End")
 
@@ -771,7 +773,7 @@ def generate_processes(paths, param):
     ''' documentation '''
     timecheck("Start")
 
-    assumptions = pd.read_excel(paths["assumptions"])
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
 
     depreciation = dict(zip(assumptions["Process"], assumptions["depreciation"].astype(float)))
     on_off = dict(zip(assumptions["Process"], assumptions["on-off"].astype(float)))
@@ -780,7 +782,7 @@ def generate_processes(paths, param):
     pro_and_sto = gpd.read_file(paths["pro_sto"])
 
     # Split the storage from the processes
-    process_raw = pro_and_sto[~pro_and_sto["coIn"].isin(param["pro_sto"]["storage"])]
+    process_raw = pro_and_sto[~pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
     print('Number of processes read: ' + str(len(process_raw)))
 
     # Consider the lifetime of power plants
@@ -796,9 +798,9 @@ def generate_processes(paths, param):
         process_compact.loc[process_compact["CoIn"] == c, "on-off"] = on_off[c]
 
     # Select small processes and group them
-    process_group = process_compact[(process_compact["inst-cap"] < param["pro_sto"]["aff_thres"])
+    process_group = process_compact[(process_compact["inst-cap"] < param["pro_sto"]["agg_thres"])
                                     | (process_compact["on-off"] == 0)]
-    process_group.groupby(["Site", "CoIn"], inplace=True)
+    process_group = process_group.groupby(["Site", "CoIn"])
 
     # Define the attributes of the aggregates
     small_cap = pd.DataFrame(process_group["inst-cap"].sum())
@@ -812,7 +814,7 @@ def generate_processes(paths, param):
     # Recombine big processes with the aggregated small ones
     process_compact = process_compact[(process_compact["inst-cap"] >= param["pro_sto"]["agg_thres"])
                                       & (process_compact["on-off"] == 1)]
-    process_compact.append(process_small, ignore_index=True, inplace=True)
+    process_compact = process_compact.append(process_small, ignore_index=True)
     print("Number of compacted processes: " + str(len(process_compact)))
 
     ########################################################
@@ -826,7 +828,7 @@ def generate_storage(paths, param):
     timecheck("Start")
 
     # Read required assumptions
-    assumptions = pd.read_excel(paths["assumptions"])
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Storage')
     depreciation = dict(zip(assumptions["Storage"], assumptions["depreciation"].astype(float)))
 
     # Get data from the shapefile
@@ -847,8 +849,8 @@ def generate_storage(paths, param):
     storage_compact = storage_located.copy()
 
     # Select small processes and group them
-    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]]
-    storage_group.groupby(["Site", "CoIn"], inplace=True)
+    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(["Site", "CoIn"])
+    # storage_group = storage_group.groupby(["Site", "CoIn"])
 
     # Define the attributes of the aggregates
     small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
@@ -861,7 +863,7 @@ def generate_storage(paths, param):
 
     # Recombine big storage units with the aggregated small ones
     storage_compact = storage_compact[storage_compact["inst-cap"] >= param["pro_sto"]["agg_thres"]]
-    storage_compact.append(storage_small, ignore_index=True, inplace=True)
+    storage_compact = storage_compact.append(storage_small, ignore_index=True, sort=True)
     print("Number of compacted storage units: " + str(len(storage_compact)))
 
     #################################################################
@@ -869,8 +871,9 @@ def generate_storage(paths, param):
     #################################################################
 
     # Take the raw storage table and group by tuple of sites and storage type
-    storage_compact = storage_located[["site", "CoIn", "CoOut", "inst-cap"]]
-    storage_compact.rename(columns={'CoIn': 'sto', 'CoOut': 'Co'}, inplace=True)
+    storage_compact = storage_located[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
+    storage_compact.rename(columns={'CoIn': 'Sto', 'CoOut': 'Co'}, inplace=True)
+    storage_group = storage_compact.groupby(["Site", "Sto"])
 
     # Define the attributes of the aggregates
     inst_cap0 = storage_group["inst-cap"].sum().rename('inst-cap-pi')
@@ -931,11 +934,15 @@ def clean_grid_data(paths, param):
     grid_sorted = grid_sorted.astype({'index_old': object})
 
     # Match multiple entries for wires and voltage to one circuit
-    grid_clean = match_wire_voltages(grid_sorted)
+    if os.path.isfile('savegridclean.hdf'):
+        grid_clean = pd.read_hdf('savegridclean.hdf', 'df')
+    else:
+        grid_clean = match_wire_voltages(grid_sorted)
+        grid_clean.to_hdf('savegridclean.hdf', 'df')
 
     # Special correction for the USA: DC and AC split
     if os.path.basename(paths["grid"]) == 'gridkit_north_america-highvoltage-links.csv':
-        ind_excerpt = grid_clean[grid_clean.frequency == '60;0'].index
+        ind_excerpt = grid_clean[grid_clean["frequency"] == '60;0'].index
         suffix = 1  # When we create a new row, we will add a suffix to the old index
 
         grid_clean_f = grid_clean
@@ -986,13 +993,7 @@ def clean_grid_data(paths, param):
     grid_filled['X_ohm'] = grid_filled['x_ohmkm'] * grid_filled['length_m'] / 1000 / grid_filled['wires'].astype(float)
 
     # Filling the values for the loadability c
-    loadability = param["grid"]["loadability"]
-    grid_filled.loc[grid_filled[grid_filled["length_m"] <= 80].index, 'loadability_c'] = loadability["80"]
-    grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["700"]
-    for len in np.arange(100, 750, 50, int):
-        grid_filled.loc[grid_filled[grid_filled["length_m"] > len &
-                                    grid_filled["length_m"] <= (len + 50)].index, 'loadability_c'] = loadability[
-            str(len)]
+    grid_filled = set_loadability(grid_filled, param)
 
     # Filling the values for SIL_MW and calculating Capacity_MVA
     grid_filled.loc[grid_filled[grid_filled["voltage"] <= 230].index, 'SIL_MW'] = 230
@@ -1029,8 +1030,11 @@ def clean_grid_data(paths, param):
         w.field('ID', 'N', 6, 0)
         w.field('Cap_MVA', 'N', 8, 2)
         w.field('Type', 'C', 6, 0)
-
+        count = len(grid_cleaned.index)
+        status = 0
         for i in grid_cleaned.index:
+            status += 1
+            display_progress("Writing grid to Shapefile: ", (count, status))
             w.line([[grid_cleaned.loc[i, ['V1_long', 'V1_lat']].astype(float),
                      grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
             w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
@@ -1142,9 +1146,9 @@ def generate_aggregated_grid(paths, param):
     # Write output of everys model
     output.to_csv(paths["everys"] + 'Transmission_everys_GridKit.csv', sep=';', decimal=',')
 
-    ######################################################
-    # Create model for urbs, or write to excel directly  #
-    ######################################################
+    #######################################################
+    #  Create model for urbs, or write to excel directly  #
+    #######################################################
 
     timecheck("End")
 
@@ -1181,11 +1185,11 @@ if __name__ == '__main__':
     # generate_intermittent_supply_timeseries(paths, param) - separate module
     # generate_load_timeseries(paths, param) - done
     # generate_commodities(paths, param) # corresponds to 04 - done
-    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done (still need testing)
-    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done (still needs testing)
-    # generate_processes(paths, param)  # corresponds to 05c - done (still needs testing)
-    # generate_storage(paths, param) # corresponds to 05d - done (Weird code at the end)(still needs testing)
-    # clean_grid_data(paths, param) # corresponds to 06a - done ( still needs testing)
-    # generate_aggregated_grid(paths, param) # corresponds to 06b
-    generate_urbs_model(paths, param)
+    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    # generate_processes(paths, param)  # corresponds to 05c - done
+    # generate_storage(paths, param) # corresponds to 05d - done (Weird code at the end)
+    # clean_grid_data(paths, param) # corresponds to 06a - done
+    generate_aggregated_grid(paths, param) # corresponds to 06b
+    # generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)

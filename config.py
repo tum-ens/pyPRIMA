@@ -140,21 +140,24 @@ pro_sto = {"year_ref": 2015,
 param["pro_sto"] = pro_sto
 
 # Clean grid
+param["grid"] = {}
 loadability = {"80": 3,
                "100": 2.75,
-               "150": 2,
-               "200": 1.75,
-               "250": 1.5,
-               "300": 1.375,
-               "350": 1.25,
-               "400": 1.125,
-               "450": 1,
-               "500": 0.9,
-               "550": 0.85,
-               "600": 0.8,
-               "650": 0.77,
-               "700": 0.6}
-param["grid"]["loadaility"] = loadability
+               "150": 2.5,
+               "200": 2,
+               "250": 1.75,
+               "300": 1.5,
+               "350": 1.375,
+               "400": 1.25,
+               "450": 1.125,
+               "500": 1,
+               "550": 0.9,
+               "600": 0.85,
+               "650": 0.8,
+               "700": 0.77,
+               "750": 0.6}
+
+param["grid"]["loadability"] = loadability
 
 
 ###########################
@@ -207,8 +210,8 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      }
 
 # Process and storage data
-paths[
-    "database"] = root + '01 Raw inputs' + fs + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs +\
+                    'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
 paths["pro_sto"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Processes_and_Storage_' + \
                    str(param["year"]) + '.shp'
