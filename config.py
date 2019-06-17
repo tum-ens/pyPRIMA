@@ -221,7 +221,8 @@ paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + f
 # paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_US' + fs + \
 #                 'gridkit_north_america-highvoltage-links.csv'
 
-paths["grid_shp"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Maps' + fs + 'grid_cleaned.shp'
+paths["grid_shp"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Grid' + fs + 'grid_cleaned_shape.shp'
+paths["grid_cleaned"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Grid' + fs + 'GridKit_cleaned.csv'
 
 # ## Renewable Capacities
 # Rasters for wind and solar
@@ -246,6 +247,7 @@ paths["map_grid_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs + 'random_p
 # 02 - load
 paths["load"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Load' + fs
 paths["model_regions"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + model_regions + fs
+paths["sites"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + model_regions + fs + 'Sites.csv'
 paths["load_EU"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Load' + fs + 'Load_EU' + '%04d' % (
     param["year"]) + '.csv'
 

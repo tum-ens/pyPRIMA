@@ -68,7 +68,7 @@ def generate_sites_from_shapefile(paths):
     zones.sort_values(['Site'], inplace=True)
     zones.reset_index(inplace=True, drop=True)
 
-    zones.to_csv(paths["model_regions"] + 'Sites.csv', index=False, sep=';', decimal=',')
+    zones.to_csv(paths["sites"], index=False, sep=';', decimal=',')
 
     # Preparing output for evrys
     zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
@@ -484,7 +484,7 @@ def generate_commodities(paths, param):
     dict_maxperstep = dict(zip(assumptions['Commodity'], assumptions['maxperstep']))
 
     # Read the CSV containing the list of sites
-    sites = pd.read_csv(paths["model_regions"] + 'Sites.csv', sep=';', decimal=',')
+    sites = pd.read_csv(paths["sites"], sep=';', decimal=',')
 
     # Read the CSV containing the annual load
     load = pd.read_csv(paths["load_EU"], index_col=['sit'])
@@ -887,6 +887,13 @@ def generate_storage(paths, param):
 
 
 def clean_grid_data(paths, param):
+    """
+
+    :param paths:
+    :param param:
+    :return:
+    """
+    timecheck("Start")
 
     # Read CSV file containing the lines data
     grid_raw = pd.read_csv(paths["grid"], header=0, sep=',', decimal='.')
@@ -937,7 +944,7 @@ def clean_grid_data(paths, param):
             grid_clean_f = grid_clean_f.append(grid_clean_f.loc[i], ignore_index=True)
             # Extract the first frequency from that row and remove the rest of the string
             grid_clean_f.loc[i, 'frequency'] = grid_clean_f.loc[i, 'frequency'][
-                                                 :grid_clean_f.loc[i, 'frequency'].find(';')]
+                                               :grid_clean_f.loc[i, 'frequency'].find(';')]
             # Extract the last frequency from the last row and remove the rest of the string
             grid_clean_f.frequency.iloc[-1] = grid_clean_f.frequency.iloc[-1][
                                               grid_clean_f.frequency.iloc[-1].find(';') + 1:]
@@ -984,13 +991,14 @@ def clean_grid_data(paths, param):
     grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["700"]
     for len in np.arange(100, 750, 50, int):
         grid_filled.loc[grid_filled[grid_filled["length_m"] > len &
-                                    grid_filled["length_m"] <= (len+50)].index, 'loadability_c'] = loadability[str(len)]
+                                    grid_filled["length_m"] <= (len + 50)].index, 'loadability_c'] = loadability[
+            str(len)]
 
     # Filling the values for SIL_MW and calculating Capacity_MVA
     grid_filled.loc[grid_filled[grid_filled["voltage"] <= 230].index, 'SIL_MW'] = 230
     grid_filled.loc[grid_filled[grid_filled["voltage"] > 230].index, 'SIL_MW'] = 670
     grid_filled.loc[grid_filled.index, 'Capacity_MVA'] = \
-        pd.Series([s*c*int(w) for s, c, w in zip(grid_filled.SIL_MW, grid_filled.loadability_c, grid_filled.wires)],
+        pd.Series([s * c * int(w) for s, c, w in zip(grid_filled.SIL_MW, grid_filled.loadability_c, grid_filled.wires)],
                   index=grid_filled.index)
 
     # Sum the capacities of tines with same ID
@@ -1008,8 +1016,12 @@ def clean_grid_data(paths, param):
     grid_cleaned.drop(['frequency'], axis=1, inplace=True)
 
     ########################################################
-    # Save grid_cleaned for model specific processing ? #
+    # Save grid_cleaned for model specific processing ?    #
     ########################################################
+
+    grid_cleaned[['V1_long', 'V1_lat', 'V2_long', 'V2_lat']] = grid_cleaned[
+        ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']].astype(float)
+    grid_cleaned.to_csv(paths["grid_cleaned"], index=False, sep=';', decimal=',')
 
     # Writing to shapefile
     with shp.Writer(paths["grid_shp"], shapeType=3) as w:
@@ -1022,6 +1034,119 @@ def clean_grid_data(paths, param):
             w.line([[grid_cleaned.loc[i, ['V1_long', 'V1_lat']].astype(float),
                      grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
             w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
+
+    timecheck("End")
+
+
+def generate_aggregated_grid(paths, param):
+    """
+
+    :param paths:
+    :param param:
+    :return:
+    """
+    timecheck("Start")
+
+    # Read the shapefile containing the map data
+    regions = gpd.read_file(paths["SHP"])
+    regions["Geometry"] = regions.buffer(0)
+
+    # Read the shapefile and get the weights of the neighboring zones
+    weights = ps.queen_from_shapefile(paths["SHP"])
+
+    # Get the names of the modeled zones from the database file
+    zones = regions["NAME_SHORT"]
+    for i in regions.index:
+        if regions.loc[i, 'Population'] == 0:
+            zones.loc[i] = zones.loc[i] + '_off'
+
+    # Read the cleaned GridKit dataset
+    grid_cleaned = pd.read_csv(paths["grid_cleaned"], header=0, sep=';', decimal=',')
+
+    # Create point geometries
+    grid_cleaned['V1'] = list(zip(grid_cleaned.V1_long, grid_cleaned.V1_lat))
+    grid_cleaned['V1'] = grid_cleaned['V1'].apply(Point)
+    grid_cleaned['V2'] = list(zip(grid_cleaned.V2_long, grid_cleaned.V2_lat))
+    grid_cleaned['V2'] = grid_cleaned['V2'].apply(Point)
+
+    # Create a dataframe for the start regions
+    Region_start = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V1']], geometry='V1', crs='').rename(
+        columns={'V1': 'geometry'})
+    Region_start.crs = {'init': 'epsg:4326'}
+    Region_start = gpd.sjoin(Region_start, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
+        ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_start'})
+
+    # Create a dataframe for the end regions
+    Region_end = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V2']], geometry='V2', crs='').rename(
+        columns={'V2': 'geometry'})
+    Region_end.crs = {'init': 'epsg:4326'}
+    Region_end = gpd.sjoin(Region_end, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
+        ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_end'})
+
+    # Join dataframes
+    grid_regions = grid_cleaned.copy()
+    grid_regions.drop(['V1', 'V2'], axis=1, inplace=True)
+    grid_regions = grid_regions.join([Region_start, Region_end])
+
+    intra = len(grid_regions.loc[(grid_regions['Region_start'] == grid_regions['Region_end']) & ~(
+        grid_regions['Region_start'].isnull())])
+    extra = len(grid_regions.loc[grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull()])
+    inter = len(grid_regions) - intra - extra
+
+    # Show numbers of intraregional, interregional and extraregional lines
+    print("\nLinetypes : ")
+    print((("intraregional", intra), ("interregional", inter), ("extraregional", extra)))
+
+    # Remove intraregional and extraregional lines
+    icls_concatenated = grid_regions.loc[
+                        (grid_regions['Region_start'] != grid_regions['Region_end']) &
+                        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
+                        ].copy()
+
+    # Sort alphabetically and reindex
+    icls_reversed = reverse_lines(icls_concatenated)
+    icls_reversed.sort_values(['Region_start', 'Region_end', 'tr_type'], inplace=True)
+    icl = icls_reversed.set_index(['Region_start', 'Region_end', 'tr_type'])
+    icl = icl.reset_index()
+
+    icl_final = deduplicate_lines(icl)
+
+    # Prepare output
+    output = pd.DataFrame(icl_final,
+                          columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up', 'reactance',
+                                   'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
+
+    output['SitIn'] = icl_final['Region_start']
+    output['SitOut'] = icl_final['Region_end']
+    output['Co'] = 'Elec'
+    output['var-cost'] = 0
+    output['inst-cap'] = output['cap-up-therm'] = icl_final['Capacity_MVA']
+    output['act-lo'] = 0
+    output['act-up'] = 1
+    output['reactance'] = icl_final['X_ohm'].astype(float)
+    output['angle-up'] = 45
+    output['PSTmax'] = 0
+    output['idx'] = np.arange(1, len(output) + 1)
+
+    # Length of lines based on distance between centroids
+    coord = pd.read_csv(paths["sites"], sep=';', decimal=',').set_index('Site')
+    coord = coord[coord['Population'] > 0]
+    output = output.join(coord[['Longitude', 'Latitude']], on='SitIn', rsuffix='_1', how='inner')
+    output = output.join(coord[['Longitude', 'Latitude']], on='SitOut', rsuffix='_2', how='inner')
+    output.reset_index(inplace=True)
+    output['length'] = [geopy.distance.distance(tuple(output.loc[i, ['Latitude', 'Longitude']].astype(float)),
+                                                tuple(output.loc[i, ['Latitude_2', 'Longitude_2']].astype(float))).km
+                        for i in output.index]
+    output.drop(['Longitude', 'Latitude', 'Longitude_2', 'Latitude_2', 'index'], axis=1, inplace=True)
+
+    # Write output of everys model
+    output.to_csv(paths["everys"] + 'Transmission_everys_GridKit.csv', sep=';', decimal=',')
+
+    ######################################################
+    # Create model for urbs, or write to excel directly  #
+    ######################################################
+
+    timecheck("End")
 
 
 def generate_urbs_model(paths, param):

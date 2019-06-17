@@ -6,6 +6,8 @@ import numpy as np
 from shapely import geometry
 from shapely.geometry import Point
 import shapefile as shp
+import pysal as ps
+import geopy
 import sys
 import datetime
 import inspect
@@ -686,8 +688,8 @@ def reverse_lines(df):
     """
     for idx in df.index:
         if df.Region_start[idx] > df.Region_end[idx]:
-            df.loc[idx, ('Region_start')], df.loc[idx, ('Region_end')] = df.loc[idx, ('Region_end')], df.loc[
-                idx, ('Region_start')]
+            df.loc[idx, 'Region_start'], df.loc[idx, 'Region_end'] = df.loc[idx, 'Region_end'], df.loc[
+                idx, 'Region_start']
     df_final = df
     return df_final
 
@@ -756,7 +758,6 @@ def deduplicate_lines(df):
 
 
 def match_wire_voltages(grid_sorted):
-
     """
     the columns 'voltage' and 'wires' may contain multiple values separated with a semicolon. The goal is to assign
     a voltage to every circuit, whenever possible.
