@@ -90,8 +90,10 @@ def generate_sites_from_shapefile(paths):
     zones_urbs = zones[['Site', 'Area']].rename(columns={'Site': 'Name', 'Area': 'area'})
     zones_urbs['area'] = zones_urbs['area'] * 1000000  # in m²
 
-    zones_evrys.to_csv(paths["evrys"] + 'Sites_evrys.csv', index=False, sep=';', decimal=',')
-    zones_urbs.to_csv(paths["urbs"] + 'Sites_urbs.csv', index=False, sep=';', decimal=',')
+    zones_evrys.to_csv(paths["evrys_sites"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_sites"])
+    zones_urbs.to_csv(paths["urbs_sites"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs"])
 
     timecheck('End')
 
@@ -462,8 +464,13 @@ def generate_load_timeseries(paths, param):
 
     # Output
     Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
-    df_evrys.to_csv(paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv', sep=',', index=False)
-    df_urbs.to_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["load_EU"])
+
+    df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["urbs_demand"])
+
+    df_evrys.to_csv(paths["evrys_demand"], sep=',', index=False)
+    print("File Saved: " + paths["evrys_demand"])
 
     timecheck('End')
 
@@ -519,8 +526,11 @@ def generate_commodities(paths, param):
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
                      'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
 
-    output_evrys.to_csv(paths["evrys"] + 'Commodities_evrys.csv', index=False, sep=';', decimal=',')
-    output_urbs.to_csv(paths["urbs"] + 'Commodities_urbs.csv', index=False, sep=';', decimal=',')
+    output_urbs.to_csv(paths["urbs_commodities"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_commodities"])
+
+    output_evrys.to_csv(paths["evrys_commodities"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_commodities"])
 
     timecheck('End')
 
@@ -552,7 +562,7 @@ def distribute_renewable_capacities(paths, param):
     # Create new dataframe with needed information, rename sites and extract chosen sites
     data = data_raw[["Site", "Process", "inst-cap"]]
     data = data.replace({"site": param["dist_ren"]["country_names"]}).fillna(value=0)
-    data = data.loc[data["site"].isin(sites)].reset_index(drop=True)
+    data = data.loc[data["Site"].isin(sites)].reset_index(drop=True)
 
     # Group by and sum
     data = data.groupby(["Site", "Process"]).sum().reset_index()
@@ -610,7 +620,7 @@ def distribute_renewable_capacities(paths, param):
             del potential_new
 
         # Create map
-        map_power_plants(p, x, y, c, paths)
+        map_power_plants(p, x, y, c, paths["map_power_plants"] + p + '.shp')
 
 
 def clean_processes_and_storage_data(paths, param):
@@ -622,6 +632,7 @@ def clean_processes_and_storage_data(paths, param):
     depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
     year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
     year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+
 
     # Get data from fresna database
     Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
@@ -714,8 +725,6 @@ def clean_processes_and_storage_data(paths, param):
         np.random.normal(Process.loc[Process['year'].isnull(), 'year_mu'],
                          Process.loc[Process['year'].isnull(), 'year_stdev']))
 
-    # Process['year'].fillna(year_ref, inplace=True)
-
     # Drop recently built plants (after the reference year)
     Process = Process[(Process['year'] <= param["year"])]
 
@@ -766,6 +775,7 @@ def clean_processes_and_storage_data(paths, param):
         os.remove(paths["pro_sto"])
         P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
 
+    print("File Saved: " + paths["pro_sto"])
     timecheck("End")
 
 
@@ -774,9 +784,13 @@ def generate_processes(paths, param):
     timecheck("Start")
 
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+    # Only use the assumptions of that particular year
+    assumptions = assumptions[assumptions['year'] == param["year"]]
 
-    depreciation = dict(zip(assumptions["Process"], assumptions["depreciation"].astype(float)))
-    on_off = dict(zip(assumptions["Process"], assumptions["on-off"].astype(float)))
+    param["assumptions"] = read_assumptions_process(assumptions)
+
+    depreciation = param["assumptions"]["depreciation"]
+    on_off = param["assumptions"]["on_off"]
 
     # Get data from the shapefile
     pro_and_sto = gpd.read_file(paths["pro_sto"])
@@ -789,7 +803,7 @@ def generate_processes(paths, param):
     process_current = filter_life_time(param, process_raw, depreciation)
 
     # Get Sites
-    process_located = get_sites(process_current, paths)
+    process_located, = get_sites(process_current, paths)
     print('Number of processes after duplicate removal: ' + str(len(process_located)))
 
     # Reduce the number of processes by aggregating the small and must-run power plants
@@ -817,9 +831,15 @@ def generate_processes(paths, param):
     process_compact = process_compact.append(process_small, ignore_index=True)
     print("Number of compacted processes: " + str(len(process_compact)))
 
-    ########################################################
-    # Save process_compact for model specific processing ? #
-    ########################################################
+    # Process evrys, urbs
+    evrys_process, urbs_process = format_process_model(process_compact, param)
+
+    # Output
+    urbs_process.to_csv(paths["urbs_process"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_process"])
+    evrys_process.to_csv(paths["evrys_process"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_process"])
+
     timecheck("End")
 
 
@@ -829,7 +849,12 @@ def generate_storage(paths, param):
 
     # Read required assumptions
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Storage')
-    depreciation = dict(zip(assumptions["Storage"], assumptions["depreciation"].astype(float)))
+    # Only use the assumptions of that particular year
+    assumptions = assumptions[assumptions['year'] == param["year"]]
+
+    param["assumptions"] = read_assumptions_storage(assumptions)
+
+    depreciation = param["assumptions"]["depreciation"]
 
     # Get data from the shapefile
     pro_and_sto = gpd.read_file(paths["pro_sto"])
@@ -842,7 +867,8 @@ def generate_storage(paths, param):
     storage_current = filter_life_time(param, storage_raw, depreciation)
 
     # Get sites
-    storage_located = get_sites(storage_current, paths)
+    storage_located, regions = get_sites(storage_current, paths)
+    param["regions"] = regions
     print('Number of storage units after duplicate removal: ' + str(len(storage_located)))
 
     # Reduce number of storage units by aggregating the small storage units
@@ -883,9 +909,15 @@ def generate_storage(paths, param):
     # Combine the list of series into a dataframe
     storage_compact = pd.DataFrame([inst_cap0, co0]).transpose().reset_index()
 
-    ########################################################
-    # Save storage_compact for model specific processing ? #
-    ########################################################
+    # Storage evrys, urbs
+    evrys_storage, urbs_storage = format_storage_model(storage_compact, param)
+
+    # Output
+    urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_storage"])
+    evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_storage"])
+
     timecheck("End")
 
 
@@ -934,11 +966,7 @@ def clean_grid_data(paths, param):
     grid_sorted = grid_sorted.astype({'index_old': object})
 
     # Match multiple entries for wires and voltage to one circuit
-    if os.path.isfile('savegridclean.hdf'):
-        grid_clean = pd.read_hdf('savegridclean.hdf', 'df')
-    else:
-        grid_clean = match_wire_voltages(grid_sorted)
-        grid_clean.to_hdf('savegridclean.hdf', 'df')
+    grid_clean = match_wire_voltages(grid_sorted)
 
     # Special correction for the USA: DC and AC split
     if os.path.basename(paths["grid"]) == 'gridkit_north_america-highvoltage-links.csv':
@@ -1016,13 +1044,10 @@ def clean_grid_data(paths, param):
     # Drop column 'frequency'
     grid_cleaned.drop(['frequency'], axis=1, inplace=True)
 
-    ########################################################
-    # Save grid_cleaned for model specific processing ?    #
-    ########################################################
-
     grid_cleaned[['V1_long', 'V1_lat', 'V2_long', 'V2_lat']] = grid_cleaned[
         ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']].astype(float)
     grid_cleaned.to_csv(paths["grid_cleaned"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["grid_cleaned"])
 
     # Writing to shapefile
     with shp.Writer(paths["grid_shp"], shapeType=3) as w:
@@ -1039,6 +1064,7 @@ def clean_grid_data(paths, param):
                      grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
             w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
 
+    print("File Saved: " + paths["grid_shp"])
     timecheck("End")
 
 
@@ -1056,13 +1082,15 @@ def generate_aggregated_grid(paths, param):
     regions["Geometry"] = regions.buffer(0)
 
     # Read the shapefile and get the weights of the neighboring zones
-    weights = ps.queen_from_shapefile(paths["SHP"])
+    weights = ps.lib.weights.Queen.from_shapefile(paths["SHP"])
+    param["weights"] = weights
 
     # Get the names of the modeled zones from the database file
     zones = regions["NAME_SHORT"]
     for i in regions.index:
         if regions.loc[i, 'Population'] == 0:
             zones.loc[i] = zones.loc[i] + '_off'
+    param["zones"] = zones
 
     # Read the cleaned GridKit dataset
     grid_cleaned = pd.read_csv(paths["grid_cleaned"], header=0, sep=';', decimal=',')
@@ -1077,6 +1105,7 @@ def generate_aggregated_grid(paths, param):
     Region_start = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V1']], geometry='V1', crs='').rename(
         columns={'V1': 'geometry'})
     Region_start.crs = {'init': 'epsg:4326'}
+    Region_start.crs = regions[['NAME_SHORT', 'geometry']].crs
     Region_start = gpd.sjoin(Region_start, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
         ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_start'})
 
@@ -1084,6 +1113,8 @@ def generate_aggregated_grid(paths, param):
     Region_end = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V2']], geometry='V2', crs='').rename(
         columns={'V2': 'geometry'})
     Region_end.crs = {'init': 'epsg:4326'}
+    # regions is in GRS80 which is almost the same as WGS 84 also known as epsg:4326
+    Region_end.crs = regions[['NAME_SHORT', 'geometry']].crs
     Region_end = gpd.sjoin(Region_end, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
         ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_end'})
 
@@ -1115,39 +1146,19 @@ def generate_aggregated_grid(paths, param):
 
     icl_final = deduplicate_lines(icl)
 
-    # Prepare output
-    output = pd.DataFrame(icl_final,
-                          columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up', 'reactance',
-                                   'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
+    # Transmission evrys, urbs
+    evrys_transmission, urbs_transmission = format_transmission_model(icl_final, paths, param)
 
-    output['SitIn'] = icl_final['Region_start']
-    output['SitOut'] = icl_final['Region_end']
-    output['Co'] = 'Elec'
-    output['var-cost'] = 0
-    output['inst-cap'] = output['cap-up-therm'] = icl_final['Capacity_MVA']
-    output['act-lo'] = 0
-    output['act-up'] = 1
-    output['reactance'] = icl_final['X_ohm'].astype(float)
-    output['angle-up'] = 45
-    output['PSTmax'] = 0
-    output['idx'] = np.arange(1, len(output) + 1)
+    # Ouput
+    urbs_transmission.to_csv(paths["urbs_transmission"], sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_transmission"])
 
-    # Length of lines based on distance between centroids
-    coord = pd.read_csv(paths["sites"], sep=';', decimal=',').set_index('Site')
-    coord = coord[coord['Population'] > 0]
-    output = output.join(coord[['Longitude', 'Latitude']], on='SitIn', rsuffix='_1', how='inner')
-    output = output.join(coord[['Longitude', 'Latitude']], on='SitOut', rsuffix='_2', how='inner')
-    output.reset_index(inplace=True)
-    output['length'] = [geopy.distance.distance(tuple(output.loc[i, ['Latitude', 'Longitude']].astype(float)),
-                                                tuple(output.loc[i, ['Latitude_2', 'Longitude_2']].astype(float))).km
-                        for i in output.index]
-    output.drop(['Longitude', 'Latitude', 'Longitude_2', 'Latitude_2', 'index'], axis=1, inplace=True)
+    evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_transmission"])
 
-    # Write output of everys model
-    output.to_csv(paths["everys"] + 'Transmission_everys_GridKit.csv', sep=';', decimal=',')
 
     #######################################################
-    #  Create model for urbs, or write to excel directly  #
+    #    Create shapefile for urbs transmission line ?    #
     #######################################################
 
     timecheck("End")
@@ -1181,15 +1192,15 @@ def generate_urbs_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths) - done
-    # generate_intermittent_supply_timeseries(paths, param) - separate module
-    # generate_load_timeseries(paths, param) - done
-    # generate_commodities(paths, param) # corresponds to 04 - done
-    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-    # generate_processes(paths, param)  # corresponds to 05c - done
-    # generate_storage(paths, param) # corresponds to 05d - done (Weird code at the end)
-    # clean_grid_data(paths, param) # corresponds to 06a - done
-    generate_aggregated_grid(paths, param) # corresponds to 06b
+    generate_sites_from_shapefile(paths)  # done
+    generate_intermittent_supply_timeseries(paths, param)  # separate module
+    # generate_load_timeseries(paths, param)  # done
+    generate_commodities(paths, param)  # corresponds to 04 - done
+    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    generate_processes(paths, param)  # corresponds to 05c - done
+    generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    clean_grid_data(paths, param)  # corresponds to 06a - done
+    generate_aggregated_grid(paths, param)  # corresponds to 06b
     # generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)

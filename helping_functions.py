@@ -7,7 +7,7 @@ from shapely import geometry
 from shapely.geometry import Point
 import shapefile as shp
 import pysal as ps
-import geopy
+from geopy import distance
 import sys
 import datetime
 import inspect
@@ -510,9 +510,7 @@ def rasclip(raster_path, shapefile_path, counter):
     return poly.GetField('NAME_SHORT'), xoffset, yoffset, clip
 
 
-def map_power_plants(p, x, y, c, paths):
-    outSHPfn = paths["map_power_plants"] + p + '.shp'
-
+def map_power_plants(p, x, y, c, outSHPfn):
     # Create the output shapefile
     shpDriver = ogr.GetDriverByName("ESRI Shapefile")
     if os.path.exists(outSHPfn):
@@ -536,6 +534,7 @@ def map_power_plants(p, x, y, c, paths):
         outFeature.SetField('CapacityMW', c[i])
         outLayer.CreateFeature(outFeature)
     outFeature = None
+    print("File Saved: " + outSHPfn)
 
 
 def map_grid_plants(x, y, paths):
@@ -631,7 +630,7 @@ def get_sites(current, paths):
 
     located.dropna(axis=0, subset=["Site"], inplace=True)
 
-    return located
+    return located, regions
 
 
 def closest_polygon(geom, polygons):
@@ -745,11 +744,11 @@ def deduplicate_lines(df):
     # aggregate val of rows with (a,b,t) == (b,a,t)
     idx = 0
     while idx < len(df) - 1:
-        if (df.iloc[idx, 0] == df.iloc[idx + 1, 0]) & (
-                df.iloc[idx, 1] == df.iloc[idx + 1, 1]):  # & (df.iloc[idx,2] == df.iloc[idx+1,2]):
-            df.iloc[idx, 26] = df.iloc[idx, 26] + df.iloc[idx + 1, 26]  # Capacity MVA
-            df.iloc[idx, 23] = 1 / (1 / df.iloc[idx, 23] + 1 / df.iloc[idx + 1, 23])  # Specific resistance Ohm/km
-            df.iloc[idx, 13] = df.iloc[idx, 13] + df.iloc[idx + 1, 13]  # Length
+        if (df.iloc[idx, 0] == df.iloc[idx + 1, 0]) & (df.iloc[idx, 1] == df.iloc[idx + 1, 1]) & (
+                df.iloc[idx, 2] == df.iloc[idx + 1, 2]):
+            df.iloc[idx, 4] = df.iloc[idx, 4] + df.iloc[idx + 1, 4]  # Capacity MVA
+            df.iloc[idx, 9] = 1 / (1 / df.iloc[idx, 9] + 1 / df.iloc[idx + 1, 9])  # Specific resistance Ohm/km
+            # df.iloc[idx,13] = df.iloc[idx,13] + df.iloc[idx+1,13] # Length
             df = df.drop(df.index[idx + 1])
         else:
             idx += 1
@@ -902,3 +901,468 @@ def set_loadability(grid_filled, param):
     grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["750"]
 
     return grid_filled
+
+
+def format_process_model(process_compact, param):
+    assump = param["assumptions"]
+
+    # evrys
+    output_pro_evrys = process_compact.copy()
+    output_pro_evrys.drop(['on-off'], axis=1, inplace=True)
+
+    output_pro_evrys = output_pro_evrys.join(pd.DataFrame([], columns=['eff', 'effmin', 'act-up', 'act-lo', 'on-off',
+                                                                       'start-cost', 'reserve-cost', 'ru', 'rd',
+                                                                       'rumax',
+                                                                       'rdmax', 'cotwo', 'detail', 'lambda', 'heatmax',
+                                                                       'maxdeltaT', 'heatupcost', 'su', 'sd', 'pdt',
+                                                                       'hotstart',
+                                                                       'pot', 'pretemp', 'preheat', 'prestate',
+                                                                       'prepow',
+                                                                       'precaponline']), how='outer')
+    for c in output_pro_evrys['CoIn'].unique():
+        output_pro_evrys.loc[output_pro_evrys.CoIn == c,
+                             ['eff', 'effmin', 'act-up', 'act-lo', 'on-off', 'start-cost',
+                              'reserve-cost', 'ru', 'rd', 'rumax', 'rdmax', 'cotwo',
+                              'detail', 'lambda', 'heatmax', 'maxdeltaT', 'heatupcost',
+                              'su', 'sd', 'pdt', 'hotstart', 'pot', 'pretemp',
+                              'preheat', 'prestate']] = [assump["eff"][c], assump["effmin"][c], assump["act_up"][c],
+                                                         assump["act_lo"][c], assump["on_off"][c],
+                                                         assump["start_cost"][c], assump["reserve_cost"][c],
+                                                         assump["ru"][c], assump["rd"][c], assump["rumax"][c],
+                                                         assump["rdmax"][c], assump["cotwo"][c], assump["detail"][c],
+                                                         assump["lambda_"][c], assump["heatmax"][c],
+                                                         assump["maxdeltaT"][c], assump["heatupcost"][c],
+                                                         assump["su"][c], assump["sd"][c], assump["pdt"][c],
+                                                         assump["hotstart"][c], assump["pot"][c],
+                                                         assump["pretemp"][c], assump["preheat"][c],
+                                                         assump["prestate"][c]]
+
+    ind = output_pro_evrys['CoIn'] == 'Coal'
+    output_pro_evrys.loc[ind, 'eff'] = 0.35 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
+            param["year_ref"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.92 * output_pro_evrys.loc[ind, 'eff']
+
+    ind = output_pro_evrys['CoIn'] == 'Lignite'
+    output_pro_evrys.loc[ind, 'eff'] = 0.33 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
+            param["year_ref"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.9 * output_pro_evrys.loc[ind, 'eff']
+
+    ind = ((output_pro_evrys['CoIn'] == 'Gas') & (output_pro_evrys['inst-cap'] <= 100))
+    output_pro_evrys.loc[ind, 'eff'] = 0.3 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
+            param["pro_sto"]["year_ref"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.65 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.3
+    output_pro_evrys.loc[ind, 'ru'] = 0.01
+    output_pro_evrys.loc[ind, 'lambda'] = 0.3
+    output_pro_evrys.loc[ind, 'heatupcost'] = 20
+    output_pro_evrys.loc[ind, 'su'] = 0.9
+
+    ind = output_pro_evrys['CoIn'] == 'Oil'
+    output_pro_evrys.loc[ind, 'eff'] = 0.25 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
+            param["pro_sto"]["year_ref"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.65 * output_pro_evrys.loc[ind, 'eff']
+
+    ind = output_pro_evrys['CoIn'] == 'Nuclear'
+    output_pro_evrys.loc[ind, 'eff'] = 0.3 + 0.05 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
+            param["pro_sto"]["year_ref"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.95 * output_pro_evrys.loc[ind, 'eff']
+
+    output_pro_evrys['prepow'] = output_pro_evrys['inst-cap'] * output_pro_evrys['act-lo']
+    output_pro_evrys['precaponline'] = output_pro_evrys['prepow']
+
+    # Change the order of the columns
+    output_pro_evrys = output_pro_evrys[
+        ['Site', 'Pro', 'CoIn', 'CoOut', 'inst-cap', 'eff', 'effmin', 'act-lo', 'act-up',
+         'on-off', 'start-cost', 'reserve-cost', 'ru', 'rd', 'rumax', 'rdmax', 'cotwo',
+         'detail', 'lambda', 'heatmax', 'maxdeltaT', 'heatupcost', 'su', 'sd', 'pdt',
+         'hotstart', 'pot', 'prepow', 'pretemp', 'preheat', 'prestate', 'precaponline', 'year']]
+    output_pro_evrys.iloc[:, 4:] = output_pro_evrys.iloc[:, 4:].astype(float)
+
+    # function to remove non-ASCII
+    def remove_non_ascii(text):
+        return ''.join(i for i in text if ord(i) < 128)
+
+    # function to shorten names
+    def shorten_labels(text):
+        return text[:63]
+
+    output_pro_evrys.loc[:, 'Pro'] = output_pro_evrys.loc[:, 'Pro'].apply(remove_non_ascii)
+    output_pro_evrys.loc[:, 'Pro'] = output_pro_evrys.loc[:, 'Pro'].apply(shorten_labels)
+
+    # urbs
+
+    # Take excerpt from the evrys table and group by tuple of sites and commodity
+    process_grouped = output_pro_evrys[['Site', 'CoIn', 'inst-cap', 'act-lo', 'start-cost', 'ru']].apply(pd.to_numeric,
+                                                                                                         errors='ignore')
+    process_grouped = process_grouped.groupby(['Site', 'CoIn'])
+
+    inst_cap0 = process_grouped['inst-cap'].sum().rename('inst-cap')
+    max_grad0 = process_grouped['ru'].mean().rename('max-grad') * 60
+    max_grad0[max_grad0 == 60] = float('Inf')
+    min_fraction0 = process_grouped['act-lo'].mean().rename('min-fraction')
+    startup_cost0 = process_grouped['start-cost'].mean().rename('startup-cost')
+
+    # Combine the list of series into a dataframe
+    process_existant = pd.DataFrame([inst_cap0, max_grad0, min_fraction0, startup_cost0]).transpose()
+
+    # Get the possible commodities and add Slacks
+    commodities = list(output_pro_evrys.CoIn.unique())
+    commodities.append('Slack')
+    commodities.append('Shunt')
+
+    # Create a dataframe to store all the possible combinations of sites and commodities
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodities],
+                                                       names=['Site', 'CoIn']))
+
+    # Get the capacities of existing processes
+    df_joined = df.join(process_existant, how='outer')
+
+    # Set the capacity of inexistant processes to zero
+    df_joined.loc[np.isnan(df_joined['inst-cap']), 'inst-cap'] = 0
+
+    output_pro_urbs = df_joined.reset_index(drop=False)
+    output_pro_urbs = output_pro_urbs.join(pd.DataFrame([], columns=['cap-lo', 'cap-up', 'inv-cost', 'fix-cost',
+                                                                     'var-cost', 'wacc', 'depreciation',
+                                                                     'area-per-cap']), how='outer')
+    for c in output_pro_urbs['CoIn'].unique():
+        output_pro_urbs.loc[
+            output_pro_urbs.CoIn == c, ['cap-lo', 'cap-up', 'max-grad',
+                                        'min-fraction', 'inv-cost', 'fix-cost',
+                                        'var-cost', 'startup-cost', 'wacc',
+                                        'depreciation', 'area-per-cap']] = [
+            assump["cap_lo"][c], assump["cap_up"][c], assump["max_grad"][c],
+            assump["min_fraction"][c], assump["inv_cost"][c], assump["fix_cost"][c],
+            assump["var_cost"][c], assump["startup_cost"][c], param["pro_sto"]["wacc"],
+            assump["depreciation"][c], assump["area_per_cap"][c]]
+
+    # Cap-up must be greater than inst-cap
+    output_pro_urbs.loc[output_pro_urbs['cap-up'] < output_pro_urbs['inst-cap'], 'cap-up'] = output_pro_urbs.loc[
+        output_pro_urbs['cap-up'] < output_pro_urbs['inst-cap'], 'inst-cap']
+
+    # inst-cap must be greater than cap-lo
+    output_pro_urbs.loc[output_pro_urbs['inst-cap'] < output_pro_urbs['cap-lo'], 'inst-cap'] = output_pro_urbs.loc[
+        output_pro_urbs['inst-cap'] < output_pro_urbs['cap-lo'], 'cap-lo']
+
+    # Cap-up must be of type float
+    output_pro_urbs[['cap-up']] = output_pro_urbs[['cap-up']].astype(float)
+
+    # Delete rows where cap-up is zero
+    output_pro_urbs = output_pro_urbs[output_pro_urbs['cap-up'] != 0]
+
+    # Change the order of the columns
+    output_pro_urbs = output_pro_urbs[
+        ['Site', 'CoIn', 'inst-cap', 'cap-lo', 'cap-up', 'max-grad', 'min-fraction', 'inv-cost',
+         'fix-cost', 'var-cost', 'startup-cost', 'wacc', 'depreciation', 'area-per-cap']]
+    output_pro_urbs = output_pro_urbs.fillna(0)
+
+    return output_pro_evrys, output_pro_urbs
+
+
+def format_storage_model(storage_compact, param):
+    assump = param["assumptions"]
+
+    # evrys
+    output_sto_evrys = storage_compact.copy()
+
+    output_sto_evrys = output_sto_evrys.join(pd.DataFrame([], columns=['inst-cap-po', 'inst-cap-c', 'eff-in', 'eff-out',
+                                                                       'var-cost-pi', 'var-cost-po', 'var-cost-c',
+                                                                       'act-up-pi',
+                                                                       'act-up-po', 'act-lo-pi', 'act-lo-po',
+                                                                       'act-lo-c',
+                                                                       'act-up-c', 'precont', 'prepowin', 'prepowout',
+                                                                       'ru', 'rd', 'rumax', 'rdmax', 'seasonal',
+                                                                       'ctr']), how='outer')
+    for c in output_sto_evrys.Sto:
+        output_sto_evrys.loc[
+            output_sto_evrys.Sto == c, ['eff-in', 'eff-out', 'var-cost-pi', 'var-cost-po', 'var-cost-c',
+                                        'act-up-pi', 'act-up-po', 'act-lo-pi', 'act-lo-po', 'act-lo-c',
+                                        'act-up-c', 'prepowin', 'prepowout', 'ru', 'rd', 'rumax',
+                                        'rdmax', 'seasonal', 'ctr']] = [
+            assump["eff_in"][c], assump["eff_out"][c], assump["var_cost_pi"][c],
+            assump["var_cost_po"][c], assump["var_cost_c"][c], assump["act_up_pi"][c],
+            assump["act_up_po"][c], assump["act_lo_pi"][c],
+            assump["act_lo_po"][c], assump["act_lo_c"][c], assump["act_up_c"][c],
+            assump["prepowin"][c], assump["prepowout"][c],
+            assump["ru"][c], assump["rd"][c], assump["rumax"][c], assump["rdmax"][c],
+            assump["seasonal"][c], assump["ctr"][c]]
+
+    output_sto_evrys['inst-cap-po'] = output_sto_evrys['inst-cap-pi']
+    output_sto_evrys.loc[output_sto_evrys['Sto'] == 'PumSt', 'inst-cap-c'] = 6 * output_sto_evrys.loc[
+        output_sto_evrys['Sto'] == 'PumSt', 'inst-cap-pi']
+    output_sto_evrys.loc[output_sto_evrys['Sto'] == 'Battery', 'inst-cap-c'] = 2 * output_sto_evrys.loc[
+        output_sto_evrys['Sto'] == 'Battery', 'inst-cap-pi']
+    output_sto_evrys['precont'] = 0.5 * output_sto_evrys['inst-cap-c']
+
+    # Change the order of the columns
+    output_sto_evrys = output_sto_evrys[
+        ['Site', 'Sto', 'Co', 'inst-cap-pi', 'inst-cap-po', 'inst-cap-c', 'eff-in', 'eff-out',
+         'var-cost-pi', 'var-cost-po', 'var-cost-c', 'act-lo-pi', 'act-up-pi', 'act-lo-po',
+         'act-up-po', 'act-lo-c', 'act-up-c', 'precont', 'prepowin', 'prepowout', 'ru', 'rd',
+         'rumax', 'rdmax', 'seasonal', 'ctr']]
+    output_sto_evrys = output_sto_evrys.iloc[:, :3].join(output_sto_evrys.iloc[:, 3:].astype(float))
+
+    # urbs
+    # Create a dataframe to store all the possible combinations of sites and commodities
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([param["regions"]['NAME_SHORT'].unique(),
+                                                        param["pro_sto"]["storage"]],
+                                                       names=['Site', 'Storage']))
+
+    # Take excerpt from the evrys table and group by tuple of sites and commodity
+    storage_existant = output_sto_evrys[['Site', 'Sto', 'Co', 'inst-cap-c', 'inst-cap-pi']].rename(
+        columns={'Sto': 'Storage', 'Co': 'Commodity', 'inst-cap-pi': 'inst-cap-p'})
+
+    # Get the capacities of existing processes
+    df_joined = df.join(storage_existant.set_index(['Site', 'Storage']), how='outer')
+
+    # Set the capacity of inexistant processes to zero
+    df_joined['Commodity'].fillna('Elec', inplace=True)
+    df_joined.fillna(0, inplace=True)
+
+    output_sto_urbs = df_joined.reset_index()
+    output_sto_urbs = output_sto_urbs.join(pd.DataFrame([], columns=['cap-lo-c', 'cap-up-c', 'cap-lo-p', 'cap-up-p',
+                                                                     'eff-in', 'eff-out', 'inv-cost-p', 'inv-cost-c',
+                                                                     'fix-cost-p', 'fix-cost-c', 'var-cost-p',
+                                                                     'var-cost-c',
+                                                                     'wacc', 'depreciation', 'init']), how='outer')
+    for c in output_sto_urbs.Storage:
+        output_sto_urbs.loc[
+            output_sto_urbs.Storage == c, ['cap-lo-c', 'cap-up-c', 'cap-lo-p',
+                                           'cap-up-p', 'eff-in', 'eff-out',
+                                           'inv-cost-p', 'inv-cost-c', 'fix-cost-p',
+                                           'fix-cost-c', 'var-cost-p', 'var-cost-c',
+                                           'wacc', 'depreciation', 'init']] = [
+            assump["cap_lo_c"][c], assump["cap_up_c"][c], assump["cap_lo_p"][c],
+            assump["cap_up_p"][c], assump["eff_in"][c], assump["eff_out"][c],
+            assump["inv_cost_p"][c], assump["inv_cost_c"][c], assump["fix_cost_p"][c],
+            assump["fix_cost_c"][c], assump["var_cost_p"][c], assump["var_cost_c"][c],
+            param["pro_sto"]["wacc"], assump["depreciation"][c], assump["init"][c]]
+
+    output_sto_urbs.loc[output_sto_urbs['Storage'] == 'PumSt', 'cap-up-c'] = output_sto_urbs.loc[
+        output_sto_urbs['Storage'] == 'PumSt', 'inst-cap-c']
+    output_sto_urbs.loc[output_sto_urbs['Storage'] == 'PumSt', 'cap-up-p'] = output_sto_urbs.loc[
+        output_sto_urbs['Storage'] == 'PumSt', 'inst-cap-p']
+
+    # Change the order of the columns
+    output_sto_urbs = output_sto_urbs[
+        ['Site', 'Storage', 'Commodity', 'inst-cap-c', 'cap-lo-c', 'cap-up-c', 'inst-cap-p', 'cap-lo-p', 'cap-up-p',
+         'eff-in', 'eff-out', 'inv-cost-p', 'inv-cost-c', 'fix-cost-p', 'fix-cost-c', 'var-cost-p', 'var-cost-c',
+         'wacc', 'depreciation', 'init']]
+
+    output_sto_urbs.iloc[:, 3:] = output_sto_urbs.iloc[:, 3:].astype(float)
+
+    return output_sto_evrys, output_sto_urbs
+
+
+def format_transmission_model(icl_final, paths, param):
+    # evrys
+    output_evrys = pd.DataFrame(icl_final,
+                                columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up',
+                                         'reactance',
+                                         'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
+
+    output_evrys['SitIn'] = icl_final['Region_start']
+    output_evrys['SitOut'] = icl_final['Region_end']
+    output_evrys['Co'] = 'Elec'
+    output_evrys['var-cost'] = 0
+    output_evrys['inst-cap'] = output_evrys['cap-up-therm'] = icl_final['Capacity_MVA']
+    output_evrys['act-lo'] = 0
+    output_evrys['act-up'] = 1
+    output_evrys['reactance'] = icl_final['X_ohm'].astype(float)
+    output_evrys['angle-up'] = 45
+    output_evrys['PSTmax'] = 0
+    output_evrys['idx'] = np.arange(1, len(output_evrys) + 1)
+
+    # Length of lines based on distance between centroids
+    coord = pd.read_csv(paths["sites"], sep=';', decimal=',').set_index('Site')
+    coord = coord[coord['Population'] > 0]
+    output_evrys = output_evrys.join(coord[['Longitude', 'Latitude']], on='SitIn', rsuffix='_1', how='inner')
+    output_evrys = output_evrys.join(coord[['Longitude', 'Latitude']], on='SitOut', rsuffix='_2', how='inner')
+    output_evrys.reset_index(inplace=True)
+    output_evrys['length'] = [distance.distance(tuple(output_evrys.loc[i, ['Latitude', 'Longitude']].astype(float)),
+                                                tuple(output_evrys.loc[i, ['Latitude_2', 'Longitude_2']].astype(
+                                                    float))).km
+                              for i in output_evrys.index]
+    output_evrys.drop(['Longitude', 'Latitude', 'Longitude_2', 'Latitude_2', 'index'], axis=1, inplace=True)
+    output_evrys = output_evrys.set_index(['SitIn', 'SitOut'])
+
+    # Create a dataframe to store all the possible combinations of pairs of 1st order neighbors
+    df = pd.DataFrame(columns=['SitIn', 'SitOut'])
+    zones = param["zones"]
+    weights = param["weights"]
+    for z in range(len(zones)):
+        for n in weights.neighbors[z]:
+            if (zones[z] < zones[n]) & ~(zones[z].endswith('_off') | zones[n].endswith('_off')):
+                df = df.append(pd.DataFrame([[zones[z], zones[n]]], columns=['SitIn', 'SitOut']), ignore_index=True)
+
+    # urbs
+
+    # Set SitIn and SitOut as index
+    df.set_index(['SitIn', 'SitOut'], inplace=True)
+
+    # Get the capacities of existing lines
+    df_joined = df.join(output_evrys, how='outer')
+
+    # Set the capacity of inexistant lines to zero
+    df_joined['inst-cap'].fillna(0, inplace=True)
+
+    # Reset the index
+    df_joined.reset_index(drop=False, inplace=True)
+
+    # Length of lines based on distance between centroids
+    coord = pd.read_csv(paths["sites"], sep=';', decimal=',').set_index('Site')
+    coord = coord[coord['Population'] > 0]
+    df_joined = df_joined.join(coord[['Longitude', 'Latitude']], on='SitIn', rsuffix='_1', how='inner')
+    df_joined = df_joined.join(coord[['Longitude', 'Latitude']], on='SitOut', rsuffix='_2', how='inner')
+    df_joined['length'] = [distance.distance(tuple(df_joined.loc[i, ['Latitude', 'Longitude']].astype(float)),
+                                             tuple(df_joined.loc[i, ['Latitude_2', 'Longitude_2']].astype(
+                                                 float))).km for i in df_joined.index]
+    df_joined.drop(['Longitude', 'Latitude', 'Longitude_2', 'Latitude_2'], axis=1, inplace=True)
+
+    output_urbs = df_joined.rename(columns={'SitIn': 'Site In', 'SitOut': 'Site Out', 'Co': 'Commodity'})
+    output_urbs['tr_type'].fillna('AC_OHL', inplace=True)
+    output_urbs.loc[output_urbs['tr_type'] == 'AC_OHL', 'Transmission'] = 'AC_OHL'
+    output_urbs.loc[~(output_urbs['tr_type'] == 'AC_OHL'), 'Transmission'] = 'DC_CAB'
+    output_urbs['Commodity'].fillna('Elec', inplace=True)
+
+    # Use the length between the centroids [in km]
+    output_urbs.loc[output_urbs['tr_type'] == 'AC_OHL', 'eff'] = 0.92 ** (
+            output_urbs.loc[output_urbs['tr_type'] == 'AC_OHL', 'length'] / 1000)
+    output_urbs.loc[output_urbs['tr_type'] == 'AC_CAB', 'eff'] = 0.9 ** (
+            output_urbs.loc[output_urbs['tr_type'] == 'AC_CAB', 'length'] / 1000)
+    output_urbs.loc[output_urbs['tr_type'] == 'DC_OHL', 'eff'] = 0.95 ** (
+            output_urbs.loc[output_urbs['tr_type'] == 'DC_OHL', 'length'] / 1000)
+    output_urbs.loc[output_urbs['tr_type'] == 'DC_CAB', 'eff'] = 0.95 ** (
+            output_urbs.loc[output_urbs['tr_type'] == 'DC_CAB', 'length'] / 1000)
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                    & (output_urbs['length'] < 150), 'inv-cost'] = \
+        300 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                              & (output_urbs['length'] < 150), 'length']
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                    & (output_urbs['length'] >= 150), 'inv-cost'] = \
+        770 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                              & (output_urbs['length'] >= 150), 'length'] - 70000
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                    & (output_urbs['length'] < 150), 'inv-cost'] = \
+        1200 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                               & (output_urbs['length'] < 150), 'length']
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                    & (output_urbs['length'] >= 150), 'inv-cost'] = \
+        3080 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                               & (output_urbs['length'] >= 150), 'length'] - 280000
+
+    output_urbs.loc[output_urbs['tr_type'] == 'DC_OHL', 'inv-cost'] = 288 * output_urbs.loc[
+        output_urbs['tr_type'] == 'DC_OHL', 'length'] + 160000
+    output_urbs.loc[output_urbs['tr_type'] == 'DC_CAB', 'inv-cost'] = 1152 * output_urbs.loc[
+        output_urbs['tr_type'] == 'DC_CAB', 'length'] + 160000
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                    | (output_urbs['tr_type'] == 'DC_OHL'), 'fix-cost'] = \
+        42 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_OHL')
+                             | (output_urbs['tr_type'] == 'DC_OHL'), 'length']
+
+    output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                    | (output_urbs['tr_type'] == 'DC_CAB'), 'fix-cost'] = \
+        21 * output_urbs.loc[(output_urbs['tr_type'] == 'AC_CAB')
+                             | (output_urbs['tr_type'] == 'DC_CAB'), 'length']
+
+    output_urbs['var-cost'].fillna(0, inplace=True)
+    output_urbs['cap-lo'] = 0
+    output_urbs['cap-up'] = output_urbs['inst-cap']
+    output_urbs['cap-up'].fillna(0, inplace=True)
+    output_urbs['wacc'] = 0.07
+    output_urbs['depreciation'] = 40
+
+    # Change the order of the columns
+    output_urbs = output_urbs[
+        ['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
+         'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
+    output_urbs.iloc[:, 4:] = output_urbs.iloc[:, 4:].astype('float64')
+    return output_evrys, output_urbs
+
+
+def read_assumptions_process(assumptions):
+    process = {
+        "cap_lo": dict(zip(assumptions['Process'], assumptions['cap-lo'].astype(float))),
+        "cap_up": dict(zip(assumptions['Process'], assumptions['cap-up'].astype(float))),
+        "max_grad": dict(zip(assumptions['Process'], assumptions['max-grad'].astype(float))),
+        "min_fraction": dict(zip(assumptions['Process'], assumptions['min-fraction'].astype(float))),
+        "inv_cost": dict(zip(assumptions['Process'], assumptions['inv-cost'].astype(float))),
+        "fix_cost": dict(zip(assumptions['Process'], assumptions['fix-cost'].astype(float))),
+        "var_cost": dict(zip(assumptions['Process'], assumptions['var-cost'].astype(float))),
+        "startup_cost": dict(zip(assumptions['Process'], assumptions['startup-cost'].astype(float))),
+        "depreciation": dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float))),
+        "area_per_cap": dict(zip(assumptions['Process'], assumptions['area-per-cap'].astype(float))),
+        "year_my": dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float))),
+        "eff": dict(zip(assumptions['Process'], assumptions['eff'].astype(float))),
+        "effmin": dict(zip(assumptions['Process'], assumptions['effmin'].astype(float))),
+        "act_up": dict(zip(assumptions['Process'], assumptions['act-up'].astype(float))),
+        "act_lo": dict(zip(assumptions['Process'], assumptions['act-lo'].astype(float))),
+        "on_off": dict(zip(assumptions['Process'], assumptions['on-off'].astype(float))),
+        "start_cost": dict(zip(assumptions['Process'], assumptions['start-cost'].astype(float))),
+        "reserve_cost": dict(zip(assumptions['Process'], assumptions['reserve-cost'].astype(float))),
+        "ru": dict(zip(assumptions['Process'], assumptions['ru'].astype(float))),
+        "rd": dict(zip(assumptions['Process'], assumptions['rd'].astype(float))),
+        "rumax": dict(zip(assumptions['Process'], assumptions['rumax'].astype(float))),
+        "rdmax": dict(zip(assumptions['Process'], assumptions['rdmax'].astype(float))),
+        "cotwo": dict(zip(assumptions['Process'], assumptions['cotwo'].astype(float))),
+        "detail": dict(zip(assumptions['Process'], assumptions['detail'].astype(float))),
+        "lambda_": dict(zip(assumptions['Process'], assumptions['lambda'].astype(float))),
+        "heatmax": dict(zip(assumptions['Process'], assumptions['heatmax'].astype(float))),
+        "maxdeltaT": dict(zip(assumptions['Process'], assumptions['maxdeltaT'].astype(float))),
+        "heatupcost": dict(zip(assumptions['Process'], assumptions['heatupcost'].astype(float))),
+        "su": dict(zip(assumptions['Process'], assumptions['su'].astype(float))),
+        "sd": dict(zip(assumptions['Process'], assumptions['sd'].astype(float))),
+        "pdt": dict(zip(assumptions['Process'], assumptions['pdt'].astype(float))),
+        "hotstart": dict(zip(assumptions['Process'], assumptions['hotstart'].astype(float))),
+        "pot": dict(zip(assumptions['Process'], assumptions['pot'].astype(float))),
+        "pretemp": dict(zip(assumptions['Process'], assumptions['pretemp'].astype(float))),
+        "preheat": dict(zip(assumptions['Process'], assumptions['preheat'].astype(float))),
+        "prestate": dict(zip(assumptions['Process'], assumptions['prestate'].astype(float))),
+        "year_mu": dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float))),
+        "year_stdev": dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+    }
+
+    return process
+
+
+def read_assumptions_storage(assumptions):
+    storage = {
+        "cap_lo_c": dict(zip(assumptions['Storage'], assumptions['cap-lo-c'].astype(float))),
+        "cap_lo_p": dict(zip(assumptions['Storage'], assumptions['cap-lo-p'].astype(float))),
+        "cap_up_c": dict(zip(assumptions['Storage'], assumptions['cap-up-c'].astype(float))),
+        "cap_up_p": dict(zip(assumptions['Storage'], assumptions['cap-up-p'].astype(float))),
+        "inv_cost_c": dict(zip(assumptions['Storage'], assumptions['inv-cost-c'].astype(float))),
+        "fix_cost_c": dict(zip(assumptions['Storage'], assumptions['fix-cost-c'].astype(float))),
+        "var_cost_c": dict(zip(assumptions['Storage'], assumptions['var-cost-c'].astype(float))),
+        "inv_cost_p": dict(zip(assumptions['Storage'], assumptions['inv-cost-p'].astype(float))),
+        "fix_cost_p": dict(zip(assumptions['Storage'], assumptions['fix-cost-p'].astype(float))),
+        "var_cost_p": dict(zip(assumptions['Storage'], assumptions['var-cost-p'].astype(float))),
+        "depreciation": dict(zip(assumptions['Storage'], assumptions['depreciation'].astype(float))),
+        "init": dict(zip(assumptions['Storage'], assumptions['init'].astype(float))),
+        "eff_in": dict(zip(assumptions['Storage'], assumptions['eff-in'].astype(float))),
+        "eff_out": dict(zip(assumptions['Storage'], assumptions['eff-out'].astype(float))),
+        "var_cost_pi": dict(zip(assumptions['Storage'], assumptions['var-cost-pi'].astype(float))),
+        "var_cost_po": dict(zip(assumptions['Storage'], assumptions['var-cost-po'].astype(float))),
+        "act_up_pi": dict(zip(assumptions['Storage'], assumptions['act-up-pi'].astype(float))),
+        "act_lo_pi": dict(zip(assumptions['Storage'], assumptions['act-lo-pi'].astype(float))),
+        "act_up_po": dict(zip(assumptions['Storage'], assumptions['act-up-po'].astype(float))),
+        "act_lo_po": dict(zip(assumptions['Storage'], assumptions['act-lo-po'].astype(float))),
+        "act_lo_c": dict(zip(assumptions['Storage'], assumptions['act-lo-c'].astype(float))),
+        "act_up_c": dict(zip(assumptions['Storage'], assumptions['act-up-c'].astype(float))),
+        "prepowin": dict(zip(assumptions['Storage'], assumptions['prepowin'].astype(float))),
+        "prepowout": dict(zip(assumptions['Storage'], assumptions['prepowout'].astype(float))),
+        "ru": dict(zip(assumptions['Storage'], assumptions['ru'].astype(float))),
+        "rd": dict(zip(assumptions['Storage'], assumptions['rd'].astype(float))),
+        "rumax": dict(zip(assumptions['Storage'], assumptions['rumax'].astype(float))),
+        "rdmax": dict(zip(assumptions['Storage'], assumptions['rdmax'].astype(float))),
+        "seasonal": dict(zip(assumptions['Storage'], assumptions['seasonal'].astype(float))),
+        "ctr": dict(zip(assumptions['Storage'], assumptions['ctr'].astype(float))),
+        "year_mu": dict(zip(assumptions['Storage'], assumptions['year_mu'].astype(float))),
+        "year_stdev": dict(zip(assumptions['Storage'], assumptions['year_stdev'].astype(float)))
+    }
+
+    return storage

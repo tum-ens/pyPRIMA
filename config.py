@@ -178,7 +178,6 @@ elif platform.startswith('linux'):
     root = git_folder + fs + ".." + fs
 
 region = param["region"]
-region = param["region"]
 model_regions = param["model_regions"]
 
 paths = {}
@@ -254,8 +253,24 @@ paths["sites"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 
 paths["load_EU"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Load' + fs + 'Load_EU' + '%04d' % (
     param["year"]) + '.csv'
 
+# urbs
 paths["urbs"] = paths["model_regions"] + "urbs" + fs
+paths["urbs_sites"] = paths["urbs"] + 'Sites_urbs.csv'
+paths["urbs_demand"] = paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv'
+paths["urbs_commodities"] = paths["urbs"] + 'Commodities_urbs.csv'
+paths["urbs_process"] = paths["urbs"] + 'Process_urbs.csv'
+paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs.csv'
+paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs_GridKit.csv'
+
+
+# evrys
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
+paths["evrys_sites"] = paths["evrys"] + 'Sites_evrys.csv'
+paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv'
+paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys.csv'
+paths["evrys_process"] = paths["evrys"] + 'Process_evrys.csv'
+paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys.csv'
+paths["evrys_transmission"] = paths["evrys"] + 'Transmission_everys_GridKit.csv'
 
 paths["urbs_model"] = param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
 paths["urbs_model_hdf"] = paths["urbs"] + 'model_data.hdf'
@@ -264,10 +279,5 @@ if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])
 if not os.path.isdir(paths["evrys"]):
     os.mkdir(paths["evrys"])
-# if technology == "Wind":
-# paths["OUT"] = root + "OUTPUT" + fs + region + fs + str(turbine["hub_height"]) + "m_" + str(correction) + "corr_" + timestamp
-# else:
-# paths["OUT"] = root + "OUTPUT" + fs + region + fs + str(pv["tracking"]) + "axis_" + timestamp
-
 
 del root, PathTemp, fs
