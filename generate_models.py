@@ -632,7 +632,6 @@ def clean_processes_and_storage_data(paths, param):
     year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
     year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
 
-
     # Get data from fresna database
     Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
                           usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
@@ -765,6 +764,204 @@ def clean_processes_and_storage_data(paths, param):
     # Define the output commodity
     P_located['CoOut'] = 'Elec'
     P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
+    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
+
+    # Save the GeoDataFrame
+    if not os.path.isfile(paths["pro_sto"]):
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+    else:
+        os.remove(paths["pro_sto"])
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+
+    print("File Saved: " + paths["pro_sto"])
+    timecheck("End")
+
+
+def clean_processes_and_storage_data_FRESNA(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+    depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
+    year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
+    year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+
+    # Get data from fresna database
+    Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
+                          usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    Process.rename(columns={'Capacity': 'inst-cap', 'YearCommissioned': 'year', 'lat': 'Latitude', 'lon': 'Longitude'},
+                   inplace=True)
+    print('Number of power plants: ', len(Process))
+
+    Process['Technology'].fillna('NaN', inplace=True)
+    Process['inst-cap'].fillna(0, inplace=True)
+    Process[['Fueltype', 'Technology', 'Set']].drop_duplicates()
+    Process[(Process['Technology'] == 'Run-Of-River') & (Process['Fueltype'] == 'Hydro')].groupby(['Country']).sum()
+    Process.groupby(['Fueltype', 'Technology', 'Set']).sum().to_csv(paths["process_raw"], sep=';',
+                                                                    decimal=',', index=True)
+    # Type
+    Process['CoIn'] = np.nan
+
+    for i in Process.index:
+        # Get the coal
+        if Process.loc[i, 'Fueltype'] == 'Hard Coal':
+            Process.loc[i, 'CoIn'] = 'Coal'
+        # Get the gas
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'CCGT'),
+                                                                 ('Natural Gas', 'CCGT, Thermal'),
+                                                                 ('Natural Gas', 'Gas Engines'), ('Natural Gas', 'NaN'),
+                                                                 ('Natural Gas', 'Pv')]:
+            Process.loc[i, 'CoIn'] = 'Gas_CCGT'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'OCGT')]:
+            Process.loc[i, 'CoIn'] = 'Gas_OCGT'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'Steam Turbine')]:
+            Process.loc[i, 'CoIn'] = 'Gas_ST'
+        # Get lignite and nuclear
+        if Process.loc[i, 'Fueltype'] in ['Lignite', 'Nuclear']:
+            Process.loc[i, 'CoIn'] = Process.loc[i, 'Fueltype']
+        # Get oil and other
+        if Process.loc[i, 'Fueltype'] in ['Oil', 'Other', 'Waste']:
+            Process.loc[i, 'CoIn'] = 'Oil/Other'
+        # Get the unconventional storage
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'Storage Technologies'),
+                                                                 ('Natural Gas', 'Caes')]:
+            Process.loc[i, 'CoIn'] = 'Storage_ST'
+        # Get the pumped storage facilities
+        if Process.loc[i, 'Technology'] in ['Pumped Storage', 'Pumped Storage With Natural Inflow']:
+            Process.loc[i, 'CoIn'] = 'Storage_Long-Term'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Hydro', 'Reservoir'), ('Hydro', 'NaN'),
+                                                                 ('Hydro', 'Pv'), ('Hydro', 'Run-Of-River')]:
+            Process.loc[i, 'CoIn'] = 'Hydro'
+        Process.loc[i, 'Site'] = param["dist_ren"]["country_names"][Process.loc[i, 'Country']]
+
+    # Remove useless rows
+    Process.dropna(subset=['CoIn'], inplace=True)
+
+    # year
+    for i in Process.index:
+        Process.loc[i, 'Year'] = max(Process.loc[i, 'YearCommissioned'], Process.loc[i, 'Retrofit'])
+        Process.loc[i, 'Cohort'] = max((Process.loc[i, 'YearCommissioned'] // 5) * 5, 1960)
+        Process.loc[i, 'Cohort_new'] = max((Process.loc[i, 'Year'] // 5) * 5, 1960)
+        if np.isnan(Process.loc[i, 'Cohort']):
+            Process.loc[i, 'Cohort'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort'] = str(int(Process.loc[i, 'Cohort']))
+        if np.isnan(Process.loc[i, 'Cohort_new']):
+            Process.loc[i, 'Cohort_new'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort_new'] = str(int(Process.loc[i, 'Cohort_new']))
+
+    Process_agg = Process.groupby(['Site', 'CoIn', 'Cohort']).sum() / 1000
+
+    Process_agg = Process_agg[['inst-cap']]
+
+    full_ind = pd.MultiIndex.from_product([Process['Site'].unique(),
+                                           Process['CoIn'].unique(),
+                                           # ['Lignite', 'Coal', 'Gas_CCGT', 'Gas_ST', 'Gas_OCGT', 'Oil/Other'],
+                                           Process['Cohort'].unique()])
+
+    table_empty = pd.DataFrame(0, index=full_ind, columns=['inst-cap'])
+    for i in Process_agg.index:
+        table_empty.loc[i, 'inst-cap'] = Process_agg.loc[i, 'inst-cap']
+
+    Process_agg = table_empty.reset_index().rename(columns={'level_0': 'Site', 'level_1': 'CoIn', 'level_2': 'Cohort'})
+
+    Process_agg.set_index(['CoIn', 'Cohort'], inplace=True)
+    Process_agg.pivot(columns='Site').to_csv(paths["Process_agg"], sep=';', decimal=',', index=True)
+
+    Process.drop(Process[(Process['YearCommissioned'] > param["year"])].index, axis=0, inplace=True)
+
+    # Assign a dummy year for missing entries (will be changed later)
+    for c in Process['CoIn'].unique():
+        if c == 'Storage_Long-Term':
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = 1980
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = 5
+        elif c == 'Storage_ST':
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = 2010
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = 5
+        else:
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = year_mu[c]
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = year_stdev[c]
+
+    Process.loc[Process['YearCommissioned'].isnull(), 'YearCommissioned'] = np.floor(
+        np.random.normal(Process.loc[Process['YearCommissioned'].isnull(), 'year_mu'],
+                         Process.loc[Process['YearCommissioned'].isnull(), 'year_stdev']))
+
+    Process.loc[Process['YearCommissioned'] > param["year"], 'YearCommissioned'] = param["year"]
+
+    # Recalculate cohorts
+    for i in Process.index:
+        Process.loc[i, 'Year'] = max(Process.loc[i, 'YearCommissioned'], Process.loc[i, 'Retrofit'])
+        Process.loc[i, 'Cohort'] = max((Process.loc[i, 'YearCommissioned'] // 5) * 5, 1960)
+        Process.loc[i, 'Cohort_new'] = max((Process.loc[i, 'Year'] // 5) * 5, 1960)
+        if np.isnan(Process.loc[i, 'Cohort']):
+            Process.loc[i, 'Cohort'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort'] = str(int(Process.loc[i, 'Cohort']))
+        if np.isnan(Process.loc[i, 'Cohort_new']):
+            Process.loc[i, 'Cohort_new'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort_new'] = str(int(Process.loc[i, 'Cohort_new']))
+
+    Process_agg2 = Process.groupby(['Site', 'CoIn', 'Cohort']).sum() / 1000
+
+    Process_agg2 = Process_agg2[['inst-cap']]
+
+    full_ind = pd.MultiIndex.from_product([Process['Site'].unique(),
+                                           Process['CoIn'].unique(),
+                                           # ['Lignite', 'Coal', 'Gas_CCGT', 'Gas_ST', 'Gas_OCGT', 'Oil/Other'],
+                                           Process['Cohort'].unique()])
+
+    table_empty = pd.DataFrame(0, index=full_ind, columns=['inst-cap'])
+    for i in Process_agg2.index:
+        table_empty.loc[i, 'inst-cap'] = Process_agg2.loc[i, 'inst-cap']
+
+    Process_agg2 = table_empty.reset_index().rename(columns={'level_0': 'Site', 'level_1': 'CoIn', 'level_2': 'Cohort'})
+
+    Process_agg2.set_index(['CoIn', 'Cohort'], inplace=True)
+    Process_agg2.pivot(columns='Site').to_csv(paths["Process_agg_bis"], sep=';', decimal=',', index=True)
+
+    # Process name
+    # Use the name of the processes in OPSD as a standard name
+    Process['Pro'] = Process['Name']
+    Process['Pro'].fillna('unnamed', inplace=True)
+
+    # Add suffix to duplicate names
+    Process['Pro'] = Process['Pro'] + Process.groupby(['Pro']).cumcount().astype(str).replace('0', '')
+
+    # Remove spaces from the name and replace them with underscores
+    Process['Pro'] = [Process.loc[i, 'Pro'].replace(' ', '_') for i in Process.index]
+
+    # Show except
+    print('Number of power plants with distinct names: ', len(Process['Pro'].unique()))
+
+    # Coordinates
+    P_missing = Process[Process['Longitude'].isnull()].copy()
+    P_located = Process[~Process['Longitude'].isnull()].copy()
+
+    # Assign dummy coordinates within the same country (will be changed later)
+    for country in P_missing['Country'].unique():
+        P_missing.loc[P_missing['Country'] == country, 'Latitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 2]
+        P_missing.loc[P_missing['Country'] == country, 'Longitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 3]
+
+    Process = P_located.append(P_missing)
+    Process = Process[Process['Longitude'] > -11]
+
+    # Sites
+    # Create point geometries (shapely)
+    Process['geometry'] = list(zip(Process.Longitude, Process.Latitude))
+    Process['geometry'] = Process['geometry'].apply(Point)
+
+    P_located = gpd.GeoDataFrame(Process, geometry='geometry', crs='')
+    P_located.crs = {'init': 'epsg:4326'}
+
+    # Define the output commodity
+    P_located['CoOut'] = 'Elec'
+
+    P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
+
     P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
 
     # Save the GeoDataFrame
@@ -1229,15 +1426,16 @@ def generate_evrys_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)  # done
-    # generate_intermittent_supply_timeseries(paths, param)  # separate module
-    # generate_load_timeseries(paths, param)  # done
-    # generate_commodities(paths, param)  # corresponds to 04 - done
-    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-    # generate_processes(paths, param)  # corresponds to 05c - done
-    # generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    # clean_grid_data(paths, param)  # corresponds to 06a - done
-    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
-    # generate_urbs_model(paths, param) # Done
+    generate_sites_from_shapefile(paths)  # done
+    generate_intermittent_supply_timeseries(paths, param)  # separate module
+    generate_load_timeseries(paths, param)  # done
+    generate_commodities(paths, param)  # corresponds to 04 - done
+    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+    generate_processes(paths, param)  # corresponds to 05c - done
+    generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    clean_grid_data(paths, param)  # corresponds to 06a - done
+    generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    generate_urbs_model(paths, param) # Done
     generate_evrys_model(paths, param)

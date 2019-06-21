@@ -105,7 +105,10 @@ dist_ren = {"country_names": {'Albania': 'AL',
                               'Spain': 'ES',
                               'Sweden': 'SE',
                               'Switzerland': 'CH',
-                              'Ukraine': 'UA'},
+                              'Ukraine': 'UA',
+                              'Czech Republic': 'CZ',
+                              'United Kingdom': 'UK'
+                              },
             "renewables": {'Onshore wind energy': 'WindOn',
                            'Offshore wind energy': 'WindOff',
                            'Solar': 'Solar',
@@ -227,6 +230,8 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
 # Process and storage data
 paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs + \
                     'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+paths["database_FRESNA"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs + \
+                    'FRESNA2' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
 # Grid
 paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + fs + \
@@ -268,6 +273,9 @@ paths["load_EU"] = pathtemp + 'Load' + fs + 'Load_EU' + '%04d' % (param["year"])
 # 02 - process and storage
 paths["pro_sto"] = pathtemp + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
 paths["PPs_"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+paths["process_raw"] = pathtemp + 'Processes_raw_FRESNA2_2.csv'
+paths["Process_agg"] = pathtemp + 'Processes_agg_FRESNA2_2.csv'
+paths["Process_agg_bis"] = pathtemp + 'Processes_agg_FRESNA2_3.csv'
 
 # 02 - Grid
 paths["grid_shp"] = pathtemp + 'Grid' + fs + 'grid_cleaned_shape.shp'
