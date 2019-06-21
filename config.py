@@ -12,9 +12,19 @@ param["region"] = 'Europe'
 param["model_regions"] = 'NUTS0_wo_Balkans'
 param["year"] = 2015
 
-# Urbs
+# Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
                               'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price']
+param["evrys_model_sheets"] = ['Flags', 'Sites', 'Commodities', 'Process', 'Transmission', 'Storage', 'DSM', 'Demand']
+
+# urbs Global paramters
+urbs_global = {"Support timeframe": param["year"],
+              "Discount rate": 0.03,
+              "CO2 limit": 'inf',
+              "Cost budget": 6.5e11,
+              "CO2 budget": 'inf'
+              }
+param["urbs_global"] = urbs_global
 
 # Load
 
@@ -162,7 +172,6 @@ loadability = {"80": 3,
 param["grid"] = {"depreciation": 40,
                  "loadability": loadability}
 
-
 ###########################
 ##### Define Paths ########
 ###########################
@@ -185,10 +194,9 @@ model_regions = param["model_regions"]
 
 paths = {}
 
-
-    ##################################
-    #           Input files          #
-    ##################################
+##################################
+#           Input files          #
+##################################
 
 # Shapefiles
 PathTemp = root + "01 Raw inputs" + fs + "Maps" + fs + "Shapefiles" + fs
@@ -217,7 +225,7 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
                      }
 
 # Process and storage data
-paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs +\
+paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs + \
                     'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
 # Grid
@@ -246,10 +254,9 @@ paths["IRENA"] = root + '01 Raw inputs' + fs + 'Renewable energy' + fs + 'Renewa
 paths["map_power_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs
 paths["map_grid_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs + 'random_points.shp'
 
-
-    ##################################
-    #     General Ouputs Folders     #
-    ##################################
+##################################
+#     General Ouputs Folders     #
+##################################
 
 pathtemp = root + '02 Intermediate files' + fs + 'Files ' + region + fs
 # 02 - load
@@ -274,19 +281,19 @@ paths["urbs_commodities"] = paths["urbs"] + 'Commodities_urbs' + ' %04d' % (para
 paths["urbs_process"] = paths["urbs"] + 'Process_urbs' + ' %04d' % (param["year"]) + '.csv'
 paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs' + ' %04d' % (param["year"]) + '.csv'
 paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs' + ' %04d' % (param["year"]) + '.csv'
-paths["urbs_model"] = paths["urbs"] + param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
-
+paths["urbs_model"] = paths["urbs"] + 'urbs_' + \
+                      str(param["region"]) + '_' + str(param["model_regions"]) + '_' + str(param["year"]) + '.xlsx'
 
 # evrys
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
-paths["evrys_sites"] = paths["evrys"] + 'Site_evrys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_sites"] = paths["evrys"] + 'Sites_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv'
 paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_process"] = paths["evrys"] + 'Process_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_transmission"] = paths["evrys"] + 'Transmission_everys' + ' %04d' % (param["year"]) + '.csv'
-paths["evrys_model"] = paths["evrys"] + param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
-
+paths["evrys_model"] = paths["evrys"] + 'evrys_' + \
+                       str(param["region"]) + '_' + str(param["model_regions"]) + '_' + str(param["year"]) + '.xlsx'
 
 if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])

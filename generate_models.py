@@ -468,7 +468,7 @@ def generate_load_timeseries(paths, param):
     df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_demand"])
 
-    df_evrys.to_csv(paths["evrys_demand"], sep=',', index=False)
+    df_evrys.to_csv(paths["evrys_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["evrys_demand"])
 
     timecheck('End')
@@ -1166,7 +1166,7 @@ def generate_aggregated_grid(paths, param):
 def generate_urbs_model(paths, param):
     """
     Read model's .csv files, and create relevant dataframes.
-    Writes dataframes to urbs and evrys input excel files.
+    Writes dataframes to urbs input excel file.
     """
     timecheck('Start')
 
@@ -1174,18 +1174,55 @@ def generate_urbs_model(paths, param):
     urbs_paths = glob.glob(paths["urbs"] + '*.csv')
     # create empty dictionary
     urbs_model = {}
+    # read .csv files and associate them with relevant sheet
     for str in urbs_paths:
         # clean input names and associate them with the relevant dataframe
         sheet = os.path.basename(str).replace('_urbs' + ' %04d' % (param["year"]) + '.csv', '')
         urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+
+    # Add global parameters
+    urbs_model["Global"] = pd.DataFrame.from_dict(param["urbs_global"], orient='index')
 
     # Create ExcelWriter
     with ExcelWriter(paths["urbs_model"], mode='w') as writer:
         # populate excel file with available sheets
         for sheet in param["urbs_model_sheets"]:
             if sheet in urbs_model.keys():
-                urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+                if sheet is 'Global':
+                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=True, header=False)
+                else:
+                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+
     print("File Saved: " + paths["urbs_model"])
+
+    timecheck('End')
+
+
+def generate_evrys_model(paths, param):
+    """
+        Read model's .csv files, and create relevant dataframes.
+        Writes dataframes to evrys input excel file.
+        """
+    timecheck('Start')
+
+    # List all files present in urbs folder
+    evrys_paths = glob.glob(paths["evrys"] + '*.csv')
+    # create empty dictionary
+    evrys_model = {}
+    # read .csv files and associate them with relevant sheet
+    for str in evrys_paths:
+        # clean input names and associate them with the relevant dataframe
+        sheet = os.path.basename(str).replace('_evrys' + ' %04d' % (param["year"]) + '.csv', '')
+        evrys_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+
+    # Create ExcelWriter
+    with ExcelWriter(paths["evrys_model"], mode='w') as writer:
+        # populate excel file with available sheets
+        for sheet in param["evrys_model_sheets"]:
+            if sheet in evrys_model.keys():
+                evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+
+    print("File Saved: " + paths["evrys_model"])
 
     timecheck('End')
 
@@ -1201,6 +1238,6 @@ if __name__ == '__main__':
     # generate_processes(paths, param)  # corresponds to 05c - done
     # generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
     # clean_grid_data(paths, param)  # corresponds to 06a - done
-    # generate_aggregated_grid(paths, param)  # corresponds to 06b
-    generate_urbs_model(paths, param)
-    # generate_evrys_model(paths, param)
+    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    # generate_urbs_model(paths, param) # Done
+    generate_evrys_model(paths, param)
