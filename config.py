@@ -291,7 +291,7 @@ paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"
 paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_process"] = paths["evrys"] + 'Process_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys' + ' %04d' % (param["year"]) + '.csv'
-paths["evrys_transmission"] = paths["evrys"] + 'Transmission_everys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_transmission"] = paths["evrys"] + 'Transmission_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_model"] = paths["evrys"] + 'evrys_' + \
                        str(param["region"]) + '_' + str(param["model_regions"]) + '_' + str(param["year"]) + '.xlsx'
 
