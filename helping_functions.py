@@ -939,12 +939,12 @@ def format_process_model(process_compact, param):
 
     ind = output_pro_evrys['CoIn'] == 'Coal'
     output_pro_evrys.loc[ind, 'eff'] = 0.35 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
-            param["year_ref"] - 1960)
+            param["pro_sto"]["year_ref"] - 1960)
     output_pro_evrys.loc[ind, 'effmin'] = 0.92 * output_pro_evrys.loc[ind, 'eff']
 
     ind = output_pro_evrys['CoIn'] == 'Lignite'
     output_pro_evrys.loc[ind, 'eff'] = 0.33 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (
-            param["year_ref"] - 1960)
+            param["pro_sto"]["year_ref"] - 1960)
     output_pro_evrys.loc[ind, 'effmin'] = 0.9 * output_pro_evrys.loc[ind, 'eff']
 
     ind = ((output_pro_evrys['CoIn'] == 'Gas') & (output_pro_evrys['inst-cap'] <= 100))
@@ -1270,11 +1270,11 @@ def format_transmission_model(icl_final, paths, param):
                              | (output_urbs['tr_type'] == 'DC_CAB'), 'length']
 
     output_urbs['var-cost'].fillna(0, inplace=True)
-    output_urbs['cap-lo'] = 0
+    output_urbs['cap-lo'] = param["dist_ren"]["cap_lo"]
     output_urbs['cap-up'] = output_urbs['inst-cap']
     output_urbs['cap-up'].fillna(0, inplace=True)
-    output_urbs['wacc'] = 0.07
-    output_urbs['depreciation'] = 40
+    output_urbs['wacc'] = param["pro_sto"]["wacc"]
+    output_urbs['depreciation'] = param["grid"]["depreciation"]
 
     # Change the order of the columns
     output_urbs = output_urbs[

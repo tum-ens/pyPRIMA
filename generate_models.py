@@ -569,7 +569,7 @@ def distribute_renewable_capacities(paths, param):
 
     # Estimate number of units
     units = param["dist_ren"]["units"]
-    for p in data["process"].unique():
+    for p in data["Process"].unique():
         data.loc[data["Process"] == p, "Unit"] = data.loc[data["Process"] == p, "inst-cap"] // units[p] \
                                                  + (data.loc[data["Process"] == p, "inst_cap"] % units[p] > 0)
     for p in data["Process"].unique():
@@ -803,7 +803,7 @@ def generate_processes(paths, param):
     process_current = filter_life_time(param, process_raw, depreciation)
 
     # Get Sites
-    process_located, = get_sites(process_current, paths)
+    process_located, _ = get_sites(process_current, paths)
     print('Number of processes after duplicate removal: ' + str(len(process_located)))
 
     # Reduce the number of processes by aggregating the small and must-run power plants
@@ -828,7 +828,7 @@ def generate_processes(paths, param):
     # Recombine big processes with the aggregated small ones
     process_compact = process_compact[(process_compact["inst-cap"] >= param["pro_sto"]["agg_thres"])
                                       & (process_compact["on-off"] == 1)]
-    process_compact = process_compact.append(process_small, ignore_index=True)
+    process_compact = process_compact.append(process_small, ignore_index=True, sort=True)
     print("Number of compacted processes: " + str(len(process_compact)))
 
     # Process evrys, urbs
@@ -1192,15 +1192,15 @@ def generate_urbs_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    generate_sites_from_shapefile(paths)  # done
-    generate_intermittent_supply_timeseries(paths, param)  # separate module
+    # generate_sites_from_shapefile(paths)  # done
+    # generate_intermittent_supply_timeseries(paths, param)  # separate module
     # generate_load_timeseries(paths, param)  # done
-    generate_commodities(paths, param)  # corresponds to 04 - done
-    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-    generate_processes(paths, param)  # corresponds to 05c - done
-    generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    clean_grid_data(paths, param)  # corresponds to 06a - done
-    generate_aggregated_grid(paths, param)  # corresponds to 06b
+    # generate_commodities(paths, param)  # corresponds to 04 - done
+    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    # clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    # generate_processes(paths, param)  # corresponds to 05c - done
+    # generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    # clean_grid_data(paths, param)  # corresponds to 06a - done
+    # generate_aggregated_grid(paths, param)  # corresponds to 06b
     # generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)

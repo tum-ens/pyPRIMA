@@ -140,7 +140,7 @@ pro_sto = {"year_ref": 2015,
 param["pro_sto"] = pro_sto
 
 # Clean grid
-param["grid"] = {}
+param["grid"] = {"depreciation": 40}
 loadability = {"80": 3,
                "100": 2.75,
                "150": 2.5,
@@ -158,6 +158,7 @@ loadability = {"80": 3,
                "750": 0.6}
 
 param["grid"]["loadability"] = loadability
+
 
 
 ###########################
