@@ -390,7 +390,6 @@ def generate_load_timeseries(paths, param):
     load_regions = load_subregions.groupby(['Region', 'Country']).sum()
     load_regions.reset_index(inplace=True)
     load_regions.set_index(['Region'], inplace=True)
-    load_regions.to_hdf('load_subregion.hdf', 'df')
 
     for s in sec + ['RES']:
         zonal_weighting(paths, load_sector, stat, s)
@@ -1150,7 +1149,7 @@ def generate_aggregated_grid(paths, param):
     evrys_transmission, urbs_transmission = format_transmission_model(icl_final, paths, param)
 
     # Ouput
-    urbs_transmission.to_csv(paths["urbs_transmission"], sep=';', decimal=',')
+    urbs_transmission.to_csv(paths["urbs_transmission"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_transmission"])
 
     evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
@@ -1171,22 +1170,23 @@ def generate_urbs_model(paths, param):
     """
     timecheck('Start')
 
-    # ## To be done later when all modules are implemented ## #
+    # List all files present in urbs folder
+    urbs_paths = glob.glob(paths["urbs"] + '*.csv')
+    # create empty dictionary
+    urbs_model = {}
+    for str in urbs_paths:
+        # clean input names and associate them with the relevant dataframe
+        sheet = os.path.basename(str).replace('_urbs' + ' %04d' % (param["year"]) + '.csv', '')
+        urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
 
-    # # Prepare blank excel file
-    # output = pd.ExcelWriter(paths["urbs_model"], mode='w')
-    #
-    # # Read and Format zones
-    # site_urbs = pd.read_csv(paths["urbs"] + 'Sites_urbs.csv', sep=';', decimal=',')
-    #
-    # # Write Sites
-    #
-    # site_urbs.to_excel(output, "Site")
-    # # Read load
-    # load_urbs = pd.read_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',')
-    # load_urbs.to_excel(output, "Demand")
-    #
-    # # TO IMPLEMENT FOR EVRYS TOO
+    # Create ExcelWriter
+    with ExcelWriter(paths["urbs_model"], mode='w') as writer:
+        # populate excel file with available sheets
+        for sheet in param["urbs_model_sheets"]:
+            if sheet in urbs_model.keys():
+                urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+    print("File Saved: " + paths["urbs_model"])
+
     timecheck('End')
 
 
@@ -1202,5 +1202,5 @@ if __name__ == '__main__':
     # generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
     # clean_grid_data(paths, param)  # corresponds to 06a - done
     # generate_aggregated_grid(paths, param)  # corresponds to 06b
-    # generate_urbs_model(paths, param)
+    generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)

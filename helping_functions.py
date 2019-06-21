@@ -1,6 +1,7 @@
 from osgeo import gdal, ogr, gdalnumeric
 from osgeo.gdalconst import GA_ReadOnly
 import pandas as pd
+from pandas import ExcelWriter
 import geopandas as gpd
 import numpy as np
 from shapely import geometry
@@ -12,6 +13,7 @@ import sys
 import datetime
 import inspect
 import os
+import glob
 
 gdal.PushErrorHandler('CPLQuietErrorHandler')
 
@@ -25,17 +27,12 @@ def clean_load_data(paths, param, countries):
     :return:
     """
     timecheck('Start')
-    # avoid reading the excel file each time(to be removed)
-    if not os.path.isfile('savetimeseries_temp.hdf'):
-        # Get dataframe with timeseries
-        print('reading excel file (might take a bit of time)\n')
-        df_raw = pd.read_excel(paths["load_ts"], header=0, skiprows=[0, 1, 2], sep=',', decimal='.')
-        print('done')
-        # Filter by year
-        df_year = df_raw.loc[df_raw['Year'] == param["year"]]
-        df_year.to_hdf('savetimeseries_temp.hdf', 'df')
-    else:
-        df_year = pd.read_hdf('savetimeseries_temp.hdf', 'df')
+
+    # Read country load timeseries
+    df_raw = pd.read_excel(paths["load_ts"], header=0, skiprows=[0, 1, 2], sep=',', decimal='.')
+
+    # Filter by year
+    df_year = df_raw.loc[df_raw['Year'] == param["year"]]
 
     # Scale based on coverage ratio
     df_scaled = df_year.copy()

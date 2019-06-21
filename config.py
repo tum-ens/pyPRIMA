@@ -7,12 +7,16 @@ from sys import platform
 #### User preferences #####
 ###########################
 
-# Load
-
 param = {}
 param["region"] = 'Europe'
 param["model_regions"] = 'NUTS0_wo_Balkans'
 param["year"] = 2015
+
+# Urbs
+param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
+                              'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price']
+
+# Load
 
 load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/Fall', 5: 'Spring/Fall', 6: 'Summer',
                         7: 'Summer', 8: 'Summer', 9: 'Spring/Fall', 10: 'Spring/Fall', 11: 'Spring/Fall', 12: 'Winter'},
@@ -115,7 +119,7 @@ dist_ren = {"country_names": {'Albania': 'AL',
 
 param["dist_ren"] = dist_ren
 
-# Clean Process and storage data, Process, and Storage
+# Clean Process and Storage data, Process, and Storage
 pro_sto = {"year_ref": 2015,
            "proc_dict": {'Hard Coal': 'Coal',
                          'Hydro': 'Hydro_Small',
@@ -139,8 +143,7 @@ pro_sto = {"year_ref": 2015,
 
 param["pro_sto"] = pro_sto
 
-# Clean grid
-param["grid"] = {"depreciation": 40}
+# Clean Grid
 loadability = {"80": 3,
                "100": 2.75,
                "150": 2.5,
@@ -156,9 +159,8 @@ loadability = {"80": 3,
                "650": 0.8,
                "700": 0.77,
                "750": 0.6}
-
-param["grid"]["loadability"] = loadability
-
+param["grid"] = {"depreciation": 40,
+                 "loadability": loadability}
 
 
 ###########################
@@ -182,6 +184,11 @@ region = param["region"]
 model_regions = param["model_regions"]
 
 paths = {}
+
+
+    ##################################
+    #           Input files          #
+    ##################################
 
 # Shapefiles
 PathTemp = root + "01 Raw inputs" + fs + "Maps" + fs + "Shapefiles" + fs
@@ -213,19 +220,12 @@ paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Hausha
 paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs +\
                     'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
 
-paths["pro_sto"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Processes_and_Storage_' + \
-                   str(param["year"]) + '.shp'
-paths["PPs_"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
-
 # Grid
-
 paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + fs + \
                 'gridkit_europe-highvoltage-links.csv'
 # paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_US' + fs + \
 #                 'gridkit_north_america-highvoltage-links.csv'
 
-paths["grid_shp"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Grid' + fs + 'grid_cleaned_shape.shp'
-paths["grid_cleaned"] = root + "02 Intermediate files" + fs + "Files " + region + fs + 'Grid' + fs + 'GridKit_cleaned.csv'
 
 # ## Renewable Capacities
 # Rasters for wind and solar
@@ -246,35 +246,47 @@ paths["IRENA"] = root + '01 Raw inputs' + fs + 'Renewable energy' + fs + 'Renewa
 paths["map_power_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs
 paths["map_grid_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs + 'random_points.shp'
 
-# Ouput Folders
+
+    ##################################
+    #     General Ouputs Folders     #
+    ##################################
+
+pathtemp = root + '02 Intermediate files' + fs + 'Files ' + region + fs
 # 02 - load
-paths["load"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Load' + fs
-paths["model_regions"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + model_regions + fs
-paths["sites"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + model_regions + fs + 'Sites.csv'
-paths["load_EU"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs + 'Load' + fs + 'Load_EU' + '%04d' % (
-    param["year"]) + '.csv'
+paths["load"] = pathtemp + 'Load' + fs
+paths["model_regions"] = pathtemp + model_regions + fs
+paths["sites"] = pathtemp + model_regions + fs + 'Sites.csv'
+paths["load_EU"] = pathtemp + 'Load' + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
+
+# 02 - process and storage
+paths["pro_sto"] = pathtemp + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
+paths["PPs_"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+
+# 02 - Grid
+paths["grid_shp"] = pathtemp + 'Grid' + fs + 'grid_cleaned_shape.shp'
+paths["grid_cleaned"] = pathtemp + 'Grid' + fs + 'GridKit_cleaned.csv'
 
 # urbs
 paths["urbs"] = paths["model_regions"] + "urbs" + fs
-paths["urbs_sites"] = paths["urbs"] + 'Sites_urbs.csv'
-paths["urbs_demand"] = paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv'
-paths["urbs_commodities"] = paths["urbs"] + 'Commodities_urbs.csv'
-paths["urbs_process"] = paths["urbs"] + 'Process_urbs.csv'
-paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs.csv'
-paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs_GridKit.csv'
+paths["urbs_sites"] = paths["urbs"] + 'Site_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_demand"] = paths["urbs"] + 'Demand_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_commodities"] = paths["urbs"] + 'Commodities_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_process"] = paths["urbs"] + 'Process_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs' + ' %04d' % (param["year"]) + '.csv'
+paths["urbs_model"] = paths["urbs"] + param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
 
 
 # evrys
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
-paths["evrys_sites"] = paths["evrys"] + 'Sites_evrys.csv'
+paths["evrys_sites"] = paths["evrys"] + 'Site_evrys' + ' %04d' % (param["year"]) + '.csv'
 paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv'
-paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys.csv'
-paths["evrys_process"] = paths["evrys"] + 'Process_evrys.csv'
-paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys.csv'
-paths["evrys_transmission"] = paths["evrys"] + 'Transmission_everys_GridKit.csv'
+paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_process"] = paths["evrys"] + 'Process_evrys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_transmission"] = paths["evrys"] + 'Transmission_everys' + ' %04d' % (param["year"]) + '.csv'
+paths["evrys_model"] = paths["evrys"] + param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
 
-paths["urbs_model"] = param["region"] + '_' + param["model_regions"] + '_' + str(param["year"]) + '.xlsx'
-paths["urbs_model_hdf"] = paths["urbs"] + 'model_data.hdf'
 
 if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])
