@@ -1,5 +1,5 @@
-import os
 from helping_functions import *
+import os
 import shutil
 import openpyxl
 from scipy.ndimage import convolve
@@ -7,8 +7,37 @@ import datetime
 
 
 def initialization():
+    ''' documentation '''
     timecheck('Start')
+
     from config import paths, param
+    res_weather = param["dist_ren"]["res_weather"]
+    res_desired = param["dist_ren"]["res_desired"]
+
+    # read shapefile of regions
+    regions_shp = gpd.read_file(paths["SHP"])
+    # Extract onshore and offshore areas separately
+    param["regions_land"] = regions_shp.drop(regions_shp[regions_shp["Population"] == 0].index)
+    param["regions_eez"] = regions_shp.drop(regions_shp[regions_shp["Population"] != 0].index)
+    # Recombine the maps in this order: onshore then offshore
+
+    regions_all = gpd.GeoDataFrame(pd.concat([param["regions_land"], param["regions_eez"]],
+                                             ignore_index=True), crs=param["regions_land"].crs)
+
+    param["nRegions_land"] = len(param["regions_land"])
+    param["nRegions_eez"] = len(param["regions_eez"])
+
+    nRegions = param["nRegions_land"] + param["nRegions_eez"]
+    Crd_regions = np.zeros((nRegions, 4))
+    for reg in range(0, nRegions):
+        # Box coordinates for MERRA2 data
+        r = regions_all.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions[reg, :] = crd_merra(box, res_weather)
+    Crd_all = np.array([max(Crd_regions[:, 0]), max(Crd_regions[:, 1]), min(Crd_regions[:, 2]), min(Crd_regions[:, 3])])
+    param["Crd_regions"] = Crd_regions
+    param["Crd_all"] = Crd_all
+
     timecheck('End')
     return paths, param
 
@@ -39,7 +68,7 @@ def generate_sites_from_shapefile(paths):
     zones.sort_values(['Site'], inplace=True)
     zones.reset_index(inplace=True, drop=True)
 
-    zones.to_csv(paths["model_regions"] + 'Sites.csv', index=False, sep=';', decimal=',')
+    zones.to_csv(paths["sites"], index=False, sep=';', decimal=',')
 
     # Preparing output for evrys
     zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
@@ -61,8 +90,10 @@ def generate_sites_from_shapefile(paths):
     zones_urbs = zones[['Site', 'Area']].rename(columns={'Site': 'Name', 'Area': 'area'})
     zones_urbs['area'] = zones_urbs['area'] * 1000000  # in m²
 
-    zones_evrys.to_csv(paths["evrys"] + 'Sites_evrys.csv', index=False, sep=';', decimal=',')
-    zones_urbs.to_csv(paths["urbs"] + 'Sites_urbs.csv', index=False, sep=';', decimal=',')
+    zones_evrys.to_csv(paths["evrys_sites"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_sites"])
+    zones_urbs.to_csv(paths["urbs_sites"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs"])
 
     timecheck('End')
 
@@ -335,7 +366,7 @@ def generate_load_timeseries(paths, param):
     # Calculate the hourly load for each subregion
 
     load_subregions = pd.DataFrame(0, index=stat_sub.index,
-                                       columns=df_sectors.index.tolist() + ['Region', 'Country'])
+                                   columns=df_sectors.index.tolist() + ['Region', 'Country'])
     load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
     status = 0
     length = len(load_subregions.index) * len(landuse_types)
@@ -345,13 +376,13 @@ def generate_load_timeseries(paths, param):
     for sr in load_subregions.index:
         c = load_subregions.loc[sr, 'Country']
         # For residential:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
-                                                                 + stat_sub.loc[sr, 'RES']\
-                                                                 * load_landuse.loc[c, 'RES'].to_numpy()
+        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                             + stat_sub.loc[sr, 'RES'] \
+                                                             * load_landuse.loc[c, 'RES'].to_numpy()
         for lu in landuse_types:
-            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()]\
-                                                                     + stat_sub.loc[sr, lu] \
-                                                                     * load_landuse.loc[c, lu].to_numpy()
+            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
+                                                                 + stat_sub.loc[sr, lu] \
+                                                                 * load_landuse.loc[c, lu].to_numpy()
             # show_progress
             status = status + 1
             display_progress("Computing sub regions load", (length, status))
@@ -359,7 +390,6 @@ def generate_load_timeseries(paths, param):
     load_regions = load_subregions.groupby(['Region', 'Country']).sum()
     load_regions.reset_index(inplace=True)
     load_regions.set_index(['Region'], inplace=True)
-    load_regions.to_hdf('load_subregion.hdf', 'df')
 
     for s in sec + ['RES']:
         zonal_weighting(paths, load_sector, stat, s)
@@ -433,14 +463,21 @@ def generate_load_timeseries(paths, param):
 
     # Output
     Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
-    df_evrys.to_csv(paths["evrys"] + 'Demand_evrys' + '%04d' % (param["year"]) + '.csv', sep=',', index=False)
-    df_urbs.to_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["load_EU"])
+
+    df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["urbs_demand"])
+
+    df_evrys.to_csv(paths["evrys_demand"], sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["evrys_demand"])
+
     timecheck('End')
 
 
 def generate_commodities(paths, param):
-
+    ''' documentation '''
     timecheck('Start')
+
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
     commodities = list(assumptions['Commodity'].unique())
 
@@ -453,7 +490,7 @@ def generate_commodities(paths, param):
     dict_maxperstep = dict(zip(assumptions['Commodity'], assumptions['maxperstep']))
 
     # Read the CSV containing the list of sites
-    sites = pd.read_csv(paths["model_regions"] + 'Sites.csv', sep=';', decimal=',')
+    sites = pd.read_csv(paths["sites"], sep=';', decimal=',')
 
     # Read the CSV containing the annual load
     load = pd.read_csv(paths["load_EU"], index_col=['sit'])
@@ -488,47 +525,917 @@ def generate_commodities(paths, param):
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
                      'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
 
-    output_evrys.to_csv(paths["evrys"] + 'Commodities_evrys.csv', index=False, sep=';', decimal=',')
-    output_urbs.to_csv(paths["urbs"] + 'Commodities_urbs.csv', index=False, sep=';', decimal=',')
+    output_urbs.to_csv(paths["urbs_commodities"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_commodities"])
+
+    output_evrys.to_csv(paths["evrys_commodities"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_commodities"])
 
     timecheck('End')
 
 
+def distribute_renewable_capacities(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    # Shapefile with countries
+    countries = gpd.read_file(paths["Countries"])
+
+    # Countries to be considered
+    sites = pd.DataFrame(countries[['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Site'}))
+    sites = sites.sort_values(by=['Site'], axis=0)['Site'].unique()
+
+    # Read input file, extracted from IRENA
+    data_raw = pd.read_excel(paths["IRENA"], skiprows=[0, 1, 2, 3, 4, 5, 6])
+
+    # Add missing country names
+    for i in np.arange(1, len(data_raw.index)):
+        if data_raw.isnull().loc[i, 'Country/area'] is True:
+            data_raw.loc[i, 'Country/area'] = data_raw.loc[i - 1, 'Country/area']
+
+    # Select technologies needed in urbs and rename them
+    data_raw = data_raw.loc[data_raw["Technology"].isin(param["dist_ren"]["renewables"])].reset_index(drop=True)
+    data_raw["Technology"] = data_raw["Technology"].replace(param["dist_ren"]["renewables"])
+    data_raw = data_raw.rename(columns={'Country/area': 'Site', 'Technology': 'Process', 2015: 'inst-cap'})
+
+    # Create new dataframe with needed information, rename sites and extract chosen sites
+    data = data_raw[["Site", "Process", "inst-cap"]]
+    data = data.replace({"site": param["dist_ren"]["country_names"]}).fillna(value=0)
+    data = data.loc[data["Site"].isin(sites)].reset_index(drop=True)
+
+    # Group by and sum
+    data = data.groupby(["Site", "Process"]).sum().reset_index()
+
+    # Estimate number of units
+    units = param["dist_ren"]["units"]
+    for p in data["Process"].unique():
+        data.loc[data["Process"] == p, "Unit"] = data.loc[data["Process"] == p, "inst-cap"] // units[p] \
+                                                 + (data.loc[data["Process"] == p, "inst_cap"] % units[p] > 0)
+    for p in data["Process"].unique():
+        x = y = c = []
+        for counter in range(0, len(countries) - 1):
+            print(counter)
+            if float(data.loc[(data["site"] == countries.loc[counter, "NAME_SHORT"]) & (
+                    data["Process"] == p), 'inst-cap']) == 0:
+                continue
+            if (countries.loc[counter, "Population"]) & (p == 'WindOff'):
+                continue
+            if (countries.loc[counter, "Population"] == 0) & (p != 'WindOff'):
+                continue
+            name, x_off, y_off, potential = rasclip(paths["rasters"][p], paths["Countries"], counter)
+            raster_shape = potential.shape
+            potential = potential.flatten()
+
+            # Calculate the part of the probability that is based on the potential
+            potential_nan = np.isnan(potential) | (potential == 0)
+            potential = (potential - np.nanmin(potential)) / (np.nanmax(potential) - np.nanmin(potential))
+            potential[potential_nan] = 0
+
+            # Calculate the random part of the probability
+            potential_random = np.random.random_sample(potential.shape)
+            potential_random[potential_nan] = 0
+
+            # Combine the two parts
+            potential_new = (1 - param["dist_ren"]["randomness"]) * potential \
+                            + param["dist_ren"]["randomness"] * potential_random
+
+            # Sort elements based on their probability and keep the indices
+            ind_sort = np.argsort(potential_new, axis=None)  # Ascending
+            ind_needed = ind_sort[-int(data.loc[(data["Site"] == name) & (data["Process"] == p), "units"].values):]
+
+            # Free memory
+            del ind_sort, potential, potential_nan, potential_random
+
+            # Get the coordinates of the power plants and their respective capacities
+            power_plants = [units[p]] * len(ind_needed)
+            if data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[p] > 0:
+                power_plants[-1] = data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[
+                    p]
+            y_pp, x_pp = np.unravel_index(ind_needed, raster_shape)
+            x = x + ((x_pp + x_off + 0.5) * param["res_desired"][1] + param["Crd_all"][3]).tolist()
+            y = y + (param["Crd_all"][0] - (y_pp + y_off + 0.5) * param["res_desired"][0]).tolist()
+            c = c + potential_new[ind_needed].tolist()  # Power_plants
+
+            del potential_new
+
+        # Create map
+        map_power_plants(p, x, y, c, paths["map_power_plants"] + p + '.shp')
+
+
+def clean_processes_and_storage_data(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+
+    depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
+    year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
+    year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+
+    # Get data from fresna database
+    Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
+                          usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    Process.rename(columns={'Capacity': 'inst-cap', 'YearCommissioned': 'year', 'lat': 'Latitude', 'lon': 'Longitude'},
+                   inplace=True)
+    print('Number of power plants: ', len(Process))
+
+    # ### Process name
+
+    # Use the name of the processes in OPSD as a standard name
+    Process['Pro'] = Process['OPSD']
+
+    # If the name is missing in OPSD, use the name in other databases
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'CARMA']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'ENTSOE']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'GEO']
+    Process.loc[Process['Pro'].isnull(), 'Pro'] = Process.loc[Process['Pro'].isnull(), 'WRI']
+
+    # Add suffix to duplicate names
+    Process['Pro'] = Process['Pro'] + Process.groupby(['Pro']).cumcount().astype(str).replace('0', '')
+
+    # Remove spaces from the name and replace them with underscores
+    Process['Pro'] = [Process.loc[i, 'Pro'].replace(' ', '_') for i in Process.index]
+
+    # Remove useless columns
+    Process.drop(['CARMA', 'ENTSOE', 'GEO', 'OPSD', 'WRI'], axis=1, inplace=True)
+
+    print('Number of power plants with distinct names: ', len(Process['Pro'].unique()))
+
+    # ### Type
+
+    Process['CoIn'] = np.nan
+    for i in Process.index:
+        # Get the pumped storage facilities
+        if Process.loc[i, 'Technology'] in ['Pumped Storage', 'Pumped Storage With Natural Inflow',
+                                            'Pumped Storage, Pumped Storage With Natural Inflow, Reservoir',
+                                            'Pumped Storage, Reservoir', 'Pumped Storage, Run-Of-River']:
+            Process.loc[i, 'CoIn'] = 'PumSt'
+
+        # Get the tidal power plants
+        if Process.loc[i, 'Technology'] == 'Tidal':
+            Process.loc[i, 'CoIn'] = 'Tidal'
+
+        # Assign an input commodity
+        if pd.isnull(Process.loc[i, 'CoIn']):
+            Process.loc[i, 'CoIn'] = param["pro_sto"]["proc_dict"][Process.loc[i, 'Fueltype']]
+
+        # Distinguish between small and large hydro
+        if (Process.loc[i, 'CoIn'] == 'Hydro_Small') and (Process.loc[i, 'inst-cap'] > 30):
+            Process.loc[i, 'CoIn'] = 'Hydro_Large'
+
+    # Remove useless columns
+    Process.drop(['Fueltype', 'Technology', 'Set'], axis=1, inplace=True)
+
+    # Remove renewable power plants (except Tidal and Geothermal)
+    Process.set_index('CoIn', inplace=True)
+    Process.drop(list(set(Process.index.unique()) & set(param["pro_sto"]["renewable_powerplants"])),
+                 axis=0, inplace=True)
+
+    Process.reset_index(inplace=True)
+
+    print('Possible processes: ', Process['CoIn'].unique())
+
+    # ### Include renewable power plants
+
+    for pp in param["pro_sto"]["renewable_powerplants"]:
+        # Shapefile with power plants
+        pp_shapefile = gpd.read_file(paths["PPs_"] + pp + '.shp')
+        pp_df = pd.DataFrame(pp_shapefile.rename(columns={'CapacityMW': 'inst-cap'}))
+        pp_df['Longitude'] = [pp_df.loc[i, 'geometry'].x for i in pp_df.index]
+        pp_df['Latitude'] = [pp_df.loc[i, 'geometry'].y for i in pp_df.index]
+        pp_df['CoIn'] = pp
+        pp_df['Pro'] = [pp + '_' + str(i) for i in pp_df.index]
+        pp_df.drop(['geometry'], axis=1, inplace=True)
+        Process = Process.append(pp_df, ignore_index=True, sort=True)
+
+    # ### Year
+
+    # Assign a dummy year for missing entries (will be changed later)
+    for c in Process['CoIn'].unique():
+        if c in param["pro_sto"]["storage"]:
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_mu'] = 1980
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_stdev'] = 5
+        else:
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_mu'] = year_mu[c]
+            Process.loc[(Process['CoIn'] == c) & (Process['year'].isnull()), 'year_stdev'] = year_stdev[c]
+
+    Process.loc[Process['year'].isnull(), 'year'] = np.floor(
+        np.random.normal(Process.loc[Process['year'].isnull(), 'year_mu'],
+                         Process.loc[Process['year'].isnull(), 'year_stdev']))
+
+    # Drop recently built plants (after the reference year)
+    Process = Process[(Process['year'] <= param["year"])]
+
+    # ### Coordinates
+
+    P_missing = Process[Process['Longitude'].isnull()].copy()
+    P_located = Process[~Process['Longitude'].isnull()].copy()
+
+    # Assign dummy coordinates within the same country (will be changed later)
+    for country in P_missing['Country'].unique():
+        P_missing.loc[P_missing['Country'] == country, 'Latitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 2]
+        P_missing.loc[P_missing['Country'] == country, 'Longitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 3]
+
+    Process = P_located.append(P_missing)
+    Process = Process[Process['Longitude'] > -11]
+
+    # ### Consider lifetime of power plants
+
+    if param["year"] > param["pro_sto"]["year_ref"]:
+        for c in Process['CoIn'].unique():
+            if c in param["pro_sto"]["storage"]:
+                Process.loc[Process['CoIn'] == c, 'lifetime'] = 60
+            else:
+                Process.loc[Process['CoIn'] == c, 'lifetime'] = depreciation[c]
+        print(len(Process.loc[(Process['lifetime'] + Process['year']) < param["year"]]), ' processes will be deleted')
+        Process.drop(Process.loc[(Process['lifetime'] + Process['year']) < param["year"]].index, inplace=True)
+
+    # ### Site
+
+    # Create point geometries (shapely)
+    Process['geometry'] = list(zip(Process.Longitude, Process.Latitude))
+    Process['geometry'] = Process['geometry'].apply(Point)
+
+    P_located = gpd.GeoDataFrame(Process, geometry='geometry', crs='')
+    P_located.crs = {'init': 'epsg:4326'}
+
+    # Define the output commodity
+    P_located['CoOut'] = 'Elec'
+    P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
+    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
+
+    # Save the GeoDataFrame
+    if not os.path.isfile(paths["pro_sto"]):
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+    else:
+        os.remove(paths["pro_sto"])
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+
+    print("File Saved: " + paths["pro_sto"])
+    timecheck("End")
+
+
+def clean_processes_and_storage_data_FRESNA(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+    depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
+    year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
+    year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
+
+    # Get data from fresna database
+    Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
+                          usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    Process.rename(columns={'Capacity': 'inst-cap', 'YearCommissioned': 'year', 'lat': 'Latitude', 'lon': 'Longitude'},
+                   inplace=True)
+    print('Number of power plants: ', len(Process))
+
+    Process['Technology'].fillna('NaN', inplace=True)
+    Process['inst-cap'].fillna(0, inplace=True)
+    Process[['Fueltype', 'Technology', 'Set']].drop_duplicates()
+    Process[(Process['Technology'] == 'Run-Of-River') & (Process['Fueltype'] == 'Hydro')].groupby(['Country']).sum()
+    Process.groupby(['Fueltype', 'Technology', 'Set']).sum().to_csv(paths["process_raw"], sep=';',
+                                                                    decimal=',', index=True)
+    # Type
+    Process['CoIn'] = np.nan
+
+    for i in Process.index:
+        # Get the coal
+        if Process.loc[i, 'Fueltype'] == 'Hard Coal':
+            Process.loc[i, 'CoIn'] = 'Coal'
+        # Get the gas
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'CCGT'),
+                                                                 ('Natural Gas', 'CCGT, Thermal'),
+                                                                 ('Natural Gas', 'Gas Engines'), ('Natural Gas', 'NaN'),
+                                                                 ('Natural Gas', 'Pv')]:
+            Process.loc[i, 'CoIn'] = 'Gas_CCGT'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'OCGT')]:
+            Process.loc[i, 'CoIn'] = 'Gas_OCGT'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'Steam Turbine')]:
+            Process.loc[i, 'CoIn'] = 'Gas_ST'
+        # Get lignite and nuclear
+        if Process.loc[i, 'Fueltype'] in ['Lignite', 'Nuclear']:
+            Process.loc[i, 'CoIn'] = Process.loc[i, 'Fueltype']
+        # Get oil and other
+        if Process.loc[i, 'Fueltype'] in ['Oil', 'Other', 'Waste']:
+            Process.loc[i, 'CoIn'] = 'Oil/Other'
+        # Get the unconventional storage
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Natural Gas', 'Storage Technologies'),
+                                                                 ('Natural Gas', 'Caes')]:
+            Process.loc[i, 'CoIn'] = 'Storage_ST'
+        # Get the pumped storage facilities
+        if Process.loc[i, 'Technology'] in ['Pumped Storage', 'Pumped Storage With Natural Inflow']:
+            Process.loc[i, 'CoIn'] = 'Storage_Long-Term'
+        if tuple(Process.loc[i, ['Fueltype', 'Technology']]) in [('Hydro', 'Reservoir'), ('Hydro', 'NaN'),
+                                                                 ('Hydro', 'Pv'), ('Hydro', 'Run-Of-River')]:
+            Process.loc[i, 'CoIn'] = 'Hydro'
+        Process.loc[i, 'Site'] = param["dist_ren"]["country_names"][Process.loc[i, 'Country']]
+
+    # Remove useless rows
+    Process.dropna(subset=['CoIn'], inplace=True)
+
+    # year
+    for i in Process.index:
+        Process.loc[i, 'Year'] = max(Process.loc[i, 'YearCommissioned'], Process.loc[i, 'Retrofit'])
+        Process.loc[i, 'Cohort'] = max((Process.loc[i, 'YearCommissioned'] // 5) * 5, 1960)
+        Process.loc[i, 'Cohort_new'] = max((Process.loc[i, 'Year'] // 5) * 5, 1960)
+        if np.isnan(Process.loc[i, 'Cohort']):
+            Process.loc[i, 'Cohort'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort'] = str(int(Process.loc[i, 'Cohort']))
+        if np.isnan(Process.loc[i, 'Cohort_new']):
+            Process.loc[i, 'Cohort_new'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort_new'] = str(int(Process.loc[i, 'Cohort_new']))
+
+    Process_agg = Process.groupby(['Site', 'CoIn', 'Cohort']).sum() / 1000
+
+    Process_agg = Process_agg[['inst-cap']]
+
+    full_ind = pd.MultiIndex.from_product([Process['Site'].unique(),
+                                           Process['CoIn'].unique(),
+                                           # ['Lignite', 'Coal', 'Gas_CCGT', 'Gas_ST', 'Gas_OCGT', 'Oil/Other'],
+                                           Process['Cohort'].unique()])
+
+    table_empty = pd.DataFrame(0, index=full_ind, columns=['inst-cap'])
+    for i in Process_agg.index:
+        table_empty.loc[i, 'inst-cap'] = Process_agg.loc[i, 'inst-cap']
+
+    Process_agg = table_empty.reset_index().rename(columns={'level_0': 'Site', 'level_1': 'CoIn', 'level_2': 'Cohort'})
+
+    Process_agg.set_index(['CoIn', 'Cohort'], inplace=True)
+    Process_agg.pivot(columns='Site').to_csv(paths["Process_agg"], sep=';', decimal=',', index=True)
+
+    Process.drop(Process[(Process['YearCommissioned'] > param["year"])].index, axis=0, inplace=True)
+
+    # Assign a dummy year for missing entries (will be changed later)
+    for c in Process['CoIn'].unique():
+        if c == 'Storage_Long-Term':
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = 1980
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = 5
+        elif c == 'Storage_ST':
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = 2010
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = 5
+        else:
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_mu'] = year_mu[c]
+            Process.loc[(Process['CoIn'] == c) & (Process['YearCommissioned'].isnull()), 'year_stdev'] = year_stdev[c]
+
+    Process.loc[Process['YearCommissioned'].isnull(), 'YearCommissioned'] = np.floor(
+        np.random.normal(Process.loc[Process['YearCommissioned'].isnull(), 'year_mu'],
+                         Process.loc[Process['YearCommissioned'].isnull(), 'year_stdev']))
+
+    Process.loc[Process['YearCommissioned'] > param["year"], 'YearCommissioned'] = param["year"]
+
+    # Recalculate cohorts
+    for i in Process.index:
+        Process.loc[i, 'Year'] = max(Process.loc[i, 'YearCommissioned'], Process.loc[i, 'Retrofit'])
+        Process.loc[i, 'Cohort'] = max((Process.loc[i, 'YearCommissioned'] // 5) * 5, 1960)
+        Process.loc[i, 'Cohort_new'] = max((Process.loc[i, 'Year'] // 5) * 5, 1960)
+        if np.isnan(Process.loc[i, 'Cohort']):
+            Process.loc[i, 'Cohort'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort'] = str(int(Process.loc[i, 'Cohort']))
+        if np.isnan(Process.loc[i, 'Cohort_new']):
+            Process.loc[i, 'Cohort_new'] = 'NaN'
+        else:
+            Process.loc[i, 'Cohort_new'] = str(int(Process.loc[i, 'Cohort_new']))
+
+    Process_agg2 = Process.groupby(['Site', 'CoIn', 'Cohort']).sum() / 1000
+
+    Process_agg2 = Process_agg2[['inst-cap']]
+
+    full_ind = pd.MultiIndex.from_product([Process['Site'].unique(),
+                                           Process['CoIn'].unique(),
+                                           # ['Lignite', 'Coal', 'Gas_CCGT', 'Gas_ST', 'Gas_OCGT', 'Oil/Other'],
+                                           Process['Cohort'].unique()])
+
+    table_empty = pd.DataFrame(0, index=full_ind, columns=['inst-cap'])
+    for i in Process_agg2.index:
+        table_empty.loc[i, 'inst-cap'] = Process_agg2.loc[i, 'inst-cap']
+
+    Process_agg2 = table_empty.reset_index().rename(columns={'level_0': 'Site', 'level_1': 'CoIn', 'level_2': 'Cohort'})
+
+    Process_agg2.set_index(['CoIn', 'Cohort'], inplace=True)
+    Process_agg2.pivot(columns='Site').to_csv(paths["Process_agg_bis"], sep=';', decimal=',', index=True)
+
+    # Process name
+    # Use the name of the processes in OPSD as a standard name
+    Process['Pro'] = Process['Name']
+    Process['Pro'].fillna('unnamed', inplace=True)
+
+    # Add suffix to duplicate names
+    Process['Pro'] = Process['Pro'] + Process.groupby(['Pro']).cumcount().astype(str).replace('0', '')
+
+    # Remove spaces from the name and replace them with underscores
+    Process['Pro'] = [Process.loc[i, 'Pro'].replace(' ', '_') for i in Process.index]
+
+    # Show except
+    print('Number of power plants with distinct names: ', len(Process['Pro'].unique()))
+
+    # Coordinates
+    P_missing = Process[Process['Longitude'].isnull()].copy()
+    P_located = Process[~Process['Longitude'].isnull()].copy()
+
+    # Assign dummy coordinates within the same country (will be changed later)
+    for country in P_missing['Country'].unique():
+        P_missing.loc[P_missing['Country'] == country, 'Latitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 2]
+        P_missing.loc[P_missing['Country'] == country, 'Longitude'] = P_located[P_located['Country'] == country].iloc[
+            0, 3]
+
+    Process = P_located.append(P_missing)
+    Process = Process[Process['Longitude'] > -11]
+
+    # Sites
+    # Create point geometries (shapely)
+    Process['geometry'] = list(zip(Process.Longitude, Process.Latitude))
+    Process['geometry'] = Process['geometry'].apply(Point)
+
+    P_located = gpd.GeoDataFrame(Process, geometry='geometry', crs='')
+    P_located.crs = {'init': 'epsg:4326'}
+
+    # Define the output commodity
+    P_located['CoOut'] = 'Elec'
+
+    P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
+
+    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
+
+    # Save the GeoDataFrame
+    if not os.path.isfile(paths["pro_sto"]):
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+    else:
+        os.remove(paths["pro_sto"])
+        P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
+
+    print("File Saved: " + paths["pro_sto"])
+    timecheck("End")
+
+
+def generate_processes(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+    # Only use the assumptions of that particular year
+    assumptions = assumptions[assumptions['year'] == param["year"]]
+
+    param["assumptions"] = read_assumptions_process(assumptions)
+
+    depreciation = param["assumptions"]["depreciation"]
+    on_off = param["assumptions"]["on_off"]
+
+    # Get data from the shapefile
+    pro_and_sto = gpd.read_file(paths["pro_sto"])
+
+    # Split the storage from the processes
+    process_raw = pro_and_sto[~pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
+    print('Number of processes read: ' + str(len(process_raw)))
+
+    # Consider the lifetime of power plants
+    process_current = filter_life_time(param, process_raw, depreciation)
+
+    # Get Sites
+    process_located, _ = get_sites(process_current, paths)
+    print('Number of processes after duplicate removal: ' + str(len(process_located)))
+
+    # Reduce the number of processes by aggregating the small and must-run power plants
+    process_compact = process_located.copy()
+    for c in process_compact["CoIn"].unique():
+        process_compact.loc[process_compact["CoIn"] == c, "on-off"] = on_off[c]
+
+    # Select small processes and group them
+    process_group = process_compact[(process_compact["inst-cap"] < param["pro_sto"]["agg_thres"])
+                                    | (process_compact["on-off"] == 0)]
+    process_group = process_group.groupby(["Site", "CoIn"])
+
+    # Define the attributes of the aggregates
+    small_cap = pd.DataFrame(process_group["inst-cap"].sum())
+    small_pro = pd.DataFrame(process_group["Pro"].first() + '_agg')
+    small_coout = pd.DataFrame(process_group["CoOut"].first())
+    small_year = pd.DataFrame(process_group["year"].min())
+
+    # Aggregate the small processes
+    process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+
+    # Recombine big processes with the aggregated small ones
+    process_compact = process_compact[(process_compact["inst-cap"] >= param["pro_sto"]["agg_thres"])
+                                      & (process_compact["on-off"] == 1)]
+    process_compact = process_compact.append(process_small, ignore_index=True, sort=True)
+    print("Number of compacted processes: " + str(len(process_compact)))
+
+    # Process evrys, urbs
+    evrys_process, urbs_process = format_process_model(process_compact, param)
+
+    # Output
+    urbs_process.to_csv(paths["urbs_process"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_process"])
+    evrys_process.to_csv(paths["evrys_process"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_process"])
+
+    timecheck("End")
+
+
+def generate_storage(paths, param):
+    ''' documentation '''
+    timecheck("Start")
+
+    # Read required assumptions
+    assumptions = pd.read_excel(paths["assumptions"], sheet_name='Storage')
+    # Only use the assumptions of that particular year
+    assumptions = assumptions[assumptions['year'] == param["year"]]
+
+    param["assumptions"] = read_assumptions_storage(assumptions)
+
+    depreciation = param["assumptions"]["depreciation"]
+
+    # Get data from the shapefile
+    pro_and_sto = gpd.read_file(paths["pro_sto"])
+
+    # Split the storages from the processes
+    storage_raw = pro_and_sto[pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
+    print('Number of storage units read: ' + str(len(storage_raw)))
+
+    # Consider lifetime of storage units
+    storage_current = filter_life_time(param, storage_raw, depreciation)
+
+    # Get sites
+    storage_located, regions = get_sites(storage_current, paths)
+    param["regions"] = regions
+    print('Number of storage units after duplicate removal: ' + str(len(storage_located)))
+
+    # Reduce number of storage units by aggregating the small storage units
+    storage_compact = storage_located.copy()
+
+    # Select small processes and group them
+    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(["Site", "CoIn"])
+    # storage_group = storage_group.groupby(["Site", "CoIn"])
+
+    # Define the attributes of the aggregates
+    small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
+    small_pro = pd.DataFrame(storage_group["Pro"].first() + '_agg')
+    small_coout = pd.DataFrame(storage_group["CoOut"].first())
+    small_year = pd.DataFrame(storage_group["year"].min())
+
+    # Aggregate the small storage units
+    storage_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+
+    # Recombine big storage units with the aggregated small ones
+    storage_compact = storage_compact[storage_compact["inst-cap"] >= param["pro_sto"]["agg_thres"]]
+    storage_compact = storage_compact.append(storage_small, ignore_index=True, sort=True)
+    print("Number of compacted storage units: " + str(len(storage_compact)))
+
+    #################################################################
+    # Lose of storage compact in this process, should be modified ? #
+    #################################################################
+
+    # Take the raw storage table and group by tuple of sites and storage type
+    storage_compact = storage_located[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
+    storage_compact.rename(columns={'CoIn': 'Sto', 'CoOut': 'Co'}, inplace=True)
+    storage_group = storage_compact.groupby(["Site", "Sto"])
+
+    # Define the attributes of the aggregates
+    inst_cap0 = storage_group["inst-cap"].sum().rename('inst-cap-pi')
+
+    co0 = storage_group["Co"].first()
+
+    # Combine the list of series into a dataframe
+    storage_compact = pd.DataFrame([inst_cap0, co0]).transpose().reset_index()
+
+    # Storage evrys, urbs
+    evrys_storage, urbs_storage = format_storage_model(storage_compact, param)
+
+    # Output
+    urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_storage"])
+    evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_storage"])
+
+    timecheck("End")
+
+
+def clean_grid_data(paths, param):
+    """
+
+    :param paths:
+    :param param:
+    :return:
+    """
+    timecheck("Start")
+
+    # Read CSV file containing the lines data
+    grid_raw = pd.read_csv(paths["grid"], header=0, sep=',', decimal='.')
+
+    # Extract the string with the coordinates from the last column
+
+    grid_raw["wkt_srid_4326"] = pd.Series(map(lambda s: s[21:-1], grid_raw["wkt_srid_4326"]), grid_raw.index)
+
+    # Extract the coordinates into a new dataframe with four columns for each coordinate
+    coordinates = pd.DataFrame(grid_raw["wkt_srid_4326"].str.split(' |,').tolist(),
+                               columns=['V1_long', 'V1_lat', 'V2_long', 'V2_lat'])
+
+    # Merge the original dataframe (grid_raw) with the one for the coordinates
+    grid_raw = grid_raw.merge(coordinates, how='outer', left_index=True, right_index=True)
+
+    # Drop the old column and the coordinates dataframe
+    grid_raw.drop('wkt_srid_4326', axis=1, inplace=True)
+    del coordinates
+
+    # Compte the columns voltage and wire if they have no value
+    grid_completed = grid_raw.copy()
+    grid_completed.loc[grid_completed["voltage"].isnull(), 'voltage'] = '220000'
+    grid_completed.loc[grid_completed["wires"].isnull(), 'wires'] = '2'
+
+    # Remove all the entries where the voltage is zero
+    n_voltages = map(zero_free, map(string_to_int, grid_completed.voltage.str.split(';')))
+    n_voltages_count = pd.Series(map(len, n_voltages), index=grid_completed.index)
+    grid_filtered = grid_completed[(n_voltages_count > 0)]
+
+    # Reset the indices
+    grid_sorted = grid_filtered.reset_index(drop=False)
+    grid_sorted.rename(columns={'index': 'index_old'}, inplace=True)
+
+    # Save the old indices as a series of objects
+    grid_sorted = grid_sorted.astype({'index_old': object})
+
+    # Match multiple entries for wires and voltage to one circuit
+    grid_clean = match_wire_voltages(grid_sorted)
+
+    # Special correction for the USA: DC and AC split
+    if os.path.basename(paths["grid"]) == 'gridkit_north_america-highvoltage-links.csv':
+        ind_excerpt = grid_clean[grid_clean["frequency"] == '60;0'].index
+        suffix = 1  # When we create a new row, we will add a suffix to the old index
+
+        grid_clean_f = grid_clean
+        for i in ind_excerpt:
+            # Append a copy of the ith row of grid at the end of the same dataframe
+            grid_clean_f = grid_clean_f.append(grid_clean_f.loc[i], ignore_index=True)
+            # Extract the first frequency from that row and remove the rest of the string
+            grid_clean_f.loc[i, 'frequency'] = grid_clean_f.loc[i, 'frequency'][
+                                               :grid_clean_f.loc[i, 'frequency'].find(';')]
+            # Extract the last frequency from the last row and remove the rest of the string
+            grid_clean_f.frequency.iloc[-1] = grid_clean_f.frequency.iloc[-1][
+                                              grid_clean_f.frequency.iloc[-1].find(';') + 1:]
+
+            # Update the number of circuits in the ith row
+            grid_clean_f.wires.loc[i] = grid_clean_f.wires.loc[i] - 1
+            # Update the number of circuits in the last row
+            grid_clean_f.wires.iloc[-1] = 1
+
+            # Check whether there is only one copy of the ith row, or more
+            if str(grid_clean_f.index_old.iloc[-1]).find('_') > 0:  # There are more than one copy of the row
+                # Increment the suffix and replace the old one
+                suffix = suffix + 1
+                grid_clean_f.index_old.iloc[-1] = grid_clean_f.index_old.iloc[-1].replace('_' + str(suffix - 1),
+                                                                                          '_' + str(suffix))
+            else:  # No other copy has been created so far
+                # Reinitialize the suffix and concatenate it at the end of the old index
+                suffix = 1
+                grid_clean_f.index_old.iloc[-1] = str(grid_clean_f.index_old.iloc[-1]) + '_' + str(suffix)
+
+            # Set the voltage of the DC line
+            grid_clean_f.voltage.iloc[-1] = 500
+
+        # Replace empty values in the column frequency with 60 Hz
+        grid_clean_f.frequency.fillna(60, inplace=True)
+        grid_clean_f.loc[grid_clean_f.index, 'frequency'] = grid_clean_f.frequency.astype(int)
+    else:
+        grid_clean_f = grid_clean
+
+        # Replace empty values in the column frequency with 50 Hz
+        grid_clean_f.frequency.fillna(50, inplace=True)
+
+    grid_filled = grid_clean.copy()
+    grid_filled["length_m"] = grid_filled["length_m"].astype(float)
+
+    # Filling the values for X_ohmkm and calculating X_ohm
+    grid_filled.loc[grid_filled[grid_filled.voltage <= 230].index, 'x_ohmkm'] = 0.3315
+    grid_filled.loc[grid_filled[grid_filled.voltage > 230].index, 'x_ohmkm'] = 0.2613
+    grid_filled['X_ohm'] = grid_filled['x_ohmkm'] * grid_filled['length_m'] / 1000 / grid_filled['wires'].astype(float)
+
+    # Filling the values for the loadability c
+    grid_filled = set_loadability(grid_filled, param)
+
+    # Filling the values for SIL_MW and calculating Capacity_MVA
+    grid_filled.loc[grid_filled[grid_filled["voltage"] <= 230].index, 'SIL_MW'] = 230
+    grid_filled.loc[grid_filled[grid_filled["voltage"] > 230].index, 'SIL_MW'] = 670
+    grid_filled.loc[grid_filled.index, 'Capacity_MVA'] = \
+        pd.Series([s * c * int(w) for s, c, w in zip(grid_filled.SIL_MW, grid_filled.loadability_c, grid_filled.wires)],
+                  index=grid_filled.index)
+
+    # Sum the capacities of tines with same ID
+    grid_cleaned = grid_filled[['Capacity_MVA', 'l_id']].groupby(['l_id']).sum()
+    grid_cleaned = grid_cleaned.join(
+        grid_filled[['l_id', 'V1_long', 'V1_lat', 'V2_long', 'V2_lat', 'frequency', 'X_ohm']].set_index(['l_id']))
+    grid_cleaned.drop_duplicates(inplace=True)
+    grid_cleaned.reset_index(inplace=True)
+
+    # Clean entries in frequency
+    grid_cleaned.loc[grid_cleaned['frequency'] == '0', 'tr_type'] = 'DC_CAB'
+    grid_cleaned.loc[~(grid_cleaned['frequency'] == '0'), 'tr_type'] = 'AC_OHL'
+
+    # Drop column 'frequency'
+    grid_cleaned.drop(['frequency'], axis=1, inplace=True)
+
+    grid_cleaned[['V1_long', 'V1_lat', 'V2_long', 'V2_lat']] = grid_cleaned[
+        ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']].astype(float)
+    grid_cleaned.to_csv(paths["grid_cleaned"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["grid_cleaned"])
+
+    # Writing to shapefile
+    with shp.Writer(paths["grid_shp"], shapeType=3) as w:
+        w.autoBalance = 1
+        w.field('ID', 'N', 6, 0)
+        w.field('Cap_MVA', 'N', 8, 2)
+        w.field('Type', 'C', 6, 0)
+        count = len(grid_cleaned.index)
+        status = 0
+        for i in grid_cleaned.index:
+            status += 1
+            display_progress("Writing grid to Shapefile: ", (count, status))
+            w.line([[grid_cleaned.loc[i, ['V1_long', 'V1_lat']].astype(float),
+                     grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
+            w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
+
+    print("File Saved: " + paths["grid_shp"])
+    timecheck("End")
+
+
+def generate_aggregated_grid(paths, param):
+    """
+
+    :param paths:
+    :param param:
+    :return:
+    """
+    timecheck("Start")
+
+    # Read the shapefile containing the map data
+    regions = gpd.read_file(paths["SHP"])
+    regions["Geometry"] = regions.buffer(0)
+
+    # Read the shapefile and get the weights of the neighboring zones
+    weights = ps.lib.weights.Queen.from_shapefile(paths["SHP"])
+    param["weights"] = weights
+
+    # Get the names of the modeled zones from the database file
+    zones = regions["NAME_SHORT"]
+    for i in regions.index:
+        if regions.loc[i, 'Population'] == 0:
+            zones.loc[i] = zones.loc[i] + '_off'
+    param["zones"] = zones
+
+    # Read the cleaned GridKit dataset
+    grid_cleaned = pd.read_csv(paths["grid_cleaned"], header=0, sep=';', decimal=',')
+
+    # Create point geometries
+    grid_cleaned['V1'] = list(zip(grid_cleaned.V1_long, grid_cleaned.V1_lat))
+    grid_cleaned['V1'] = grid_cleaned['V1'].apply(Point)
+    grid_cleaned['V2'] = list(zip(grid_cleaned.V2_long, grid_cleaned.V2_lat))
+    grid_cleaned['V2'] = grid_cleaned['V2'].apply(Point)
+
+    # Create a dataframe for the start regions
+    Region_start = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V1']], geometry='V1', crs='').rename(
+        columns={'V1': 'geometry'})
+    Region_start.crs = {'init': 'epsg:4326'}
+    Region_start.crs = regions[['NAME_SHORT', 'geometry']].crs
+    Region_start = gpd.sjoin(Region_start, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
+        ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_start'})
+
+    # Create a dataframe for the end regions
+    Region_end = gpd.GeoDataFrame(grid_cleaned[['l_id', 'V2']], geometry='V2', crs='').rename(
+        columns={'V2': 'geometry'})
+    Region_end.crs = {'init': 'epsg:4326'}
+    # regions is in GRS80 which is almost the same as WGS 84 also known as epsg:4326
+    Region_end.crs = regions[['NAME_SHORT', 'geometry']].crs
+    Region_end = gpd.sjoin(Region_end, regions[['NAME_SHORT', 'geometry']], how='left', op='intersects')[
+        ['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Region_end'})
+
+    # Join dataframes
+    grid_regions = grid_cleaned.copy()
+    grid_regions.drop(['V1', 'V2'], axis=1, inplace=True)
+    grid_regions = grid_regions.join([Region_start, Region_end])
+
+    intra = len(grid_regions.loc[(grid_regions['Region_start'] == grid_regions['Region_end']) & ~(
+        grid_regions['Region_start'].isnull())])
+    extra = len(grid_regions.loc[grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull()])
+    inter = len(grid_regions) - intra - extra
+
+    # Show numbers of intraregional, interregional and extraregional lines
+    print("\nLinetypes : ")
+    print((("intraregional", intra), ("interregional", inter), ("extraregional", extra)))
+
+    # Remove intraregional and extraregional lines
+    icls_concatenated = grid_regions.loc[
+                        (grid_regions['Region_start'] != grid_regions['Region_end']) &
+                        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
+                        ].copy()
+
+    # Sort alphabetically and reindex
+    icls_reversed = reverse_lines(icls_concatenated)
+    icls_reversed.sort_values(['Region_start', 'Region_end', 'tr_type'], inplace=True)
+    icl = icls_reversed.set_index(['Region_start', 'Region_end', 'tr_type'])
+    icl = icl.reset_index()
+
+    icl_final = deduplicate_lines(icl)
+
+    # Transmission evrys, urbs
+    evrys_transmission, urbs_transmission = format_transmission_model(icl_final, paths, param)
+
+    # Ouput
+    urbs_transmission.to_csv(paths["urbs_transmission"], sep=';', decimal=',', index=False)
+    print("File Saved: " + paths["urbs_transmission"])
+
+    evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_transmission"])
+
+
+    #######################################################
+    #    Create shapefile for urbs transmission line ?    #
+    #######################################################
+
+    timecheck("End")
+
+
 def generate_urbs_model(paths, param):
     """
-    Read model's .csv fileS, and create relevant dataframes.
-    Writes dataframes to urbs and evrys input excel files.
+    Read model's .csv files, and create relevant dataframes.
+    Writes dataframes to urbs input excel file.
     """
     timecheck('Start')
 
-    # Prepare blank excel file
-    output = pd.ExcelWriter(paths["urbs_model"], mode='w')
+    # List all files present in urbs folder
+    urbs_paths = glob.glob(paths["urbs"] + '*.csv')
+    # create empty dictionary
+    urbs_model = {}
+    # read .csv files and associate them with relevant sheet
+    for str in urbs_paths:
+        # clean input names and associate them with the relevant dataframe
+        sheet = os.path.basename(str).replace('_urbs' + ' %04d' % (param["year"]) + '.csv', '')
+        urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
 
-    # Read and Format zones
-    site_urbs = pd.read_csv(paths["urbs"] + 'Sites_urbs.csv', sep=';', decimal=',')
+    # Add global parameters
+    urbs_model["Global"] = pd.DataFrame.from_dict(param["urbs_global"], orient='index')
 
-    # Write Sites
+    # Create ExcelWriter
+    with ExcelWriter(paths["urbs_model"], mode='w') as writer:
+        # populate excel file with available sheets
+        for sheet in param["urbs_model_sheets"]:
+            if sheet in urbs_model.keys():
+                if sheet is 'Global':
+                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=True, header=False)
+                else:
+                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
 
-    site_urbs.to_excel(output, "Site")
-    # Read load
-    load_urbs = pd.read_csv(paths["urbs"] + 'Demand_urbs' + '%04d' % (param["year"]) + '.csv', sep=';', decimal=',')
-    load_urbs.to_excel(output, "Demand")
+    print("File Saved: " + paths["urbs_model"])
 
-    # TO IMPLEMENT FOR EVRYS TOO
+    timecheck('End')
+
+
+def generate_evrys_model(paths, param):
+    """
+        Read model's .csv files, and create relevant dataframes.
+        Writes dataframes to evrys input excel file.
+        """
+    timecheck('Start')
+
+    # List all files present in urbs folder
+    evrys_paths = glob.glob(paths["evrys"] + '*.csv')
+    # create empty dictionary
+    evrys_model = {}
+    # read .csv files and associate them with relevant sheet
+    for str in evrys_paths:
+        # clean input names and associate them with the relevant dataframe
+        sheet = os.path.basename(str).replace('_evrys' + ' %04d' % (param["year"]) + '.csv', '')
+        evrys_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+
+    # Create ExcelWriter
+    with ExcelWriter(paths["evrys_model"], mode='w') as writer:
+        # populate excel file with available sheets
+        for sheet in param["evrys_model_sheets"]:
+            if sheet in evrys_model.keys():
+                evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+
+    print("File Saved: " + paths["evrys_model"])
+
     timecheck('End')
 
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)
-    # generate_intermittent_supply_timeseries(paths, param)
-    # generate_load_timeseries(paths, param)
-    generate_commodities(paths, param) # corresponds to 04
-    # distribute_renewable_capacities(paths, param) # corresponds to 05a
-    # clean_processes_and_storage_data(paths, param) # corresponds to 05b I think
-    # generate_processes(paths, param) # corresponds to 05c
-    # generate_storage(paths, param) # corresponds to 05d
-    # clean_grid_data(paths, param) # corresponds to 06a
-    # generate_aggregated_grid(paths, param) # corresponds to 06b
-    generate_urbs_model(paths, param)
-    # generate_evrys_model(paths, param)
+    generate_sites_from_shapefile(paths)  # done
+    generate_intermittent_supply_timeseries(paths, param)  # separate module
+    generate_load_timeseries(paths, param)  # done
+    generate_commodities(paths, param)  # corresponds to 04 - done
+    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+    generate_processes(paths, param)  # corresponds to 05c - done
+    generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    clean_grid_data(paths, param)  # corresponds to 06a - done
+    generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    generate_urbs_model(paths, param) # Done
+    generate_evrys_model(paths, param)
