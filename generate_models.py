@@ -93,7 +93,7 @@ def generate_sites_from_shapefile(paths):
     zones_evrys.to_csv(paths["evrys_sites"], index=False, sep=';', decimal=',')
     print("File Saved: " + paths["evrys_sites"])
     zones_urbs.to_csv(paths["urbs_sites"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["urbs"])
+    print("File Saved: " + paths["urbs_sites"])
 
     timecheck('End')
 
@@ -232,7 +232,10 @@ def generate_load_timeseries(paths, param):
     sec_dict = dict(zip(sec, param["load"]["sectors"]))
 
     # Share of sectors in electricity demand
-    sec_share = pd.read_csv(paths["sector_shares"], sep=';', decimal=',', index_col=0)
+    if param["region"] == 'California':
+        sec_share = pd.DataFrame.from_dict(param["load"]["sector_shares_Cal"])
+    else:
+        sec_share = pd.read_csv(paths["sector_shares"], sep=';', decimal=',', index_col=0)
     stat = None
 
     # Count pixels of each land use type and create weighting factors for each country:
@@ -260,12 +263,18 @@ def generate_load_timeseries(paths, param):
             os.path.isfile(paths["load"] + 'load_landuse.csv')):
 
         countries = gpd.read_file(paths["Countries"])
-        countries = countries.drop(countries[countries["Population"] == 0].index)
-        countries = countries[['NAME_SHORT', 'Population']].rename(
-            columns={'NAME_SHORT': 'Country'})  # Eventually add GDP
+        if param["region"] == 'California':
+            countries = countries[['NAME_0']].rename(columns={'NAME_0': 'Country'})
+        else:
+            countries = countries.drop(countries[countries["Population"] == 0].index)
+            countries = countries[['NAME_SHORT', 'Population']].rename(
+                columns={'NAME_SHORT': 'Country'})  # Eventually add GDP
 
         # Get dataframe with cleaned timeseries for countries
-        df_load_countries = clean_load_data(paths, param, countries)
+        if param["region"] == 'California':
+            df_load_countries = pd.read_csv(paths["load_ts_ca"], header=0, sep=';', decimal=',')
+        else:
+            df_load_countries = clean_load_data(paths, param, countries)
 
         # ADD IF statement to jump to urbs/evrys, if countries = desired resolution
         # I didn't get it *
@@ -283,7 +292,10 @@ def generate_load_timeseries(paths, param):
 
         for c in df_load_countries.columns:
             for s in sec + ['RES']:
-                df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[c, s]
+                if param["region"] == 'California':
+                    df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[s]
+                else:
+                    df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[c, s]
 
         # Normalize the loads profiles over all sectors by the hour ei. The Sum of the loads of all sectors = 1
         # for each hour
@@ -787,9 +799,9 @@ def clean_processes_and_storage_data_FRESNA(paths, param):
     year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
 
     # Get data from fresna database
-    Process = pd.read_csv(paths["database"], header=0, skipinitialspace=True,
+    Process = pd.read_csv(paths["database_FRESNA"], header=0, skipinitialspace=True,
                           usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    Process.rename(columns={'Capacity': 'inst-cap', 'YearCommissioned': 'year', 'lat': 'Latitude', 'lon': 'Longitude'},
+    Process.rename(columns={'Capacity': 'inst-cap', 'lat': 'Latitude', 'lon': 'Longitude'},
                    inplace=True)
     print('Number of power plants: ', len(Process))
 
@@ -942,9 +954,9 @@ def clean_processes_and_storage_data_FRESNA(paths, param):
     # Assign dummy coordinates within the same country (will be changed later)
     for country in P_missing['Country'].unique():
         P_missing.loc[P_missing['Country'] == country, 'Latitude'] = P_located[P_located['Country'] == country].iloc[
-            0, 2]
+            0, 9]
         P_missing.loc[P_missing['Country'] == country, 'Longitude'] = P_located[P_located['Country'] == country].iloc[
-            0, 3]
+            0, 10]
 
     Process = P_located.append(P_missing)
     Process = Process[Process['Longitude'] > -11]
@@ -962,7 +974,7 @@ def clean_processes_and_storage_data_FRESNA(paths, param):
 
     P_located.drop(['Latitude', 'Longitude', 'year_mu', 'year_stdev'], axis=1, inplace=True)
 
-    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'year', 'geometry']]
+    P_located = P_located[['Pro', 'CoIn', 'CoOut', 'inst-cap', 'Country', 'Year', 'geometry']]
 
     # Save the GeoDataFrame
     if not os.path.isfile(paths["pro_sto"]):
@@ -1115,6 +1127,90 @@ def generate_storage(paths, param):
     print("File Saved: " + paths["evrys_storage"])
 
     timecheck("End")
+
+
+def generate_processes_and_storage_california(paths, param):
+    timecheck('Start')
+    Process = pd.read_excel(paths["database_Cal"], sheet_name='Operating', header=1, skipinitialspace=True,
+                            usecols=[0, 2, 5, 6, 7, 10, 11, 14, 17, 25, 26],
+                            dtype={'Entity ID': np.unicode_, 'Plant ID': np.unicode_})
+    Process.rename(columns={'\nNameplate Capacity (MW)': 'inst-cap', 'Operating Year': 'year'}, inplace=True)
+    regions = gpd.read_file(paths["regions_SHP"])
+
+    # Drop recently built plants (after the reference year),
+    # non-operating plants, and plants outside the geographic scope
+    Process = Process[(Process['year'] <= param["year"])
+                      & (Process['Status'].isin(param["pro_sto_Cal"]["status"]))
+                      & (Process['Plant State'].isin(param["pro_sto_Cal"]["states"]))]
+
+    for i in Process.index:
+        # Define a unique ID for the processes
+        Process.loc[i, 'Pro'] = (Process.loc[i, 'Plant State'] + '_' +
+                                 Process.loc[i, 'Entity ID'] + '_' +
+                                 Process.loc[i, 'Plant ID'] + '_' +
+                                 Process.loc[i, 'Generator ID'])
+
+        # Define the input commodity
+        Process.loc[i, 'CoIn'] = param["pro_sto_Cal"]["proc_dict"][Process.loc[i, 'Energy Source Code']]
+        if Process.loc[i, 'Technology'] == 'Hydroelectric Pumped Storage':
+            Process.loc[i, 'CoIn'] = 'PumSt'
+        if (Process.loc[i, 'CoIn'] == 'Hydro_Small') and (Process.loc[i, 'inst-cap'] > 30):
+            Process.loc[i, 'CoIn'] = 'Hydro_Large'
+
+        # Define the location of the process
+        if Process.loc[i, 'Pro'] == 'CA_50045_56284_EPG':  # Manual correction
+            Process.loc[i, 'Site'] = 'LAX'
+        else:
+            Process.loc[i, 'Site'] = \
+            containing_polygon(Point(Process.loc[i, 'Longitude'], Process.loc[i, 'Latitude']), regions)['NAME_SHORT']
+
+    # Define the output commodity
+    Process['CoOut'] = 'Elec'
+
+    # Select columns to be used
+    Process = Process[['Site', 'Pro', 'CoIn', 'CoOut', 'inst-cap', 'year']]
+    print('Number of Entries: ' + str(len(Process)))
+
+    # Split the storages from the processes
+    process_raw = Process[~Process['CoIn'].isin(param["pro_sto_Cal"]["storage"])]
+    storage_raw = Process[Process['CoIn'].isin(param["pro_sto_Cal"]["storage"])]
+    print('Number of Processes: ' + str(len(process_raw)))
+    print('Number of Storage systems: ' + str(len(storage_raw)))
+
+    # Processes
+    # Reduce the number of processes by aggregating the small ones
+    # Select small processes and group them
+    process_group = process_raw[process_raw['inst-cap'] < 10].groupby(['Site', 'CoIn'])
+    # Define the attributes of the aggregates
+    small_cap = pd.DataFrame(process_group['inst-cap'].sum())
+    small_pro = pd.DataFrame(process_group['Pro'].first() + '_agg')
+    small_coout = pd.DataFrame(process_group['CoOut'].first())
+    small_year = pd.DataFrame(process_group['year'].min())
+    # Aggregate the small processes
+    process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+
+    # Recombine big processes with the aggregated small ones
+    process_compact = process_raw[process_raw['inst-cap'] >= 10].append(process_small, ignore_index=True)
+    print('Number of Processes after agregation: ' + str(len(process_compact)))
+    evrys_process, urbs_process = format_process_model_California(process_compact, process_small, param)
+
+    # Output
+    urbs_process.to_csv(paths["urbs_process"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_process"])
+    evrys_process.to_csv(paths["evrys_process"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_process"])
+
+    # Storage Systems
+    param["sites_evrys_unique"] = evrys_process.Sites.unique()
+    evrys_storage, urbs_storage = format_storage_model_California(storage_raw, param)
+
+    # Output
+    urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_storage"])
+    evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=';', decimal=',', encoding='ascii')
+    print("File Saved: " + paths["evrys_storage"])
+
+    timecheck('End')
 
 
 def clean_grid_data(paths, param):
@@ -1428,14 +1524,17 @@ if __name__ == '__main__':
     paths, param = initialization()
     generate_sites_from_shapefile(paths)  # done
     generate_intermittent_supply_timeseries(paths, param)  # separate module
-    generate_load_timeseries(paths, param)  # done
+    generate_load_timeseries(paths, param)  # done - Added California's param
     generate_commodities(paths, param)  # corresponds to 04 - done
     distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-    clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
-    generate_processes(paths, param)  # corresponds to 05c - done
-    generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    if param["region"] == 'California':
+        generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
+    else:
+        clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+        clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+        generate_processes(paths, param)  # corresponds to 05c - done
+        generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
     clean_grid_data(paths, param)  # corresponds to 06a - done
     generate_aggregated_grid(paths, param)  # corresponds to 06b - done
-    generate_urbs_model(paths, param) # Done
+    generate_urbs_model(paths, param)  # Done
     generate_evrys_model(paths, param)

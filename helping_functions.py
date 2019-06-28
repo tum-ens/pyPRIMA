@@ -97,48 +97,65 @@ def get_sectoral_profiles(paths, param):
     time_series['Season'] = [dict_season[time_series.loc[i, 'Date'].month] for i in time_series.index]
 
     # Residential load
-    residential_profile_raw = pd.read_excel(paths["profiles"]["RES"], header=[3, 4], skipinitialspace=True)
-    residential_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-                                            'Werktag': 'Working day', 'Sonntag/Feiertag': 'Sunday',
-                                            'Samstag': 'Saturday'}, inplace=True)
-    residential_profile = time_series.copy()
-    for i in residential_profile.index:
-        residential_profile.loc[i, hours] = list(
-            residential_profile_raw[(residential_profile.loc[i, 'Season'], residential_profile.loc[i, 'Day'])])
-    # Reshape the hourly load in one vector, where the rows are the hours of the year
-    residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order='C')
+    if param["Region"] == "California":
+        residential_profile_raw = pd.read_excel(paths["profiles_ca"]["RES"], header=[0])
+        residential_profile = residential_profile_raw.ilco[:365, 2:].values
+        residential_profile = np.reshape(residential_profile, (8760, 1))
+
+    else:
+        residential_profile_raw = pd.read_excel(paths["profiles"]["RES"], header=[3, 4], skipinitialspace=True)
+        residential_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+                                                'Werktag': 'Working day', 'Sonntag/Feiertag': 'Sunday',
+                                                'Samstag': 'Saturday'}, inplace=True)
+        residential_profile = time_series.copy()
+        for i in residential_profile.index:
+            residential_profile.loc[i, hours] = list(
+                residential_profile_raw[(residential_profile.loc[i, 'Season'], residential_profile.loc[i, 'Day'])])
+        # Reshape the hourly load in one vector, where the rows are the hours of the year
+        residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order='C')
     profiles = pd.DataFrame(residential_profile / residential_profile.sum(), columns=['RES'])
 
     # Industrial load
     if 'IND' in param["load"]["sectors"]:
-        industrial_profile_raw = pd.read_excel(paths["profiles"]["IND"], header=0)
-        industrial_profile_raw.rename(columns={'Stunde': 'Hour', 'Last': 'Load'}, inplace=True)
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        industrial_profile = np.tile(industrial_profile_raw['Load'].values, 365)
+        if param["Region"] == "California":
+            industrial_profile_raw = pd.read_excel(paths["profiles_ca"]["IND"], header=0)
+            industrial_profile = industrial_profile_raw.iloc[:365, 2:].values
+            industrial_profile = np.reshape(industrial_profile, (8760, 1))
+        else:
+            industrial_profile_raw = pd.read_excel(paths["profiles"]["IND"], header=0)
+            industrial_profile_raw.rename(columns={'Stunde': 'Hour', 'Last': 'Load'}, inplace=True)
+            # Reshape the hourly load in one vector, where the rows are the hours of the year
+            industrial_profile = np.tile(industrial_profile_raw['Load'].values, 365)
         profiles['IND'] = industrial_profile / industrial_profile.sum()
 
     # Commercial load
     if 'COM' in param["load"]["sectors"]:
-        commercial_profile_raw = pd.read_csv(paths["profiles"]["COM"], sep='[;]', engine='python', decimal=',',
-                                             skiprows=[0, 99], header=[0, 1],
-                                             skipinitialspace=True)
-        # commercial_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-        #                                        'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
-        #                               inplace=True)
-        commercial_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-                                               'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
-                                      inplace=True)
-        # Aggregate from 15 min --> hourly load
-        commercial_profile_raw[('Hour', 'All')] = [int(str(commercial_profile_raw.loc[i, ('G0', '[W]')])[:2]) for i in
-                                                   commercial_profile_raw.index]
-        commercial_profile_raw = commercial_profile_raw.groupby([('Hour', 'All')]).sum()
-        commercial_profile_raw.reset_index(inplace=True)
-        commercial_profile = time_series.copy()
-        for i in commercial_profile.index:
-            commercial_profile.loc[i, hours] = list(
-                commercial_profile_raw[(commercial_profile.loc[i, 'Season'], commercial_profile.loc[i, 'Day'])])
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order='C')
+        if param["Region"] == "California":
+            commercial_profile_raw = pd.read_excel(paths["profiles_ca"]["COM"], header=0)
+            commercial_profile = commercial_profile_raw.iloc[:365, 2:].values
+            commercial_profile = np.reshape(commercial_profile, (8760, 1))
+        else:
+            commercial_profile_raw = pd.read_csv(paths["profiles"]["COM"], sep='[;]', engine='python', decimal=',',
+                                                 skiprows=[0, 99], header=[0, 1],
+                                                 skipinitialspace=True)
+            # commercial_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+            #                                     'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
+            #                               inplace=True)
+            commercial_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+                                                   'Werktag': 'Working day', 'Sonntag': 'Sunday',
+                                                   'Samstag': 'Saturday'},
+                                          inplace=True)
+            # Aggregate from 15 min --> hourly load
+            commercial_profile_raw[('Hour', 'All')] = [int(str(commercial_profile_raw.loc[i, ('G0', '[W]')])[:2])
+                                                       for i in commercial_profile_raw.index]
+            commercial_profile_raw = commercial_profile_raw.groupby([('Hour', 'All')]).sum()
+            commercial_profile_raw.reset_index(inplace=True)
+            commercial_profile = time_series.copy()
+            for i in commercial_profile.index:
+                commercial_profile.loc[i, hours] = list(
+                    commercial_profile_raw[(commercial_profile.loc[i, 'Season'], commercial_profile.loc[i, 'Day'])])
+            # Reshape the hourly load in one vector, where the rows are the hours of the year
+            commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order='C')
         profiles['COM'] = commercial_profile / commercial_profile.sum()
 
     # Agricultural load
@@ -755,7 +772,6 @@ def deduplicate_lines(df):
 
 
 def match_wire_voltages(grid_sorted):
-    timecheck('Start')
     """
     the columns 'voltage' and 'wires' may contain multiple values separated with a semicolon. The goal is to assign
     a voltage to every circuit, whenever possible.
@@ -776,6 +792,8 @@ def match_wire_voltages(grid_sorted):
     :param grid_sorted:
     :return:
     """
+
+    timecheck('Start')
 
     n_circuits = pd.Series(map(string_to_int, grid_sorted.wires.str.split(';')))
     n_circuits_count = pd.Series(map(sum, n_circuits), index=grid_sorted.index)
@@ -861,7 +879,6 @@ def match_wire_voltages(grid_sorted):
     # Express voltage in kV
     grid_clean.voltage = pd.Series([grid_clean.loc[i, 'voltage'][0] / 1000 for i in grid_clean.index],
                                    index=grid_clean.index)
-    print(' \n')
     timecheck('End')
     return grid_clean
 
@@ -1148,6 +1165,302 @@ def format_storage_model(storage_compact, param):
     output_sto_urbs.iloc[:, 3:] = output_sto_urbs.iloc[:, 3:].astype(float)
 
     return output_sto_evrys, output_sto_urbs
+
+
+def format_process_model_California(process_compact, process_small, param):
+    # evrys
+    output_pro_evrys = process_compact.copy()
+    output_pro_evrys['eff'] = 1  # Will be changed for thermal power plants
+    output_pro_evrys['effmin'] = 1  # Will be changed for thermal power plants
+    output_pro_evrys['act-up'] = 1
+    output_pro_evrys['act-lo'] = 0  # Will be changed for most conventional power plants
+    output_pro_evrys['on-off'] = 1  # Will be changed to 0 for SupIm commodities
+    output_pro_evrys['start-cost'] = 0  # Will be changed for most conventional power plants
+    output_pro_evrys['reserve-cost'] = 0
+    output_pro_evrys['ru'] = 1  # Will be changed for thermal power plants
+    output_pro_evrys['cotwo'] = 0  # Will be changed for most conventional power plants
+    output_pro_evrys['detail'] = 1  # 5: thermal modeling, 1: simple modeling, will be changed for thermal power plants
+    output_pro_evrys['lambda'] = 0  # Will be changed for most conventional power plants
+    output_pro_evrys['heatmax'] = 1  # Will be changed for most conventional power plants
+    output_pro_evrys['maxdeltaT'] = 1
+    output_pro_evrys['heatupcost'] = 0  # Will be changed for most conventional power plants
+    output_pro_evrys['su'] = 1  # Will be changed for most conventional power plants
+    output_pro_evrys['pdt'] = 0
+    output_pro_evrys['hotstart'] = 0
+    output_pro_evrys['pot'] = 0
+    output_pro_evrys['pretemp'] = 1
+    output_pro_evrys['preheat'] = 0
+    output_pro_evrys['prestate'] = 1
+
+    ind = output_pro_evrys['CoIn'] == 'Coal'
+    output_pro_evrys.loc[ind, 'eff'] = 0.35 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.92 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.4
+    output_pro_evrys.loc[ind, 'start-cost'] = 90
+    output_pro_evrys.loc[ind, 'ru'] = 0.03
+    output_pro_evrys.loc[ind, 'cotwo'] = 0.33
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.06
+    output_pro_evrys.loc[ind, 'heatmax'] = 0.15
+    output_pro_evrys.loc[ind, 'heatupcost'] = 110
+    output_pro_evrys.loc[ind, 'su'] = 0.5
+
+    ind = output_pro_evrys['CoIn'] == 'Lignite'
+    output_pro_evrys.loc[ind, 'eff'] = 0.33 + 0.1 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.9 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.45
+    output_pro_evrys.loc[ind, 'start-cost'] = 110
+    output_pro_evrys.loc[ind, 'ru'] = 0.02
+    output_pro_evrys.loc[ind, 'cotwo'] = 0.40
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.04
+    output_pro_evrys.loc[ind, 'heatmax'] = 0.12
+    output_pro_evrys.loc[ind, 'heatupcost'] = 130
+    output_pro_evrys.loc[ind, 'su'] = 0.5
+
+    ind = (output_pro_evrys['CoIn'] == 'Gas') & (output_pro_evrys['inst-cap'] > 100) & (
+                output_pro_evrys.index < len(process_compact) - len(process_small))
+    output_pro_evrys.loc[ind, 'eff'] = 0.45 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.82 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.45
+    output_pro_evrys.loc[ind, 'start-cost'] = 40
+    output_pro_evrys.loc[ind, 'ru'] = 0.05
+    output_pro_evrys.loc[ind, 'cotwo'] = 0.20
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.1
+    output_pro_evrys.loc[ind, 'heatmax'] = 0.2
+    output_pro_evrys.loc[ind, 'heatupcost'] = 60
+    output_pro_evrys.loc[ind, 'su'] = 0.5
+
+    ind = (output_pro_evrys['CoIn'] == 'Gas') & ((output_pro_evrys['inst-cap'] <= 100) | (
+                output_pro_evrys.index >= len(process_compact) - len(process_small)))
+    output_pro_evrys.loc[ind, 'eff'] = 0.3 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.65 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.3
+    output_pro_evrys.loc[ind, 'start-cost'] = 40
+    output_pro_evrys.loc[ind, 'ru'] = 0.01
+    output_pro_evrys.loc[ind, 'cotwo'] = 0.20
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.3
+    output_pro_evrys.loc[ind, 'heatupcost'] = 20
+    output_pro_evrys.loc[ind, 'su'] = 0.9
+
+    ind = output_pro_evrys['CoIn'] == 'Oil'
+    output_pro_evrys.loc[ind, 'eff'] = 0.25 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.65 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.4
+    output_pro_evrys.loc[ind, 'start-cost'] = 40
+    output_pro_evrys.loc[ind, 'ru'] = 0.05
+    output_pro_evrys.loc[ind, 'cotwo'] = 0.30
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.3
+    output_pro_evrys.loc[ind, 'heatupcost'] = 20
+    output_pro_evrys.loc[ind, 'su'] = 0.7
+
+    ind = output_pro_evrys['CoIn'] == 'Nuclear'
+    output_pro_evrys.loc[ind, 'eff'] = 0.3 + 0.05 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
+    output_pro_evrys.loc[ind, 'effmin'] = 0.95 * output_pro_evrys.loc[ind, 'eff']
+    output_pro_evrys.loc[ind, 'act-lo'] = 0.45
+    output_pro_evrys.loc[ind, 'start-cost'] = 150
+    output_pro_evrys.loc[ind, 'ru'] = 0.04
+    output_pro_evrys.loc[ind, 'detail'] = 5
+    output_pro_evrys.loc[ind, 'lambda'] = 0.03
+    output_pro_evrys.loc[ind, 'heatmax'] = 0.1
+    output_pro_evrys.loc[ind, 'heatupcost'] = 100
+    output_pro_evrys.loc[ind, 'su'] = 0.45
+
+    ind = output_pro_evrys['CoIn'].isin(['Biomass', 'Waste'])
+    output_pro_evrys.loc[ind, 'eff'] = 0.3
+    output_pro_evrys.loc[ind, 'effmin'] = 0.3
+    output_pro_evrys.loc[ind, 'ru'] = 0.05
+
+    ind = output_pro_evrys['CoIn'].isin(['Solar', 'WindOn', 'WindOff', 'Hydro_large', 'Hydro_Small'])
+    output_pro_evrys.loc[ind, 'on-off'] = 0
+
+    output_pro_evrys['rd'] = output_pro_evrys['ru']
+    output_pro_evrys['rumax'] = np.minimum(output_pro_evrys['ru'] * 60, 1)
+    output_pro_evrys['rdmax'] = output_pro_evrys['rumax']
+    output_pro_evrys['sd'] = output_pro_evrys['su']
+    output_pro_evrys['prepow'] = output_pro_evrys['inst-cap'] * output_pro_evrys['act-lo']
+    output_pro_evrys['precaponline'] = output_pro_evrys['prepow']
+    # Change the order of the columns
+    output_pro_evrys = output_pro_evrys[
+        ['Site', 'Pro', 'CoIn', 'CoOut', 'inst-cap', 'eff', 'effmin', 'act-lo', 'act-up',
+         'on-off', 'start-cost', 'reserve-cost', 'ru', 'rd', 'rumax', 'rdmax', 'cotwo',
+         'detail', 'lambda', 'heatmax', 'maxdeltaT', 'heatupcost', 'su', 'sd', 'pdt',
+         'hotstart', 'pot', 'prepow', 'pretemp', 'preheat', 'prestate', 'precaponline', 'year']]
+
+    # urbs
+    # Take excerpt from the evrys table and group by tuple of sites and commodity
+    process_grouped = output_pro_evrys[['Site', 'CoIn', 'inst-cap', 'act-lo', 'start-cost', 'ru']].groupby(
+        ['Site', 'CoIn'])
+
+    inst_cap0 = process_grouped['inst-cap'].sum().rename('inst-cap')
+    max_grad0 = process_grouped['ru'].mean().rename('max-grad') * 60
+    max_grad0[max_grad0 == 60] = float('Inf')
+    min_fraction0 = process_grouped['act-lo'].mean().rename('min-fraction')
+    startup_cost0 = process_grouped['start-cost'].mean().rename('startup-cost')
+
+    # Combine the list of series into a dataframe
+    process_existant = pd.DataFrame([inst_cap0, max_grad0, min_fraction0, startup_cost0]).transpose()
+
+    # Get the possible commodities and add Slacks
+    commodities = list(output_pro_evrys.CoIn.unique())
+    commodities.append('Slack')
+
+    # Create a dataframe to store all the possible combinations of sites and commodities
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodities],
+                                                       names=['Site', 'CoIn']))
+    # Get the capacities of existing processes
+    df_joined = df.join(process_existant, how='outer')
+
+    # Set the capacity of inexistant processes to zero
+    df_joined.loc[np.isnan(df_joined['inst-cap']), 'inst-cap'] = 0
+
+    output_pro_urbs = df_joined.reset_index(drop=False)
+    output_pro_urbs = output_pro_urbs.join(pd.DataFrame([], columns=['cap-lo', 'cap-up', 'inv-cost', 'fix-cost',
+                                                                     'var-cost', 'wacc', 'depreciation',
+                                                                     'area-per-cap']), how='outer')
+
+    for c in output_pro_urbs.CoIn:
+        output_pro_urbs.loc[
+            output_pro_urbs.CoIn == c, ['cap-lo', 'cap-up', 'max-grad', 'min-fraction', 'inv-cost', 'fix-cost',
+                                        'var-cost']] = [param["pro_sto_Cal"]["Cal_urbs"]["cap_lo"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["cap_up"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["max_grad"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["min_fraction"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["inv_cost"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["fix_cost"][c],
+                                                        param["pro_sto_Cal"]["Cal_urbs"]["var_cost"][c]]
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'startup-cost'] =\
+            param["pro_sto_Cal"]["Cal_urbs"]["startup_cost"][c]
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'wacc'] =\
+            param["pro_sto_Cal"]["Cal_urbs"]["wacc"]
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, ['depreciation', 'area-per-cap']] =\
+            [param["pro_sto_Cal"]["Cal_urbs"]["depreciation"][c],
+             param["pro_sto_Cal"]["Cal_urbs"]["area_per_cap"][c]]
+
+    # Cap-up must be greater than inst-cap
+    output_pro_urbs.loc[output_pro_urbs['cap-up'] < output_pro_urbs['inst-cap'], 'cap-up'] = output_pro_urbs.loc[
+        output_pro_urbs['cap-up'] < output_pro_urbs['inst-cap'], 'inst-cap']
+
+    # inst-cap must be greater than cap-lo
+    output_pro_urbs.loc[output_pro_urbs['inst-cap'] < output_pro_urbs['cap-lo'], 'inst-cap'] = output_pro_urbs.loc[
+        output_pro_urbs['inst-cap'] < output_pro_urbs['cap-lo'], 'cap-lo']
+
+    # Cap-up must be of type float
+    output_pro_urbs[['cap-up']] = output_pro_urbs[['cap-up']].astype(float)
+
+    # Delete rows where cap-up is zero
+    output_pro_urbs = output_pro_urbs[output_pro_urbs['cap-up'] != 0]
+
+    # Change the order of the columns
+    output_pro_urbs = output_pro_urbs[
+        ['Site', 'CoIn', 'inst-cap', 'cap-lo', 'cap-up', 'max-grad', 'min-fraction', 'inv-cost',
+         'fix-cost', 'var-cost', 'startup-cost', 'wacc', 'depreciation', 'area-per-cap']]
+
+    return output_pro_evrys, output_pro_urbs
+
+
+def format_storage_model_California(storage_raw, param):
+    # evrys
+    # Take the raw storage table and group by tuple of sites and storage type
+    sto_evrys = storage_raw[['Site', 'CoIn', 'CoOut', 'inst-cap']].rename(columns={'CoIn': 'Sto', 'CoOut': 'Co'})
+    sto_grouped = sto_evrys.groupby(['Site', 'Sto'])
+
+    inst_cap0 = sto_grouped['inst-cap'].sum().rename('inst-cap-pi')
+    co0 = sto_grouped['Co'].first()
+
+    # Combine the list of series into a dataframe
+    sto_existant = pd.DataFrame([inst_cap0, co0]).transpose()
+    output_sto_evrys = sto_existant.reset_index()
+    output_sto_evrys['inst-cap-po'] = output_sto_evrys['inst-cap-pi']
+    output_sto_evrys['var-cost-pi'] = 0.05
+    output_sto_evrys['var-cost-po'] = 0.05
+    output_sto_evrys['var-cost-c'] = -0.01
+    output_sto_evrys['act-lo-pi'] = 0
+    output_sto_evrys['act-up-pi'] = 1
+    output_sto_evrys['act-lo-po'] = 0
+    output_sto_evrys['act-up-po'] = 1
+    output_sto_evrys['act-lo-c'] = 0
+    output_sto_evrys['act-up-c'] = 1
+    output_sto_evrys['prepowin'] = 0
+    output_sto_evrys['prepowout'] = 0
+    output_sto_evrys['ru'] = 0.1
+    output_sto_evrys['rd'] = 0.1
+    output_sto_evrys['rumax'] = 1
+    output_sto_evrys['rdmax'] = 1
+    output_sto_evrys['seasonal'] = 0
+    output_sto_evrys['ctr'] = 1
+
+    ind = (output_sto_evrys['Sto'] == 'PumSt')
+    output_sto_evrys.loc[ind, 'inst-cap-c'] = 8 * output_sto_evrys.loc[ind, 'inst-cap-pi']
+    output_sto_evrys.loc[ind, 'eff-in'] = 0.92
+    output_sto_evrys.loc[ind, 'eff-out'] = 0.92
+
+    ind = (output_sto_evrys['Sto'] == 'Battery')
+    output_sto_evrys.loc[ind, 'inst-cap-c'] = 2 * output_sto_evrys.loc[ind, 'inst-cap-pi']
+    output_sto_evrys.loc[ind, 'eff-in'] = 0.94
+    output_sto_evrys.loc[ind, 'eff-out'] = 0.94
+    output_sto_evrys['precont'] = output_sto_evrys['inst-cap-c'] / 2
+
+    # Change the order of the columns
+    output_sto_evrys = output_sto_evrys[
+        ['Site', 'Sto', 'Co', 'inst-cap-pi', 'inst-cap-po', 'inst-cap-c', 'eff-in', 'eff-out',
+         'var-cost-pi', 'var-cost-po', 'var-cost-c', 'act-lo-pi', 'act-up-pi', 'act-lo-po',
+         'act-up-po', 'act-lo-c', 'act-up-c', 'precont', 'prepowin', 'prepowout', 'ru', 'rd',
+         'rumax', 'rdmax', 'seasonal', 'ctr']]
+
+    # urbs
+    # Create a dataframe to store all the possible combinations of sites and commodities
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([param["sites_evrys_unique"], output_sto_evrys.Sto.unique()],
+                                                       names=['Site', 'Storage']))
+    # Take excerpt from the evrys table and group by tuple of sites and commodity
+    storage_existant = output_sto_evrys[['Site', 'Sto', 'Co', 'inst-cap-c', 'inst-cap-pi', 'precont']].rename(
+        columns={'Sto': 'Storage', 'Co': 'Commodity', 'inst-cap-pi': 'inst-cap-p'})
+
+    # Get the capacities of existing processes
+    df_joined = df.join(storage_existant.set_index(['Site', 'Storage']), how='outer')
+
+    # Set the capacity of inexistant processes to zero
+    df_joined['Commodity'].fillna('Elec', inplace=True)
+    df_joined.fillna(0, inplace=True)
+    out_sto_urbs = df_joined.reset_index()
+    out_sto_urbs['cap-lo-c'] = 0
+    out_sto_urbs['cap-up-c'] = out_sto_urbs['inst-cap-c']
+    out_sto_urbs['cap-lo-p'] = 0
+    out_sto_urbs['cap-up-p'] = out_sto_urbs['inst-cap-p']
+    out_sto_urbs['var-cost-p'] = 0
+    out_sto_urbs['var-cost-c'] = 0
+    out_sto_urbs['wacc'] = 0
+    out_sto_urbs['init'] = 0.5
+
+    ind = out_sto_urbs['Storage'] == 'PumSt'
+    out_sto_urbs.loc[ind, 'eff-in'] = 0.92
+    out_sto_urbs.loc[ind, 'eff-out'] = 0.92
+    out_sto_urbs.loc[ind, 'inv-cost-p'] = 275000
+    out_sto_urbs.loc[ind, 'inv-cost-c'] = 0
+    out_sto_urbs.loc[ind, 'fix-cost-p'] = 4125
+    out_sto_urbs.loc[ind, 'fix-cost-c'] = 0
+    out_sto_urbs.loc[ind, 'depreciation'] = 50
+    ind = out_sto_urbs['Storage'] == 'Battery'
+    out_sto_urbs.loc[ind, 'cap-up-c'] = np.inf
+    out_sto_urbs.loc[ind, 'cap-up-p'] = np.inf
+    out_sto_urbs.loc[ind, 'eff-in'] = 0.94
+    out_sto_urbs.loc[ind, 'eff-out'] = 0.94
+    out_sto_urbs.loc[ind, 'inv-cost-p'] = 75000
+    out_sto_urbs.loc[ind, 'inv-cost-c'] = 200000
+    out_sto_urbs.loc[ind, 'fix-cost-p'] = 3750
+    out_sto_urbs.loc[ind, 'fix-cost-c'] = 10000
+    out_sto_urbs.loc[ind, 'depreciation'] = 10
+
+    # Change the order of the columns
+    out_sto_urbs = out_sto_urbs[
+        ['Site', 'Storage', 'Commodity', 'inst-cap-c', 'cap-lo-c', 'cap-up-c', 'inst-cap-p', 'cap-lo-p',
+         'cap-up-p', 'eff-in', 'eff-out', 'inv-cost-p', 'inv-cost-c', 'fix-cost-p', 'fix-cost-c',
+         'var-cost-p', 'var-cost-c', 'depreciation', 'wacc', 'init']]
+
+    return output_sto_evrys, out_sto_urbs
 
 
 def format_transmission_model(icl_final, paths, param):

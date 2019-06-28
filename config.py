@@ -19,11 +19,11 @@ param["evrys_model_sheets"] = ['Flags', 'Sites', 'Commodities', 'Process', 'Tran
 
 # urbs Global paramters
 urbs_global = {"Support timeframe": param["year"],
-              "Discount rate": 0.03,
-              "CO2 limit": 'inf',
-              "Cost budget": 6.5e11,
-              "CO2 budget": 'inf'
-              }
+               "Discount rate": 0.03,
+               "CO2 limit": 'inf',
+               "Cost budget": 6.5e11,
+               "CO2 budget": 'inf'
+               }
 param["urbs_global"] = urbs_global
 
 # Load
@@ -52,8 +52,10 @@ load = {"dict_season": {1: 'Winter', 2: 'Winter', 3: 'Spring/Fall', 4: 'Spring/F
         # Efficiency measures
         "degree_of_eff": 1,
         # Distribution factors for load from country to regional level
-        "distribution_type": 'sectors_landuse',
-        "sectors": ['COM', 'IND', 'AGR']
+        "distribution_type": 'sectors_landuse',  # 'sectors_landuse' or 'population_GPD'
+        "sectors": ['COM', 'IND', 'AGR', 'STR'],
+        # Load sectorial share for California
+        "sector_shares_Cal": {'IND': 0.175, 'RES': 0.327, 'COM': 0.416, 'AGR': 0.077, 'STR': 0.005}
         }
 
 param["load"] = load
@@ -156,6 +158,59 @@ pro_sto = {"year_ref": 2015,
 
 param["pro_sto"] = pro_sto
 
+# Processes and Storages in California
+
+Cal_urbs = {'cap_lo': {'Biomass': 0, 'Coal': 0, 'Gas': 0, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
+                       'Nuclear': 0, 'Oil': 0, 'Slack': 999999, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
+            'cap_up': {'Biomass': 100, 'Coal': 0, 'Gas': 10000, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
+                       'Nuclear': 0, 'Oil': 0, 'Slack': 999999, 'Solar': np.inf, 'Waste': 0, 'WindOn': np.inf},
+            'max_grad': {'Biomass': 1.2, 'Coal': 0.6, 'Gas': 4.8, 'Geothermal': 0.6, 'Hydro_Large': np.inf,
+                         'Hydro_Small': np.inf,
+                         'Nuclear': 0.3, 'Oil': 3, 'Slack': np.inf, 'Solar': np.inf, 'Waste': 1.2, 'WindOn': np.inf},
+            'min_fraction': {'Biomass': 0, 'Coal': 0.5, 'Gas': 0.25, 'Geothermal': 0, 'Hydro_Large': 0,
+                             'Hydro_Small': 0,
+                             'Nuclear': 0.7, 'Oil': 0.4, 'Slack': 0, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
+            'inv_cost': {'Biomass': 875000, 'Coal': 600000, 'Gas': 450000, 'Geothermal': 1000000,
+                         'Hydro_Large': 1600000, 'Hydro_Small': 320000,
+                         'Nuclear': 1600000, 'Oil': 600000, 'Slack': 0, 'Solar': 600000, 'Waste': 800000,
+                         'WindOn': 900000},
+            'fix_cost': {'Biomass': 28000, 'Coal': 18000, 'Gas': 6000, 'Geothermal': 10000, 'Hydro_Large': 20000,
+                         'Hydro_Small': 1000,
+                         'Nuclear': 50000, 'Oil': 9000, 'Slack': 0, 'Solar': 25000, 'Waste': 4000, 'WindOn': 30000},
+            'var_cost': {'Biomass': 5, 'Coal': 14, 'Gas': 25, 'Geothermal': 5, 'Hydro_Large': 3, 'Hydro_Small': 3,
+                         'Nuclear': 10, 'Oil': 35, 'Slack': 200, 'Solar': 0, 'Waste': 2, 'WindOn': 0},
+            'startup_cost': {'Biomass': 0, 'Coal': 90, 'Gas': 40, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
+                             'Nuclear': 150, 'Oil': 40, 'Slack': 0, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
+            'wacc': 0.07,
+            'depreciation': {'Biomass': 25, 'Coal': 40, 'Gas': 30, 'Geothermal': 100, 'Hydro_Large': 100,
+                             'Hydro_Small': 30,
+                             'Nuclear': 60, 'Oil': 30, 'Slack': 1, 'Solar': 25, 'Waste': 25, 'WindOn': 25},
+            'area_per_cap': {'Biomass': np.nan, 'Coal': np.nan, 'Gas': np.nan, 'Geothermal': np.nan,
+                             'Hydro_Large': np.nan, 'Hydro_Small': np.nan,
+                             'Nuclear': np.nan, 'Oil': np.nan, 'Slack': np.nan, 'Solar': 14000, 'Waste': np.nan,
+                             'WindOn': np.nan}
+            }
+
+pro_sto_Cal = {'proc_dict': {'AB': 'Biomass', 'BLQ': 'Biomass', 'OBG': 'Biomass', 'WDS': 'Biomass',
+                             'BIT': 'Coal', 'RC': 'Coal',
+                             'DFO': 'Oil', 'JF': 'Oil', 'PG': 'Oil', 'PC': 'Oil',
+                             'LFG': 'Gas', 'NG': 'Gas', 'OG': 'Gas', 'PUR': 'Gas', 'WH': 'Gas',
+                             'GEO': 'Geothermal',
+                             'WAT': 'Hydro_Small',
+                             # Later, we will define Hydro_Large as power plants with capacity > 30MW
+                             'MWH': 'Battery',
+                             'NUC': 'Nuclear',
+                             'SUN': 'Solar',
+                             'MSW': 'Waste',
+                             'WND': 'WindOn'},
+               'storage': ['PumSt', 'Battery'],
+               'status': ['(OP) Operating', '(SB) Standby/Backup: available for service but not normally used'],
+               'states': ['CA'],
+               'Cal_urbs': Cal_urbs
+               }
+
+param["pro_sto_Cal"] = pro_sto_Cal
+
 # Clean Grid
 loadability = {"80": 3,
                "100": 2.75,
@@ -182,15 +237,16 @@ param["grid"] = {"depreciation": 40,
 fs = os.path.sep
 git_folder = os.path.dirname(os.path.abspath(__file__))
 
+git_RT_folder = os.path.dirname(os.path.abspath(__file__))
+
 if platform.startswith('win'):
     # Windows Root Folder
     from pathlib import Path
 
-    root = str(Path(git_folder).parent) + fs
-
+    root = str(Path(git_RT_folder).parent.parent) + fs + "Database_KS" + fs
 elif platform.startswith('linux'):
     # Linux Root Folder
-    root = git_folder + fs + ".." + fs
+    root = git_RT_folder + fs + ".." + fs + ".." + fs + "Database_KS" + fs
 
 region = param["region"]
 model_regions = param["model_regions"]
@@ -207,6 +263,10 @@ PathTemp = root + "01 Raw inputs" + fs + "Maps" + fs + "Shapefiles" + fs
 # paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
 paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"
 paths["SHP"] = paths["Countries"]
+if param["region"] == "California":
+    paths["SHP"] = PathTemp + "CA_Regions_EM_1.shp"
+    paths["Countries"] = PathTemp + "CA_Load Profiles_Regions_EM.shp"
+    paths["regions_SHP"] = PathTemp + "CA_regions_geographic.shp"
 
 # Rasters
 PathTemp = root + "02 Intermediate files" + fs + "Files " + region + fs + "Maps" + fs + region
@@ -215,23 +275,33 @@ paths["POP"] = PathTemp + "_Population.tif"  # Population
 
 # Assumptions
 paths["assumptions"] = root + "00 Assumptions" + fs + "assumptions_const.xlsx"
+# paths["assumptions"] = root + "00 Assumptions" + fs + "assumptions_const_v04_4NEMO.xlsx"
+
 
 # Load
 PathTemp = root + "01 Raw inputs" + fs + "Load" + fs
 paths["sector_shares"] = PathTemp + "Eurostat" + fs + "SectorShares_20181206.csv"
 paths["load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"
+paths["load_ts_ca"] = PathTemp + "CA_Load Profiles_11 Regions_correct names.csv"
 paths["profiles"] = {'RES': PathTemp + "Load profiles" + fs + "Lastprofil_Haushalt_H0.xlsx",
                      'IND': PathTemp + "Load profiles" + fs + "Lastprofil_Industrie_Tag.xlsx",
                      'COM': PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",
                      'AGR': PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",
-                     'STR': PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",
+                     'STR': PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx"
                      }
+paths["profiles_ca"] = {'RES': PathTemp + "Load profiles" + fs + "Residential Load Profile_2017_SCE.csv",
+                        'IND': PathTemp + "Load profiles" + fs + "Medium Commercial and Industrial_Load Profile_2017 SCE.xlsx",
+                        'COM': PathTemp + "Load profiles" + fs + "Small Commercial_Load Profile_2017 SCE.xlsx",
+                        'AGR': PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",
+                        'STR': PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx"
+                        }
 
 # Process and storage data
-paths["database"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs + \
-                    'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
-paths["database_FRESNA"] = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs + 'EU_Powerplants' + fs + \
-                    'FRESNA2' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+PathTemp = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs
+paths["database"] = PathTemp + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
+paths["database_FRESNA"] = PathTemp + 'EU_Powerplants' + fs + 'FRESNA2' + fs + \
+                           'Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv'
+paths["database_Cal"] = PathTemp + 'CA_Powerplants' + fs + 'april_generator2017 (original data).xlsx'
 
 # Grid
 paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + fs + \
