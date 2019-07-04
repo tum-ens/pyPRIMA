@@ -618,11 +618,11 @@ def filter_life_time(param, raw, depreciation):
             raw.loc[raw["CoIn"] == c, "lifetime"] = depreciation[c]
         lifetimeleft = raw["lifetime"] + raw["year"]
         current = raw.drop(raw.loc[lifetimeleft < param["year"]].index)
-        print('Already depreciated processes:\n')
-        print(str(len(raw) - len(current)) + '# process have been removed')
+        print('Already depreciated units:\n')
+        print(str(len(raw) - len(current)) + '# Units have been removed')
     else:
         current = raw.copy()
-        print('Number of current processes: ' + str(len(current)))
+        print('Number of current units: ' + str(len(current)))
     return current
 
 
