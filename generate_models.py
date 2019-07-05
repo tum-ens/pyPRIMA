@@ -102,6 +102,52 @@ def generate_intermittent_supply_timeseries(paths, param):
     '''
     description
     '''
+    timecheck('Start')
+    Timeseries = None
+
+    # Loop over the technologies understudy
+    for tech in param["technology"]:
+        # Read coefs
+        if os.path.isfile(paths["reg_coef"][tech]):
+            Coef = pd.read_csv(paths["reg_coef"][tech], sep=';', decimal=',', index_col=[0])
+        else:
+            print("No regression Coefficients found for " + tech)
+            continue
+
+        # Extract hub heights and find the required TS
+        hub_heights = pd.Series(Coef.columns).str.slice(3).unique()
+        regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
+        quantiles = pd.Series(Coef.index)
+
+        # Read the timeseries
+        TS = {}
+        for height in hub_heights:
+            TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
+                                     sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+
+        # Prepare Dataframe to be filled
+        TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
+        for reg in regions:
+            for height in hub_heights:
+                for quan in quantiles:
+                    if height != '':
+                        TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                    (TS[height][reg, 'q' + str(quan)] * Coef[reg + '_' + height].loc[
+                                                        quan])
+                    else:
+                        TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                    (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
+        TS_tech.set_index(np.arange(1, 8761), inplace=True)
+        if Timeseries is None:
+            Timeseries = TS_tech.copy()
+        else:
+            Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
+
+    Timeseries.to_csv(paths["suplm_TS"], sep=';', decimal=',')
+    print("File Saved: " + paths["suplm_TS"])
+    Timeseries.to_csv(paths["urbs_suplm"], sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_suplm"])
+    timecheck('End')
 
 
 def generate_load_timeseries(paths, param):
@@ -1083,7 +1129,8 @@ def generate_storage(paths, param):
     storage_compact = storage_located.copy()
 
     # Select small processes and group them
-    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(["Site", "CoIn"])
+    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(
+        ["Site", "CoIn"])
     # storage_group = storage_group.groupby(["Site", "CoIn"])
 
     # Define the attributes of the aggregates
@@ -1100,12 +1147,8 @@ def generate_storage(paths, param):
     storage_compact = storage_compact.append(storage_small, ignore_index=True, sort=True)
     print("Number of compacted storage units: " + str(len(storage_compact)))
 
-    #################################################################
-    # Lose of storage compact in this process, should be modified ? #
-    #################################################################
-
     # Take the raw storage table and group by tuple of sites and storage type
-    storage_compact = storage_located[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
+    storage_compact = storage_compact[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
     storage_compact.rename(columns={'CoIn': 'Sto', 'CoOut': 'Co'}, inplace=True)
     storage_group = storage_compact.groupby(["Site", "Sto"])
 
@@ -1162,7 +1205,8 @@ def generate_processes_and_storage_california(paths, param):
             Process.loc[i, 'Site'] = 'LAX'
         else:
             Process.loc[i, 'Site'] = \
-            containing_polygon(Point(Process.loc[i, 'Longitude'], Process.loc[i, 'Latitude']), regions)['NAME_SHORT']
+                containing_polygon(Point(Process.loc[i, 'Longitude'], Process.loc[i, 'Latitude']), regions)[
+                    'NAME_SHORT']
 
     # Define the output commodity
     Process['CoOut'] = 'Elec'
@@ -1426,9 +1470,9 @@ def generate_aggregated_grid(paths, param):
 
     # Remove intraregional and extraregional lines
     icls_concatenated = grid_regions.loc[
-                        (grid_regions['Region_start'] != grid_regions['Region_end']) &
-                        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
-                        ].copy()
+        (grid_regions['Region_start'] != grid_regions['Region_end']) &
+        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
+        ].copy()
 
     # Sort alphabetically and reindex
     icls_reversed = reverse_lines(icls_concatenated)
@@ -1447,7 +1491,6 @@ def generate_aggregated_grid(paths, param):
 
     evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
     print("File Saved: " + paths["evrys_transmission"])
-
 
     #######################################################
     #    Create shapefile for urbs transmission line ?    #
@@ -1470,7 +1513,7 @@ def generate_urbs_model(paths, param):
     # read .csv files and associate them with relevant sheet
     for str in urbs_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_urbs' + ' %04d' % (param["year"]) + '.csv', '')
+        sheet = os.path.basename(str).replace('_urbs_' + str(param["year"]) + '.csv', '')
         urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
 
     # Add global parameters
@@ -1505,7 +1548,7 @@ def generate_evrys_model(paths, param):
     # read .csv files and associate them with relevant sheet
     for str in evrys_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_evrys' + ' %04d' % (param["year"]) + '.csv', '')
+        sheet = os.path.basename(str).replace('_evrys' + '_' + str(param["year"]) + '.csv', '')
         evrys_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
 
     # Create ExcelWriter
