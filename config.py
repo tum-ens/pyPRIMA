@@ -11,15 +11,15 @@ param = {}
 param["region"] = 'Europe'
 param["model_regions"] = 'NUTS0_wo_Balkans'
 param["year"] = year = 2015
-param["technology"] = ['WindOn', 'WindOff', 'PV', 'CSP']
-param["hub_heights"] = {'WindOn': np.array([60, 80, 100]),
+param["technology"] = ['WindOn']  # 'WindOff', 'PV', 'CSP'
+param["hub_heights"] = {'WindOn': np.array([60, 80, 100, 120, 140]),
                         'WindOff': np.array([135])}
 
 
 # Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
                               'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price']
-param["evrys_model_sheets"] = ['Flags', 'Sites', 'Commodities', 'Process', 'Transmission', 'Storage', 'DSM', 'Demand']
+param["evrys_model_sheets"] = ['Flags', 'Sites', 'Commodity', 'Process', 'Transmission', 'Storage', 'DSM', 'Demand']
 
 # urbs Global paramters
 urbs_global = {"Support timeframe": param["year"],
@@ -362,7 +362,7 @@ paths["sites"] = pathtemp + model_regions + fs + 'Sites.csv'
 paths["load_EU"] = pathtemp + 'Load' + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
 
 # 02 - Intermittent Supply Timeseries
-paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries' + str(year) + '.csv'
+paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries_' + str(year) + '.csv'
 
 # 02 - process and storage
 paths["pro_sto"] = pathtemp + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
@@ -380,7 +380,7 @@ paths["urbs"] = paths["model_regions"] + "urbs" + fs
 paths["urbs_sites"] = paths["urbs"] + 'Site_urbs_' + str(year) + '.csv'
 paths["urbs_suplm"] = paths["urbs"] + 'Suplm_urbs_' + str(year) + '.csv'
 paths["urbs_demand"] = paths["urbs"] + 'Demand_urbs_' + str(year) + '.csv'
-paths["urbs_commodities"] = paths["urbs"] + 'Commodities_urbs_' + str(year) + '.csv'
+paths["urbs_commodity"] = paths["urbs"] + 'Commodity_urbs_' + str(year) + '.csv'
 paths["urbs_process"] = paths["urbs"] + 'Process_urbs_' + str(year) + '.csv'
 paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs_' + str(year) + '.csv'
 paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs_' + str(year) + '.csv'
@@ -391,7 +391,7 @@ paths["urbs_model"] = paths["urbs"] + 'urbs_' + \
 paths["evrys"] = paths["model_regions"] + "evrys" + fs
 paths["evrys_sites"] = paths["evrys"] + 'Sites_evrys_' + str(year) + '.csv'
 paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys_' + str(year) + '.csv'
-paths["evrys_commodities"] = paths["evrys"] + 'Commodities_evrys_' + str(year) + '.csv'
+paths["evrys_commodity"] = paths["evrys"] + 'Commodity_evrys_' + str(year) + '.csv'
 paths["evrys_process"] = paths["evrys"] + 'Process_evrys_' + str(year) + '.csv'
 paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys_' + str(year) + '.csv'
 paths["evrys_transmission"] = paths["evrys"] + 'Transmission_evrys_' + str(year) + '.csv'

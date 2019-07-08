@@ -14,6 +14,11 @@ import datetime
 import inspect
 import os
 import glob
+import shutil
+import openpyxl
+from scipy.ndimage import convolve
+import datetime
+
 
 gdal.PushErrorHandler('CPLQuietErrorHandler')
 
@@ -1008,7 +1013,8 @@ def format_process_model(process_compact, param):
     # Take excerpt from the evrys table and group by tuple of sites and commodity
     process_grouped = output_pro_evrys[['Site', 'CoIn', 'inst-cap', 'act-lo', 'start-cost', 'ru']].apply(pd.to_numeric,
                                                                                                          errors='ignore')
-    process_grouped = process_grouped.groupby(['Site', 'CoIn'])
+    process_grouped.rename(columns={'CoIn': 'Process'}, inplace=True)
+    process_grouped = process_grouped.groupby(['Site', 'Process'])
 
     inst_cap0 = process_grouped['inst-cap'].sum().rename('inst-cap')
     max_grad0 = process_grouped['ru'].mean().rename('max-grad') * 60
@@ -1020,13 +1026,13 @@ def format_process_model(process_compact, param):
     process_existant = pd.DataFrame([inst_cap0, max_grad0, min_fraction0, startup_cost0]).transpose()
 
     # Get the possible commodities and add Slacks
-    commodities = list(output_pro_evrys.CoIn.unique())
-    commodities.append('Slack')
-    commodities.append('Shunt')
+    commodity = list(output_pro_evrys.CoIn.unique())
+    commodity.append('Slack')
+    commodity.append('Shunt')
 
     # Create a dataframe to store all the possible combinations of sites and commodities
-    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodities],
-                                                       names=['Site', 'CoIn']))
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodity],
+                                                       names=['Site', 'Process']))
 
     # Get the capacities of existing processes
     df_joined = df.join(process_existant, how='outer')
@@ -1038,12 +1044,12 @@ def format_process_model(process_compact, param):
     output_pro_urbs = output_pro_urbs.join(pd.DataFrame([], columns=['cap-lo', 'cap-up', 'inv-cost', 'fix-cost',
                                                                      'var-cost', 'wacc', 'depreciation',
                                                                      'area-per-cap']), how='outer')
-    for c in output_pro_urbs['CoIn'].unique():
+    for c in output_pro_urbs['Process'].unique():
         output_pro_urbs.loc[
-            output_pro_urbs.CoIn == c, ['cap-lo', 'cap-up', 'max-grad',
-                                        'min-fraction', 'inv-cost', 'fix-cost',
-                                        'var-cost', 'startup-cost', 'wacc',
-                                        'depreciation', 'area-per-cap']] = [
+            output_pro_urbs['Process'] == c, ['cap-lo', 'cap-up', 'max-grad',
+                                              'min-fraction', 'inv-cost', 'fix-cost',
+                                              'var-cost', 'startup-cost', 'wacc',
+                                              'depreciation', 'area-per-cap']] = [
             assump["cap_lo"][c], assump["cap_up"][c], assump["max_grad"][c],
             assump["min_fraction"][c], assump["inv_cost"][c], assump["fix_cost"][c],
             assump["var_cost"][c], assump["startup_cost"][c], param["pro_sto"]["wacc"],
@@ -1065,7 +1071,7 @@ def format_process_model(process_compact, param):
 
     # Change the order of the columns
     output_pro_urbs = output_pro_urbs[
-        ['Site', 'CoIn', 'inst-cap', 'cap-lo', 'cap-up', 'max-grad', 'min-fraction', 'inv-cost',
+        ['Site', 'Process', 'inst-cap', 'cap-lo', 'cap-up', 'max-grad', 'min-fraction', 'inv-cost',
          'fix-cost', 'var-cost', 'startup-cost', 'wacc', 'depreciation', 'area-per-cap']]
     output_pro_urbs = output_pro_urbs.fillna(0)
 
@@ -1137,19 +1143,20 @@ def format_storage_model(storage_compact, param):
                                                                      'eff-in', 'eff-out', 'inv-cost-p', 'inv-cost-c',
                                                                      'fix-cost-p', 'fix-cost-c', 'var-cost-p',
                                                                      'var-cost-c',
-                                                                     'wacc', 'depreciation', 'init']), how='outer')
+                                                                     'wacc', 'depreciation', 'init', 'discharge']),
+                                           how='outer')
     for c in output_sto_urbs.Storage:
         output_sto_urbs.loc[
             output_sto_urbs.Storage == c, ['cap-lo-c', 'cap-up-c', 'cap-lo-p',
                                            'cap-up-p', 'eff-in', 'eff-out',
                                            'inv-cost-p', 'inv-cost-c', 'fix-cost-p',
                                            'fix-cost-c', 'var-cost-p', 'var-cost-c',
-                                           'wacc', 'depreciation', 'init']] = [
+                                           'wacc', 'depreciation', 'init', 'discharge']] = [
             assump["cap_lo_c"][c], assump["cap_up_c"][c], assump["cap_lo_p"][c],
             assump["cap_up_p"][c], assump["eff_in"][c], assump["eff_out"][c],
             assump["inv_cost_p"][c], assump["inv_cost_c"][c], assump["fix_cost_p"][c],
             assump["fix_cost_c"][c], assump["var_cost_p"][c], assump["var_cost_c"][c],
-            param["pro_sto"]["wacc"], assump["depreciation"][c], assump["init"][c]]
+            param["pro_sto"]["wacc"], assump["depreciation"][c], assump["init"][c], assump["discharge"][c]]
 
     output_sto_urbs.loc[output_sto_urbs['Storage'] == 'PumSt', 'cap-up-c'] = output_sto_urbs.loc[
         output_sto_urbs['Storage'] == 'PumSt', 'inst-cap-c']
@@ -1160,7 +1167,7 @@ def format_storage_model(storage_compact, param):
     output_sto_urbs = output_sto_urbs[
         ['Site', 'Storage', 'Commodity', 'inst-cap-c', 'cap-lo-c', 'cap-up-c', 'inst-cap-p', 'cap-lo-p', 'cap-up-p',
          'eff-in', 'eff-out', 'inv-cost-p', 'inv-cost-c', 'fix-cost-p', 'fix-cost-c', 'var-cost-p', 'var-cost-c',
-         'wacc', 'depreciation', 'init']]
+         'wacc', 'depreciation', 'init', 'discharge']]
 
     output_sto_urbs.iloc[:, 3:] = output_sto_urbs.iloc[:, 3:].astype(float)
 
@@ -1219,7 +1226,7 @@ def format_process_model_California(process_compact, process_small, param):
     output_pro_evrys.loc[ind, 'su'] = 0.5
 
     ind = (output_pro_evrys['CoIn'] == 'Gas') & (output_pro_evrys['inst-cap'] > 100) & (
-                output_pro_evrys.index < len(process_compact) - len(process_small))
+            output_pro_evrys.index < len(process_compact) - len(process_small))
     output_pro_evrys.loc[ind, 'eff'] = 0.45 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
     output_pro_evrys.loc[ind, 'effmin'] = 0.82 * output_pro_evrys.loc[ind, 'eff']
     output_pro_evrys.loc[ind, 'act-lo'] = 0.45
@@ -1233,7 +1240,7 @@ def format_process_model_California(process_compact, process_small, param):
     output_pro_evrys.loc[ind, 'su'] = 0.5
 
     ind = (output_pro_evrys['CoIn'] == 'Gas') & ((output_pro_evrys['inst-cap'] <= 100) | (
-                output_pro_evrys.index >= len(process_compact) - len(process_small)))
+            output_pro_evrys.index >= len(process_compact) - len(process_small)))
     output_pro_evrys.loc[ind, 'eff'] = 0.3 + 0.15 * (output_pro_evrys.loc[ind, 'year'] - 1960) / (param["year"] - 1960)
     output_pro_evrys.loc[ind, 'effmin'] = 0.65 * output_pro_evrys.loc[ind, 'eff']
     output_pro_evrys.loc[ind, 'act-lo'] = 0.3
@@ -1305,11 +1312,11 @@ def format_process_model_California(process_compact, process_small, param):
     process_existant = pd.DataFrame([inst_cap0, max_grad0, min_fraction0, startup_cost0]).transpose()
 
     # Get the possible commodities and add Slacks
-    commodities = list(output_pro_evrys.CoIn.unique())
-    commodities.append('Slack')
+    commodity = list(output_pro_evrys.CoIn.unique())
+    commodity.append('Slack')
 
     # Create a dataframe to store all the possible combinations of sites and commodities
-    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodities],
+    df = pd.DataFrame(index=pd.MultiIndex.from_product([output_pro_evrys.Site.unique(), commodity],
                                                        names=['Site', 'CoIn']))
     # Get the capacities of existing processes
     df_joined = df.join(process_existant, how='outer')
@@ -1332,11 +1339,11 @@ def format_process_model_California(process_compact, process_small, param):
                                                         param["pro_sto_Cal"]["Cal_urbs"]["inv_cost"][c],
                                                         param["pro_sto_Cal"]["Cal_urbs"]["fix_cost"][c],
                                                         param["pro_sto_Cal"]["Cal_urbs"]["var_cost"][c]]
-        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'startup-cost'] =\
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'startup-cost'] = \
             param["pro_sto_Cal"]["Cal_urbs"]["startup_cost"][c]
-        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'wacc'] =\
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, 'wacc'] = \
             param["pro_sto_Cal"]["Cal_urbs"]["wacc"]
-        output_pro_urbs.loc[output_pro_urbs.CoIn == c, ['depreciation', 'area-per-cap']] =\
+        output_pro_urbs.loc[output_pro_urbs.CoIn == c, ['depreciation', 'area-per-cap']] = \
             [param["pro_sto_Cal"]["Cal_urbs"]["depreciation"][c],
              param["pro_sto_Cal"]["Cal_urbs"]["area_per_cap"][c]]
 
@@ -1672,7 +1679,8 @@ def read_assumptions_storage(assumptions):
         "seasonal": dict(zip(assumptions['Storage'], assumptions['seasonal'].astype(float))),
         "ctr": dict(zip(assumptions['Storage'], assumptions['ctr'].astype(float))),
         "year_mu": dict(zip(assumptions['Storage'], assumptions['year_mu'].astype(float))),
-        "year_stdev": dict(zip(assumptions['Storage'], assumptions['year_stdev'].astype(float)))
+        "year_stdev": dict(zip(assumptions['Storage'], assumptions['year_stdev'].astype(float))),
+        "discharge": dict(zip(assumptions['Storage'], assumptions['discharge'].astype(float)))
     }
 
     return storage

@@ -1,9 +1,5 @@
 from helping_functions import *
 import os
-import shutil
-import openpyxl
-from scipy.ndimage import convolve
-import datetime
 
 
 def initialization():
@@ -119,11 +115,14 @@ def generate_intermittent_supply_timeseries(paths, param):
         regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
         quantiles = pd.Series(Coef.index)
 
+
         # Read the timeseries
         TS = {}
+        hh = ''
         for height in hub_heights:
             TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
                                      sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+            hh = hh + str(height) + '_'
 
         # Prepare Dataframe to be filled
         TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
@@ -532,12 +531,12 @@ def generate_load_timeseries(paths, param):
     timecheck('End')
 
 
-def generate_commodities(paths, param):
+def generate_commodity(paths, param):
     ''' documentation '''
     timecheck('Start')
 
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
-    commodities = list(assumptions['Commodity'].unique())
+    commodity = list(assumptions['Commodity'].unique())
 
     dict_price_instate = dict(zip(assumptions['Commodity'], assumptions['price mid']))
     dict_price_outofstate = dict(zip(assumptions['Commodity'], assumptions['price out-of-state']))
@@ -560,7 +559,7 @@ def generate_commodities(paths, param):
 
     # Fill tables
     for s in sites["Site"]:
-        for c in commodities:
+        for c in commodity:
             if c == 'Elec':
                 if s in load.index:
                     annual = load.loc[s][0]
@@ -583,11 +582,11 @@ def generate_commodities(paths, param):
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
                      'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
 
-    output_urbs.to_csv(paths["urbs_commodities"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["urbs_commodities"])
+    output_urbs.to_csv(paths["urbs_commodity"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_commodity"])
 
-    output_evrys.to_csv(paths["evrys_commodities"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["evrys_commodities"])
+    output_evrys.to_csv(paths["evrys_commodity"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_commodity"])
 
     timecheck('End')
 
@@ -1103,6 +1102,7 @@ def generate_storage(paths, param):
 
     # Read required assumptions
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Storage')
+
     # Only use the assumptions of that particular year
     assumptions = assumptions[assumptions['year'] == param["year"]]
 
@@ -1131,7 +1131,6 @@ def generate_storage(paths, param):
     # Select small processes and group them
     storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(
         ["Site", "CoIn"])
-    # storage_group = storage_group.groupby(["Site", "CoIn"])
 
     # Define the attributes of the aggregates
     small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
@@ -1511,10 +1510,10 @@ def generate_urbs_model(paths, param):
     # create empty dictionary
     urbs_model = {}
     # read .csv files and associate them with relevant sheet
-    for str in urbs_paths:
+    for name in urbs_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_urbs_' + str(param["year"]) + '.csv', '')
-        urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+        sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
+        urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Add global parameters
     urbs_model["Global"] = pd.DataFrame.from_dict(param["urbs_global"], orient='index')
@@ -1546,10 +1545,10 @@ def generate_evrys_model(paths, param):
     # create empty dictionary
     evrys_model = {}
     # read .csv files and associate them with relevant sheet
-    for str in evrys_paths:
+    for name in evrys_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_evrys' + '_' + str(param["year"]) + '.csv', '')
-        evrys_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+        sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
+        evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Create ExcelWriter
     with ExcelWriter(paths["evrys_model"], mode='w') as writer:
@@ -1568,7 +1567,7 @@ if __name__ == '__main__':
     generate_sites_from_shapefile(paths)  # done
     generate_intermittent_supply_timeseries(paths, param)  # separate module
     generate_load_timeseries(paths, param)  # done - Added California's param
-    generate_commodities(paths, param)  # corresponds to 04 - done
+    generate_commodity(paths, param)  # corresponds to 04 - done
     distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
     if param["region"] == 'California':
         generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
