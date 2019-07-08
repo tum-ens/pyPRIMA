@@ -1,4 +1,5 @@
 from helping_functions import *
+from config import ts_paths
 import os
 
 
@@ -115,14 +116,13 @@ def generate_intermittent_supply_timeseries(paths, param):
         regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
         quantiles = pd.Series(Coef.index)
 
-
         # Read the timeseries
         TS = {}
         hh = ''
+        paths = ts_paths(hub_heights, tech, paths)
         for height in hub_heights:
             TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
                                      sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
-            hh = hh + str(height) + '_'
 
         # Prepare Dataframe to be filled
         TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)

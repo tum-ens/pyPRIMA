@@ -11,10 +11,7 @@ param = {}
 param["region"] = 'Europe'
 param["model_regions"] = 'NUTS0_wo_Balkans'
 param["year"] = year = 2015
-param["technology"] = ['WindOn']  # 'WindOff', 'PV', 'CSP'
-param["hub_heights"] = {'WindOn': np.array([60, 80, 100, 120, 140]),
-                        'WindOff': np.array([135])}
-
+param["technology"] = ['WindOn', 'PV']  # 'WindOff', 'PV', 'CSP'
 
 # Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
@@ -318,6 +315,7 @@ paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + f
 # Rasters for wind and solar
 timestamp = '20190617T142740'
 pathtemp = root + "02 Intermediate files" + fs + "Files " + region + fs + "Renewable energy" + fs + timestamp + fs
+paths["Renewable energy"] = pathtemp
 rasters = {'WindOn': pathtemp + 'Europe_WindOn_FLH_mask_2015.tif',
            'WindOff': pathtemp + 'Europe_WindOff_FLH_mask_2015.tif',
            'Solar': pathtemp + 'Europe_PV_FLH_mask_2015.tif',
@@ -338,16 +336,21 @@ paths["raw_TS"] = {}
 paths["reg_coef"] = {}
 paths["regression_out"] = pathtemp + "Regression_Outputs" + fs
 for tech in param["technology"]:
-    paths["raw_TS"][tech] = {}
-    if tech in ['WindOn', 'WindOff']:
-        for height in param["hub_heights"][tech]:
-            paths["raw_TS"][tech][str(height)] = \
-                pathtemp + region + '_' + tech + '_' + str(height) + '_TS_' + str(year) + '.csv'
-    else:
-        paths["raw_TS"][tech][''] = pathtemp + region + '_' + tech + '_TS_' + str(year) + '.csv'
-
     paths["reg_coef"][tech] = \
         paths["regression_out"] + region + '_' + tech + '_reg_coefficients.csv'
+
+
+def ts_paths(hub_heights, tech, paths):
+    paths["raw_TS"][tech] = {}
+    if tech in ['WindOn', 'WindOff']:
+        for height in hub_heights:
+            paths["raw_TS"][tech][str(height)] = \
+                paths["Renewable energy"] + region + '_' + tech + '_' + str(height) + '_TS_' + str(year) + '.csv'
+    else:
+        paths["raw_TS"][tech][''] = paths["Renewable energy"] + region + '_' + tech + '_TS_' + str(year) + '.csv'
+
+    return paths
+
 
 ##################################
 #     General Ouputs Folders     #
