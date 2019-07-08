@@ -1,9 +1,6 @@
 from helping_functions import *
+from config import ts_paths
 import os
-import shutil
-import openpyxl
-from scipy.ndimage import convolve
-import datetime
 
 
 def initialization():
@@ -102,6 +99,54 @@ def generate_intermittent_supply_timeseries(paths, param):
     '''
     description
     '''
+    timecheck('Start')
+    Timeseries = None
+
+    # Loop over the technologies understudy
+    for tech in param["technology"]:
+        # Read coefs
+        if os.path.isfile(paths["reg_coef"][tech]):
+            Coef = pd.read_csv(paths["reg_coef"][tech], sep=';', decimal=',', index_col=[0])
+        else:
+            print("No regression Coefficients found for " + tech)
+            continue
+
+        # Extract hub heights and find the required TS
+        hub_heights = pd.Series(Coef.columns).str.slice(3).unique()
+        regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
+        quantiles = pd.Series(Coef.index)
+
+        # Read the timeseries
+        TS = {}
+        hh = ''
+        paths = ts_paths(hub_heights, tech, paths)
+        for height in hub_heights:
+            TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
+                                     sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+
+        # Prepare Dataframe to be filled
+        TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
+        for reg in regions:
+            for height in hub_heights:
+                for quan in quantiles:
+                    if height != '':
+                        TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                    (TS[height][reg, 'q' + str(quan)] * Coef[reg + '_' + height].loc[
+                                                        quan])
+                    else:
+                        TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                    (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
+        TS_tech.set_index(np.arange(1, 8761), inplace=True)
+        if Timeseries is None:
+            Timeseries = TS_tech.copy()
+        else:
+            Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
+
+    Timeseries.to_csv(paths["suplm_TS"], sep=';', decimal=',')
+    print("File Saved: " + paths["suplm_TS"])
+    Timeseries.to_csv(paths["urbs_suplm"], sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_suplm"])
+    timecheck('End')
 
 
 def generate_load_timeseries(paths, param):
@@ -486,12 +531,12 @@ def generate_load_timeseries(paths, param):
     timecheck('End')
 
 
-def generate_commodities(paths, param):
+def generate_commodity(paths, param):
     ''' documentation '''
     timecheck('Start')
 
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Commodity')
-    commodities = list(assumptions['Commodity'].unique())
+    commodity = list(assumptions['Commodity'].unique())
 
     dict_price_instate = dict(zip(assumptions['Commodity'], assumptions['price mid']))
     dict_price_outofstate = dict(zip(assumptions['Commodity'], assumptions['price out-of-state']))
@@ -510,11 +555,11 @@ def generate_commodities(paths, param):
     # Prepare output tables for evrys and urbs
 
     output_evrys = pd.DataFrame(columns=['Site', 'Co', 'price', 'annual', 'losses', 'type'], dtype=np.float64)
-    output_urbs = pd.DataFrame(columns=['Site', 'Commodity', 'Type', 'price', 'max', 'maxperstep'])
+    output_urbs = pd.DataFrame(columns=['Site', 'Commodity', 'Type', 'price', 'max', 'maxperhour'])
 
     # Fill tables
     for s in sites["Site"]:
-        for c in commodities:
+        for c in commodity:
             if c == 'Elec':
                 if s in load.index:
                     annual = load.loc[s][0]
@@ -528,20 +573,20 @@ def generate_commodities(paths, param):
                      'type': dict_type_evrys[c]}, ignore_index=True)
                 output_urbs = output_urbs.append(
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_instate[c],
-                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+                     'max': dict_co_max[c], 'maxperhour': dict_maxperstep[c]}, ignore_index=True)
             else:
                 output_evrys = output_evrys.append(
                     {'Site': s, 'Co': c, 'price': dict_price_outofstate[c], 'annual': annual, 'losses': 0,
                      'type': dict_type_evrys[c]}, ignore_index=True)
                 output_urbs = output_urbs.append(
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
-                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+                     'max': dict_co_max[c], 'maxperhour': dict_maxperstep[c]}, ignore_index=True)
 
-    output_urbs.to_csv(paths["urbs_commodities"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["urbs_commodities"])
+    output_urbs.to_csv(paths["urbs_commodity"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["urbs_commodity"])
 
-    output_evrys.to_csv(paths["evrys_commodities"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["evrys_commodities"])
+    output_evrys.to_csv(paths["evrys_commodity"], index=False, sep=';', decimal=',')
+    print("File Saved: " + paths["evrys_commodity"])
 
     timecheck('End')
 
@@ -1057,6 +1102,7 @@ def generate_storage(paths, param):
 
     # Read required assumptions
     assumptions = pd.read_excel(paths["assumptions"], sheet_name='Storage')
+
     # Only use the assumptions of that particular year
     assumptions = assumptions[assumptions['year'] == param["year"]]
 
@@ -1083,8 +1129,8 @@ def generate_storage(paths, param):
     storage_compact = storage_located.copy()
 
     # Select small processes and group them
-    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(["Site", "CoIn"])
-    # storage_group = storage_group.groupby(["Site", "CoIn"])
+    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(
+        ["Site", "CoIn"])
 
     # Define the attributes of the aggregates
     small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
@@ -1100,12 +1146,8 @@ def generate_storage(paths, param):
     storage_compact = storage_compact.append(storage_small, ignore_index=True, sort=True)
     print("Number of compacted storage units: " + str(len(storage_compact)))
 
-    #################################################################
-    # Lose of storage compact in this process, should be modified ? #
-    #################################################################
-
     # Take the raw storage table and group by tuple of sites and storage type
-    storage_compact = storage_located[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
+    storage_compact = storage_compact[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
     storage_compact.rename(columns={'CoIn': 'Sto', 'CoOut': 'Co'}, inplace=True)
     storage_group = storage_compact.groupby(["Site", "Sto"])
 
@@ -1162,7 +1204,8 @@ def generate_processes_and_storage_california(paths, param):
             Process.loc[i, 'Site'] = 'LAX'
         else:
             Process.loc[i, 'Site'] = \
-            containing_polygon(Point(Process.loc[i, 'Longitude'], Process.loc[i, 'Latitude']), regions)['NAME_SHORT']
+                containing_polygon(Point(Process.loc[i, 'Longitude'], Process.loc[i, 'Latitude']), regions)[
+                    'NAME_SHORT']
 
     # Define the output commodity
     Process['CoOut'] = 'Elec'
@@ -1426,9 +1469,9 @@ def generate_aggregated_grid(paths, param):
 
     # Remove intraregional and extraregional lines
     icls_concatenated = grid_regions.loc[
-                        (grid_regions['Region_start'] != grid_regions['Region_end']) &
-                        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
-                        ].copy()
+        (grid_regions['Region_start'] != grid_regions['Region_end']) &
+        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())
+        ].copy()
 
     # Sort alphabetically and reindex
     icls_reversed = reverse_lines(icls_concatenated)
@@ -1448,11 +1491,6 @@ def generate_aggregated_grid(paths, param):
     evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
     print("File Saved: " + paths["evrys_transmission"])
 
-
-    #######################################################
-    #    Create shapefile for urbs transmission line ?    #
-    #######################################################
-
     timecheck("End")
 
 
@@ -1468,23 +1506,43 @@ def generate_urbs_model(paths, param):
     # create empty dictionary
     urbs_model = {}
     # read .csv files and associate them with relevant sheet
-    for str in urbs_paths:
+    for name in urbs_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_urbs' + ' %04d' % (param["year"]) + '.csv', '')
-        urbs_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+        sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
+        urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Add global parameters
-    urbs_model["Global"] = pd.DataFrame.from_dict(param["urbs_global"], orient='index')
+    urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
+
+    # Add Process-Commodity parameters
+    urbs_model["Process-Commodity"] = pd.read_excel(paths["assumptions"], sheet_name='Process-Commodity').fillna(0)
+
+    # Filter processes if not in Process-Commodity
+    urbs_model["Process"] = urbs_model["Process"].loc[
+        urbs_model["Process"]["Process"].isin(urbs_model["Process-Commodity"]["Process"].unique())]
+
+    # Verify Commodity
+    missing_commodities = urbs_model["Process-Commodity"]["Commodity"].loc[
+            ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
+    if len(missing_commodities) > 0:
+        print("Error: Missing Commodities from Process-Commodity: ")
+        print(missing_commodities)
+        return
+
+    # Add DSM and Buy-Sell-Price
+    DSM_header = ['Site', 'Commodity', 'delay', 'eff', 'recov', 'cap-max-do', 'cap-max-up']
+    urbs_model["DSM"] = pd.DataFrame(columns=DSM_header)
+    urbs_model["Buy-Sell-Price"] = pd.DataFrame(np.arange(0, 8761), columns=['t'])
 
     # Create ExcelWriter
     with ExcelWriter(paths["urbs_model"], mode='w') as writer:
         # populate excel file with available sheets
+        status = 0
         for sheet in param["urbs_model_sheets"]:
             if sheet in urbs_model.keys():
-                if sheet is 'Global':
-                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=True, header=False)
-                else:
-                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+                urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
+            status += 1
+            display_progress("Writing to Excel File in progress: ", (len(param["urbs_model_sheets"]), status))
 
     print("File Saved: " + paths["urbs_model"])
 
@@ -1503,17 +1561,20 @@ def generate_evrys_model(paths, param):
     # create empty dictionary
     evrys_model = {}
     # read .csv files and associate them with relevant sheet
-    for str in evrys_paths:
+    for name in evrys_paths:
         # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(str).replace('_evrys' + ' %04d' % (param["year"]) + '.csv', '')
-        evrys_model[sheet] = pd.read_csv(str, sep=';', decimal=',')
+        sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
+        evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Create ExcelWriter
     with ExcelWriter(paths["evrys_model"], mode='w') as writer:
         # populate excel file with available sheets
+        status = 0
         for sheet in param["evrys_model_sheets"]:
             if sheet in evrys_model.keys():
                 evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+            status += 1
+            display_progress("Writing to Excel File in progress: ", (len(param["evrys_model_sheets"]), status))
 
     print("File Saved: " + paths["evrys_model"])
 
@@ -1525,7 +1586,7 @@ if __name__ == '__main__':
     generate_sites_from_shapefile(paths)  # done
     generate_intermittent_supply_timeseries(paths, param)  # separate module
     generate_load_timeseries(paths, param)  # done - Added California's param
-    generate_commodities(paths, param)  # corresponds to 04 - done
+    generate_commodity(paths, param)  # corresponds to 04 - done
     distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
     if param["region"] == 'California':
         generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
