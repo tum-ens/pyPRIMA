@@ -1491,10 +1491,6 @@ def generate_aggregated_grid(paths, param):
     evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
     print("File Saved: " + paths["evrys_transmission"])
 
-    #######################################################
-    #    Create shapefile for urbs transmission line ?    #
-    #######################################################
-
     timecheck("End")
 
 
@@ -1516,17 +1512,37 @@ def generate_urbs_model(paths, param):
         urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Add global parameters
-    urbs_model["Global"] = pd.DataFrame.from_dict(param["urbs_global"], orient='index')
+    urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
+
+    # Add Process-Commodity parameters
+    urbs_model["Process-Commodity"] = pd.read_excel(paths["assumptions"], sheet_name='Process-Commodity').fillna(0)
+
+    # Filter processes if not in Process-Commodity
+    urbs_model["Process"] = urbs_model["Process"].loc[
+        urbs_model["Process"]["Process"].isin(urbs_model["Process-Commodity"]["Process"].unique())]
+
+    # Verify Commodity
+    missing_commodities = urbs_model["Process-Commodity"]["Commodity"].loc[
+            ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
+    if len(missing_commodities) > 0:
+        print("Error: Missing Commodities from Process-Commodity: ")
+        print(missing_commodities)
+        return
+
+    # Add DSM and Buy-Sell-Price
+    DSM_header = ['Site', 'Commodity', 'delay', 'eff', 'recov', 'cap-max-do', 'cap-max-up']
+    urbs_model["DSM"] = pd.DataFrame(columns=DSM_header)
+    urbs_model["Buy-Sell-Price"] = pd.DataFrame(np.arange(0, 8761), columns=['t'])
 
     # Create ExcelWriter
     with ExcelWriter(paths["urbs_model"], mode='w') as writer:
         # populate excel file with available sheets
+        status = 0
         for sheet in param["urbs_model_sheets"]:
             if sheet in urbs_model.keys():
-                if sheet is 'Global':
-                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=True, header=False)
-                else:
-                    urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+                urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
+            status += 1
+            display_progress("Writing to Excel File in progress: ", (len(param["urbs_model_sheets"]), status))
 
     print("File Saved: " + paths["urbs_model"])
 
@@ -1553,9 +1569,12 @@ def generate_evrys_model(paths, param):
     # Create ExcelWriter
     with ExcelWriter(paths["evrys_model"], mode='w') as writer:
         # populate excel file with available sheets
+        status = 0
         for sheet in param["evrys_model_sheets"]:
             if sheet in evrys_model.keys():
                 evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+            status += 1
+            display_progress("Writing to Excel File in progress: ", (len(param["evrys_model_sheets"]), status))
 
     print("File Saved: " + paths["evrys_model"])
 
@@ -1564,19 +1583,19 @@ def generate_evrys_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    generate_sites_from_shapefile(paths)  # done
-    generate_intermittent_supply_timeseries(paths, param)  # separate module
-    generate_load_timeseries(paths, param)  # done - Added California's param
-    generate_commodity(paths, param)  # corresponds to 04 - done
-    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    if param["region"] == 'California':
-        generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
-    else:
-        clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-        clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
-        generate_processes(paths, param)  # corresponds to 05c - done
-        generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    clean_grid_data(paths, param)  # corresponds to 06a - done
-    generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    # generate_sites_from_shapefile(paths)  # done
+    # generate_intermittent_supply_timeseries(paths, param)  # separate module
+    # generate_load_timeseries(paths, param)  # done - Added California's param
+    # generate_commodity(paths, param)  # corresponds to 04 - done
+    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    # if param["region"] == 'California':
+    #     generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
+    # else:
+    #     clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    #     clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+    #     generate_processes(paths, param)  # corresponds to 05c - done
+    #     generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    # clean_grid_data(paths, param)  # corresponds to 06a - done
+    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
     generate_urbs_model(paths, param)  # Done
     generate_evrys_model(paths, param)
