@@ -555,7 +555,7 @@ def generate_commodity(paths, param):
     # Prepare output tables for evrys and urbs
 
     output_evrys = pd.DataFrame(columns=['Site', 'Co', 'price', 'annual', 'losses', 'type'], dtype=np.float64)
-    output_urbs = pd.DataFrame(columns=['Site', 'Commodity', 'Type', 'price', 'max', 'maxperstep'])
+    output_urbs = pd.DataFrame(columns=['Site', 'Commodity', 'Type', 'price', 'max', 'maxperhour'])
 
     # Fill tables
     for s in sites["Site"]:
@@ -573,14 +573,14 @@ def generate_commodity(paths, param):
                      'type': dict_type_evrys[c]}, ignore_index=True)
                 output_urbs = output_urbs.append(
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_instate[c],
-                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+                     'max': dict_co_max[c], 'maxperhour': dict_maxperstep[c]}, ignore_index=True)
             else:
                 output_evrys = output_evrys.append(
                     {'Site': s, 'Co': c, 'price': dict_price_outofstate[c], 'annual': annual, 'losses': 0,
                      'type': dict_type_evrys[c]}, ignore_index=True)
                 output_urbs = output_urbs.append(
                     {'Site': s, 'Commodity': c, 'Type': dict_type_urbs[c], 'price': dict_price_outofstate[c],
-                     'max': dict_co_max[c], 'maxperstep': dict_maxperstep[c]}, ignore_index=True)
+                     'max': dict_co_max[c], 'maxperhour': dict_maxperstep[c]}, ignore_index=True)
 
     output_urbs.to_csv(paths["urbs_commodity"], index=False, sep=';', decimal=',')
     print("File Saved: " + paths["urbs_commodity"])
@@ -1583,19 +1583,19 @@ def generate_evrys_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)  # done
-    # generate_intermittent_supply_timeseries(paths, param)  # separate module
-    # generate_load_timeseries(paths, param)  # done - Added California's param
-    # generate_commodity(paths, param)  # corresponds to 04 - done
-    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    # if param["region"] == 'California':
-    #     generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
-    # else:
-    #     clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-    #     clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
-    #     generate_processes(paths, param)  # corresponds to 05c - done
-    #     generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    # clean_grid_data(paths, param)  # corresponds to 06a - done
-    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    generate_sites_from_shapefile(paths)  # done
+    generate_intermittent_supply_timeseries(paths, param)  # separate module
+    generate_load_timeseries(paths, param)  # done - Added California's param
+    generate_commodity(paths, param)  # corresponds to 04 - done
+    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    if param["region"] == 'California':
+        generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
+    else:
+        clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+        clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+        generate_processes(paths, param)  # corresponds to 05c - done
+        generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    clean_grid_data(paths, param)  # corresponds to 06a - done
+    generate_aggregated_grid(paths, param)  # corresponds to 06b - done
     generate_urbs_model(paths, param)  # Done
     generate_evrys_model(paths, param)
