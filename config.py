@@ -249,6 +249,9 @@ elif platform.startswith('linux'):
     # Linux Root Folder
     root = git_RT_folder + fs + ".." + fs + ".." + fs + "Database_KS" + fs
 
+else:
+    root = git_RT_folder
+
 region = param["region"]
 model_regions = param["model_regions"]
 
