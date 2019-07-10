@@ -149,6 +149,71 @@ def generate_intermittent_supply_timeseries(paths, param):
     timecheck('End')
 
 
+def generate_stratified_intermittent_supply_timeseries(paths, param):
+    '''
+    description
+    '''
+    timecheck('Start')
+    modes = param["modes"].keys()
+    # Loop Over the modes
+    for m in modes:
+        Timeseries = None
+        # Loop over the technologies
+        for tech in param["technology"]:
+            # Read coefs
+            if os.path.isfile(paths["reg_coef"][tech]):
+                Coef = pd.read_csv(paths["reg_coef"][tech], sep=';', decimal=',', index_col=[0])
+            else:
+                print("No regression Coefficients found for " + tech)
+                continue
+
+            # Extract hub heights and find the required TS
+            hub_heights = param["hub_heights"][tech]
+            regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
+            quantiles = param["modes"][m]
+
+            # Read the timeseries
+            TS = {}
+            paths = ts_paths(hub_heights, tech, paths)
+            if 'WindOn' == tech[:-1]:
+                tech = 'WindOn'
+            elif 'WindOff' == tech[:-1]:
+                tech = 'WindOff'
+
+            for height in hub_heights:
+                TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
+                                         sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+
+            # Prepare Dataframe to be filled
+            TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
+            sumcoef = {}
+            for reg in regions:
+                sumcoef[reg] = 0
+                for height in hub_heights:
+                    for quan in quantiles:
+                        if height != '':
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg + '_' + height].loc[
+                                                            quan])
+                            sumcoef[reg] = sumcoef[reg] + Coef[reg + '_' + height].loc[quan]
+                        else:
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
+                            sumcoef[reg] = sumcoef[reg] + Coef[reg].loc[quan]
+            for reg in regions:
+                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / sumcoef[reg]
+
+            TS_tech.set_index(np.arange(1, 8761), inplace=True)
+            if Timeseries is None:
+                Timeseries = TS_tech.copy()
+            else:
+                Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
+
+            Timeseries.to_csv(paths["strat_TS"] + tech + '_' + m + '.csv', sep=';', decimal=',')
+            print("File Saved: " + paths["strat_TS"] + tech + '_' + m + '.csv')
+    timecheck('End')
+
+
 def generate_load_timeseries(paths, param):
     '''
     The goal of this script is to extract and preprocess data to be used as load timeseries for every site modeled in evrys and urbs. The data is extracted from excel spreadsheets and raster maps, and output into two .csv files. The data needs to be disaggregated sectorially and spatially before being aggregated again into regions, formatted, and exported.

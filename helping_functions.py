@@ -15,7 +15,6 @@ import inspect
 import os
 import glob
 import shutil
-import openpyxl
 from scipy.ndimage import convolve
 import datetime
 

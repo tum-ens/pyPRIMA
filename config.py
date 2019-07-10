@@ -13,6 +13,21 @@ param["model_regions"] = 'NUTS0_wo_Balkans'
 param["year"] = year = 2015
 param["technology"] = ['WindOn', 'PV']  # 'WindOff', 'PV', 'CSP'
 
+# Stratified Timeseries
+modes = {"high": [100, 95, 90, 85],
+         "mid": [80, 70, 60, 50, 40],
+         "low": [35, 20, 0]}
+param["modes"] = modes
+
+hubheight = {"WindOn1": [60, 80, 100],
+             "WindOn2": [80, 100, 120],
+             "WindOn3": [100, 120, 140],
+             "WindOff1": [80],
+             "WindOff2": [100],
+             "WindOff3": [120],
+             "PV": []}
+param["hub_heights"] = hubheight
+
 # Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
                               'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price']
@@ -369,6 +384,7 @@ paths["load_EU"] = pathtemp + 'Load' + fs + 'Load_EU' + '%04d' % (param["year"])
 
 # 02 - Intermittent Supply Timeseries
 paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries_' + str(year) + '.csv'
+paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
 
 # 02 - process and storage
 paths["pro_sto"] = pathtemp + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
