@@ -331,7 +331,7 @@ paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + f
 
 # ## Renewable Capacities
 # Rasters for wind and solar
-timestamp = '20190617T142740'
+timestamp = 'Rerun_Houssame_Complete_quantiles'
 pathtemp = root + "02 Intermediate files" + fs + "Files " + region + fs + "Renewable energy" + fs + timestamp + fs
 paths["Renewable energy"] = pathtemp
 rasters = {'WindOn': pathtemp + 'Europe_WindOn_FLH_mask_2015.tif',
@@ -345,9 +345,6 @@ paths["rasters"] = rasters
 
 # IRENA Data
 paths["IRENA"] = root + '01 Raw inputs' + fs + 'Renewable energy' + fs + 'Renewables.xlsx'
-# outputs
-paths["map_power_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs
-paths["map_grid_plants"] = root + '01 Raw inputs' + fs + 'maps' + fs + 'random_points.shp'
 
 # Intermittent Supply Timeseries
 paths["raw_TS"] = {}
@@ -374,28 +371,35 @@ def ts_paths(hub_heights, tech, paths):
 #     General Ouputs Folders     #
 ##################################
 
-pathtemp = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+paths["OUT"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+
+# 02 - Site
+paths["model_regions"] = paths["OUT"] + 'Regions' + fs + model_regions + fs
+paths["sites"] = paths["model_regions"] + 'Sites.csv'
 
 # 02 - load
-paths["load"] = pathtemp + 'Load' + fs
-paths["model_regions"] = pathtemp + model_regions + fs
-paths["sites"] = pathtemp + model_regions + fs + 'Sites.csv'
-paths["load_EU"] = pathtemp + 'Load' + fs + 'Load_EU' + '%04d' % (param["year"]) + '.csv'
+paths["load"] = paths["OUT"] + 'Load' + fs + 'Load_' + str(param["year"]) + '.csv'
+paths["df_sector"] = paths["OUT"] + 'Load' + fs + 'df_sectors.csv'
+paths["load_sector"] = paths["OUT"] + 'Load' + fs + 'load_sector.csv'
+paths["load_landuse"] = paths["OUT"] + 'Load' + fs + 'load_landuse.csv'
 
 # 02 - Intermittent Supply Timeseries
 paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries_' + str(year) + '.csv'
 paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
 
 # 02 - process and storage
-paths["pro_sto"] = pathtemp + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
-paths["PPs_"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
-paths["process_raw"] = pathtemp + 'Processes_raw_FRESNA2_2.csv'
-paths["Process_agg"] = pathtemp + 'Processes_agg_FRESNA2_2.csv'
-paths["Process_agg_bis"] = pathtemp + 'Processes_agg_FRESNA2_3.csv'
+paths["pro_sto"] = paths["OUT"] + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
+paths["map_power_plants"] = paths["model_regions"]
+paths["PPs_"] = paths["map_power_plants"]
+
+paths["process_raw"] = paths["OUT"] + 'Processes_raw_FRESNA2_2.csv'
+paths["Process_agg"] = paths["OUT"] + 'Processes_agg_FRESNA2_2.csv'
+paths["Process_agg_bis"] = paths["OUT"] + 'Processes_agg_FRESNA2_3.csv'
 
 # 02 - Grid
-paths["grid_shp"] = pathtemp + 'Grid' + fs + 'grid_cleaned_shape.shp'
-paths["grid_cleaned"] = pathtemp + 'Grid' + fs + 'GridKit_cleaned.csv'
+paths["grid_shp"] = paths["OUT"] + 'Grid' + fs + 'grid_cleaned_shape.shp'
+paths["grid_cleaned"] = paths["OUT"] + 'Grid' + fs + 'GridKit_cleaned.csv'
+paths["map_grid_plants"] = paths["OUT"] + 'maps' + fs + 'random_points.shp'
 
 # urbs
 paths["urbs"] = paths["model_regions"] + "urbs" + fs

@@ -200,7 +200,15 @@ def generate_stratified_intermittent_supply_timeseries(paths, param):
                             TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
                                                         (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
                             sumcoef[reg] = sumcoef[reg] + Coef[reg].loc[quan]
-            for reg in regions:
+
+                # If coef are zero compute average of the timeseries
+                if sumcoef[reg] == 0:
+                    for height in hub_heights:
+                        for quan in quantiles:
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + TS[height][reg, 'q' + str(quan)]
+                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / (len(quantiles) * len(hub_heights))
+                # else TS = TS / sum(Coef)
+                else:
                     TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / sumcoef[reg]
 
             TS_tech.set_index(np.arange(1, 8761), inplace=True)
@@ -368,9 +376,9 @@ def generate_load_timeseries(paths, param):
         for i in stat.index:
             stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
 
-    if not (os.path.isfile(paths["load"] + 'df_sectors.csv') and
-            os.path.isfile(paths["load"] + 'load_sector.csv') and
-            os.path.isfile(paths["load"] + 'load_landuse.csv')):
+    if not (os.path.isfile(paths["df_sector"]) and
+            os.path.isfile(paths["load_sector"]) and
+            os.path.isfile(paths["load_landuse"])):
 
         countries = gpd.read_file(paths["Countries"])
         if param["region"] == 'California':
@@ -445,17 +453,17 @@ def generate_load_timeseries(paths, param):
                     display_progress("Computing regions load", (length, status))
 
         # Save the data into HDF5 files for faster execution
-        df_sectors.to_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', index=False, header=True)
-        print("Dataframe df_sector saved: " + paths["load"] + 'df_sector.csv')
-        load_sector.to_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index=True, header=True)
-        print("Dataframe load_sector saved: " + paths["load"] + 'load_sector.csv')
-        load_landuse.to_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index=True)
-        print("Dataframe load_landuse saved: " + paths["load"] + 'load_landuse.csv')
+        df_sectors.to_csv(paths["df_sector"], sep=';', decimal=',', index=False, header=True)
+        print("Dataframe df_sector saved: " + paths["df_sector"])
+        load_sector.to_csv(paths["load_sector"], sep=';', decimal=',', index=True, header=True)
+        print("Dataframe load_sector saved: " + paths["load_sector"])
+        load_landuse.to_csv(paths["load_landuse"], sep=';', decimal=',', index=True)
+        print("Dataframe load_landuse saved: " + paths["load_landuse"])
 
     # Read CSV files
-    df_sectors = pd.read_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', header=[0, 1])
-    load_sector = pd.read_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
-    load_landuse = pd.read_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index_col=[0, 1])
+    df_sectors = pd.read_csv(paths["df_sector"], sep=';', decimal=',', header=[0, 1])
+    load_sector = pd.read_csv(paths["load_sector"], sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
+    load_landuse = pd.read_csv(paths["load_landuse"], sep=';', decimal=',', index_col=[0, 1])
 
     # Split regions into subregions
     # (a region can overlap with many countries, but a subregion belongs to only one country)
@@ -584,8 +592,8 @@ def generate_load_timeseries(paths, param):
     Load_EU = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
 
     # Output
-    Load_EU.to_csv(paths["load_EU"], sep=',', index=True)
-    print("File Saved: " + paths["load_EU"])
+    Load_EU.to_csv(paths["load"], sep=',', index=True)
+    print("File Saved: " + paths["load"])
 
     df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_demand"])
