@@ -589,11 +589,13 @@ def generate_load_timeseries(paths, param):
     df_urbs = df_urbs.reset_index()
 
     # Yearly consumption for each zone
-    Load_EU = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
+    annual_load = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
 
     # Output
-    Load_EU.to_csv(paths["load"], sep=',', index=True)
-    print("File Saved: " + paths["load"])
+
+    annual_load.to_csv(paths["annual_load"], sep=',', index=True)
+    print("File Saved: " + paths["annual_load"])
+
 
     df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_demand"])
@@ -623,7 +625,7 @@ def generate_commodity(paths, param):
     sites = pd.read_csv(paths["sites"], sep=';', decimal=',')
 
     # Read the CSV containing the annual load
-    load = pd.read_csv(paths["load_EU"], index_col=['sit'])
+    load = pd.read_csv(paths["annual_load"], index_col=['sit'])
 
     # Prepare output tables for evrys and urbs
 
@@ -680,7 +682,7 @@ def distribute_renewable_capacities(paths, param):
 
     # Add missing country names
     for i in np.arange(1, len(data_raw.index)):
-        if data_raw.isnull().loc[i, 'Country/area'] is True:
+        if data_raw.isnull().loc[i, 'Country/area']:
             data_raw.loc[i, 'Country/area'] = data_raw.loc[i - 1, 'Country/area']
 
     # Select technologies needed in urbs and rename them
@@ -690,7 +692,7 @@ def distribute_renewable_capacities(paths, param):
 
     # Create new dataframe with needed information, rename sites and extract chosen sites
     data = data_raw[["Site", "Process", "inst-cap"]]
-    data = data.replace({"site": param["dist_ren"]["country_names"]}).fillna(value=0)
+    data = data.replace({"Site": param["dist_ren"]["country_names"]}).fillna(value=0)
     data = data.loc[data["Site"].isin(sites)].reset_index(drop=True)
 
     # Group by and sum
@@ -700,12 +702,12 @@ def distribute_renewable_capacities(paths, param):
     units = param["dist_ren"]["units"]
     for p in data["Process"].unique():
         data.loc[data["Process"] == p, "Unit"] = data.loc[data["Process"] == p, "inst-cap"] // units[p] \
-                                                 + (data.loc[data["Process"] == p, "inst_cap"] % units[p] > 0)
+                                                 + (data.loc[data["Process"] == p, "inst-cap"] % units[p] > 0)
     for p in data["Process"].unique():
         x = y = c = []
         for counter in range(0, len(countries) - 1):
             print(counter)
-            if float(data.loc[(data["site"] == countries.loc[counter, "NAME_SHORT"]) & (
+            if float(data.loc[(data["Site"] == countries.loc[counter, "NAME_SHORT"]) & (
                     data["Process"] == p), 'inst-cap']) == 0:
                 continue
             if (countries.loc[counter, "Population"]) & (p == 'WindOff'):
@@ -731,15 +733,15 @@ def distribute_renewable_capacities(paths, param):
 
             # Sort elements based on their probability and keep the indices
             ind_sort = np.argsort(potential_new, axis=None)  # Ascending
-            ind_needed = ind_sort[-int(data.loc[(data["Site"] == name) & (data["Process"] == p), "units"].values):]
+            ind_needed = ind_sort[-int(data.loc[(data["Site"] == name) & (data["Process"] == p), "Unit"].values):]
 
             # Free memory
             del ind_sort, potential, potential_nan, potential_random
 
             # Get the coordinates of the power plants and their respective capacities
             power_plants = [units[p]] * len(ind_needed)
-            if data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[p] > 0:
-                power_plants[-1] = data.loc[(data["Site"] == name) & (data["Process"] == p), "Inst-cap"].values % units[
+            if data.loc[(data["Site"] == name) & (data["Process"] == p), "inst-cap"].values % units[p] > 0:
+                power_plants[-1] = data.loc[(data["Site"] == name) & (data["Process"] == p), "inst-cap"].values % units[
                     p]
             y_pp, x_pp = np.unravel_index(ind_needed, raster_shape)
             x = x + ((x_pp + x_off + 0.5) * param["res_desired"][1] + param["Crd_all"][3]).tolist()
@@ -749,6 +751,7 @@ def distribute_renewable_capacities(paths, param):
             del potential_new
 
         # Create map
+        import pdb; pdb.set_trace()
         map_power_plants(p, x, y, c, paths["map_power_plants"] + p + '.shp')
 
 
@@ -1656,10 +1659,10 @@ def generate_evrys_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    generate_sites_from_shapefile(paths)  # done
-    generate_intermittent_supply_timeseries(paths, param)  # separate module
-    generate_load_timeseries(paths, param)  # done - Added California's param
-    generate_commodity(paths, param)  # corresponds to 04 - done
+    #generate_sites_from_shapefile(paths)  # done
+    #generate_intermittent_supply_timeseries(paths, param)  # separate module
+    #generate_load_timeseries(paths, param)  # done - Added California's param
+    #generate_commodity(paths, param)  # corresponds to 04 - done
     distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
     if param["region"] == 'California':
         generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
@@ -1670,5 +1673,5 @@ if __name__ == '__main__':
         generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
     clean_grid_data(paths, param)  # corresponds to 06a - done
     generate_aggregated_grid(paths, param)  # corresponds to 06b - done
-    generate_urbs_model(paths, param)  # Done
-    generate_evrys_model(paths, param)
+    #generate_urbs_model(paths, param)  # Done
+    #generate_evrys_model(paths, param)
