@@ -11,22 +11,25 @@ param = {}
 param["region"] = 'Europe'
 param["model_regions"] = 'NUTS0_wo_Balkans'# 'Bavaria_WGC'
 param["year"] = year = 2015
-param["technology"] = ['WindOn', 'PV']  # 'WindOff', 'PV', 'CSP'
+param["technology"] = ['PV1']  # 'WindOff', 'PV', 'CSP'
 
 # Stratified Timeseries
-modes = {"high": [100, 95, 90, 85],
-         "mid": [80, 70, 60, 50, 40],
-         "low": [35, 20, 0]}
+# modes = {"high": [100, 95, 90, 85],
+#          "mid": [80, 70, 60, 50, 40],
+#          "low": [35, 20, 0]}
+modes = {"high": [100, 97, 95],
+         "mid": [90, 75, 67],
+         "low": [50, 30, 0]}
 param["modes"] = modes
 
-hubheight = {"WindOn1": [60, 80, 100],
+settings = {"WindOn1": [60, 80, 100],
              "WindOn2": [80, 100, 120],
              "WindOn3": [100, 120, 140],
              "WindOff1": [80],
              "WindOff2": [100],
              "WindOff3": [120],
-             "PV": []}
-param["hub_heights"] = hubheight
+             "PV1": [0, 180]}
+param["settings"] = settings
 
 # Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
@@ -269,10 +272,10 @@ paths = {}
 
 # Shapefiles
 PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
-# paths["SHP"] = PathTemp + "Germany_with_EEZ.shp"
-# paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
-paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"
-paths["SHP"] = paths["Countries"] #PathTemp + "Bavaria_WGC.shp"
+paths["SHP"] = PathTemp + "Germany_with_EEZ.shp"
+paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
+# paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"
+# paths["SHP"] = paths["Countries"] #PathTemp + "Bavaria_WGC.shp"
 if param["region"] == "California":
     paths["SHP"] = PathTemp + "CA_Regions_EM_1.shp"
     paths["Countries"] = PathTemp + "CA_Load Profiles_Regions_EM.shp"
@@ -344,19 +347,19 @@ paths["raw_TS"] = {}
 paths["reg_coef"] = {}
 paths["regression_out"] = pathtemp + "Regression_Outputs" + fs
 for tech in param["technology"]:
+    st = ''
+    settings = np.sort(np.array(param["settings"][tech]))
+    for set in settings:
+        st += '_' + str(set)
     paths["reg_coef"][tech] = \
-        paths["regression_out"] + region + '_' + tech + '_reg_coefficients.csv'
+        paths["regression_out"] + region + '_' + tech[:-1] + '_reg_coefficients' + st + '.csv'
 
 
-def ts_paths(hub_heights, tech, paths):
+def ts_paths(settings, tech, paths):
     paths["raw_TS"][tech] = {}
-    if tech in ['WindOn', 'WindOff']:
-        for height in hub_heights:
-            paths["raw_TS"][tech][str(height)] = \
-                paths["Renewable energy"] + region + '_' + tech + '_' + str(height) + '_TS_' + year + '.csv'
-    else:
-        paths["raw_TS"][tech][''] = paths["Renewable energy"] + region + '_' + tech + '_TS_' + year + '.csv'
-
+    for set in settings:
+        paths["raw_TS"][tech][set] = \
+            paths["Renewable energy"] + region + '_' + tech[:-1] + '_' + set + '_TS_' + year + '.csv'
     return paths
 
 
@@ -376,10 +379,6 @@ def ts_paths(hub_heights, tech, paths):
 # paths["df_sector"] = paths["OUT"] + 'Load' + fs + 'df_sectors.csv'
 # paths["load_sector"] = paths["OUT"] + 'Load' + fs + 'load_sector.csv'
 # paths["load_landuse"] = paths["OUT"] + 'Load' + fs + 'load_landuse.csv'
-
-# # 02 - Intermittent Supply Timeseries
-# paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries_' + str(year) + '.csv'
-# paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
 
 # # 02 - process and storage
 # paths["pro_sto"] = paths["OUT"] + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
@@ -410,6 +409,7 @@ paths["model_regions"] = pathtemp
 paths["sites"] = pathtemp + 'Sites.csv'
 paths["annual_load"] = pathtemp + 'Load_' + region + '_' + year + '.csv'
 paths["suplm_TS"] = pathtemp + 'intermittent_supply_timeseries_' + year + '.csv'
+paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
 paths["Process_agg"] = pathtemp + 'Processes_agg_2.csv'
 paths["Process_agg_bis"] = pathtemp + 'Processes_agg_3.csv'
 paths["urbs"] = pathtemp + 'urbs' + fs
