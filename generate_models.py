@@ -168,45 +168,43 @@ def generate_stratified_intermittent_supply_timeseries(paths, param):
                 continue
 
             # Extract hub heights and find the required TS
-            hub_heights = param["hub_heights"][tech]
+            settings = np.sort(np.array(param["settings"][tech])).astype(str)
             regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
             quantiles = param["modes"][m]
 
             # Read the timeseries
             TS = {}
-            paths = ts_paths(hub_heights, tech, paths)
-            if 'WindOn' == tech[:-1]:
-                tech = 'WindOn'
-            elif 'WindOff' == tech[:-1]:
-                tech = 'WindOff'
+            paths = ts_paths(settings, tech, paths)
 
-            for height in hub_heights:
-                TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
-                                         sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+            for set in settings:
+                TS[set] = pd.read_csv(paths["raw_TS"][tech][set],
+                                      sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
 
             # Prepare Dataframe to be filled
+            tech = tech[:-1]
             TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
             sumcoef = {}
             for reg in regions:
                 sumcoef[reg] = 0
-                for height in hub_heights:
+                for set in settings:
                     for quan in quantiles:
-                        if height != '':
+                        if set != '':
                             TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
-                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg + '_' + height].loc[
-                                                            quan])
-                            sumcoef[reg] = sumcoef[reg] + Coef[reg + '_' + height].loc[quan]
+                                                        (TS[set][reg, 'q' + str(quan)] *
+                                                         Coef[reg + '_' + set].loc[
+                                                             quan])
+                            sumcoef[reg] = sumcoef[reg] + Coef[reg + '_' + set].loc[quan]
                         else:
                             TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
-                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
+                                                        (TS[set][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
                             sumcoef[reg] = sumcoef[reg] + Coef[reg].loc[quan]
 
                 # If coef are zero compute average of the timeseries
                 if sumcoef[reg] == 0:
-                    for height in hub_heights:
+                    for set in settings:
                         for quan in quantiles:
-                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + TS[height][reg, 'q' + str(quan)]
-                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / (len(quantiles) * len(hub_heights))
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + TS[set][reg, 'q' + str(quan)]
+                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / (len(quantiles) * len(settings))
                 # else TS = TS / sum(Coef)
                 else:
                     TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / sumcoef[reg]
@@ -596,7 +594,6 @@ def generate_load_timeseries(paths, param):
     annual_load.to_csv(paths["annual_load"], sep=',', index=True)
     print("File Saved: " + paths["annual_load"])
 
-
     df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_demand"])
 
@@ -751,7 +748,8 @@ def distribute_renewable_capacities(paths, param):
             del potential_new
 
         # Create map
-        import pdb; pdb.set_trace()
+        import pdb;
+        pdb.set_trace()
         map_power_plants(p, x, y, c, paths["map_power_plants"] + p + '.shp')
 
 
@@ -1599,7 +1597,7 @@ def generate_urbs_model(paths, param):
 
     # Verify Commodity
     missing_commodities = urbs_model["Process-Commodity"]["Commodity"].loc[
-            ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
+        ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
     if len(missing_commodities) > 0:
         print("Error: Missing Commodities from Process-Commodity: ")
         print(missing_commodities)
@@ -1659,19 +1657,20 @@ def generate_evrys_model(paths, param):
 
 if __name__ == '__main__':
     paths, param = initialization()
-    #generate_sites_from_shapefile(paths)  # done
-    #generate_intermittent_supply_timeseries(paths, param)  # separate module
-    #generate_load_timeseries(paths, param)  # done - Added California's param
-    #generate_commodity(paths, param)  # corresponds to 04 - done
-    distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
-    if param["region"] == 'California':
-        generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
-    else:
-        clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
-        clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
-        generate_processes(paths, param)  # corresponds to 05c - done
-        generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    clean_grid_data(paths, param)  # corresponds to 06a - done
-    generate_aggregated_grid(paths, param)  # corresponds to 06b - done
-    #generate_urbs_model(paths, param)  # Done
-    #generate_evrys_model(paths, param)
+    # generate_sites_from_shapefile(paths)  # done
+    # generate_intermittent_supply_timeseries(paths, param)  # separate module
+    generate_stratified_intermittent_supply_timeseries(paths, param)
+    # generate_load_timeseries(paths, param)  # done - Added California's param
+    # generate_commodity(paths, param)  # corresponds to 04 - done
+    # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
+    # if param["region"] == 'California':
+    #     generate_processes_and_storage_california(paths, param)  # done (Still needs testing)
+    # else:
+    #     clean_processes_and_storage_data(paths, param)  # corresponds to 05b I think - done
+    #     clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
+    #     generate_processes(paths, param)  # corresponds to 05c - done
+    #     generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
+    # clean_grid_data(paths, param)  # corresponds to 06a - done
+    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    # generate_urbs_model(paths, param)  # Done
+    # generate_evrys_model(paths, param)
