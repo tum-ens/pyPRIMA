@@ -13,6 +13,21 @@ param["model_regions"] = 'NUTS0_wo_Balkans'# 'Bavaria_WGC'
 param["year"] = year = 2015
 param["technology"] = ['WindOn', 'PV']  # 'WindOff', 'PV', 'CSP'
 
+# Stratified Timeseries
+modes = {"high": [100, 95, 90, 85],
+         "mid": [80, 70, 60, 50, 40],
+         "low": [35, 20, 0]}
+param["modes"] = modes
+
+hubheight = {"WindOn1": [60, 80, 100],
+             "WindOn2": [80, 100, 120],
+             "WindOn3": [100, 120, 140],
+             "WindOff1": [80],
+             "WindOff2": [100],
+             "WindOff3": [120],
+             "PV": []}
+param["hub_heights"] = hubheight
+
 # Models input file Sheets
 param["urbs_model_sheets"] = ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
                               'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price']
@@ -307,8 +322,10 @@ paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + f
 
 # ## Renewable Capacities
 # Rasters for wind and solar
+
 timestamp = '20190617T142740'
 pathtemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Renewable energy" + fs + timestamp + fs
+
 paths["Renewable energy"] = pathtemp
 rasters = {'WindOn': pathtemp + 'Europe_WindOn_FLH_mask_2015.tif',
            'WindOff': pathtemp + 'Europe_WindOff_FLH_mask_2015.tif',
@@ -347,6 +364,37 @@ def ts_paths(hub_heights, tech, paths):
 #     General Ouputs Folders     #
 ##################################
 
+
+# paths["OUT"] = root + '02 Intermediate files' + fs + 'Files ' + region + fs
+
+# 02 - Site
+# paths["model_regions"] = paths["OUT"] + 'Regions' + fs + model_regions + fs
+# paths["sites"] = paths["model_regions"] + 'Sites.csv'
+
+# # 02 - load
+# paths["load"] = paths["OUT"] + 'Load' + fs + 'Load_' + str(param["year"]) + '.csv'
+# paths["df_sector"] = paths["OUT"] + 'Load' + fs + 'df_sectors.csv'
+# paths["load_sector"] = paths["OUT"] + 'Load' + fs + 'load_sector.csv'
+# paths["load_landuse"] = paths["OUT"] + 'Load' + fs + 'load_landuse.csv'
+
+# # 02 - Intermittent Supply Timeseries
+# paths["suplm_TS"] = paths["model_regions"] + 'intermittent_supply_timeseries_' + str(year) + '.csv'
+# paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
+
+# # 02 - process and storage
+# paths["pro_sto"] = paths["OUT"] + 'Processes_and_Storage_' + str(param["year"]) + '.shp'
+# paths["map_power_plants"] = paths["model_regions"]
+# paths["PPs_"] = paths["map_power_plants"]
+
+# paths["process_raw"] = paths["OUT"] + 'Processes_raw_FRESNA2_2.csv'
+# paths["Process_agg"] = paths["OUT"] + 'Processes_agg_FRESNA2_2.csv'
+# paths["Process_agg_bis"] = paths["OUT"] + 'Processes_agg_FRESNA2_3.csv'
+
+# 02 - Grid
+# paths["grid_shp"] = paths["OUT"] + 'Grid' + fs + 'grid_cleaned_shape.shp'
+# paths["grid_cleaned"] = paths["OUT"] + 'Grid' + fs + 'GridKit_cleaned.csv'
+# paths["map_grid_plants"] = paths["OUT"] + 'maps' + fs + 'random_points.shp'
+
 # Intermediate files
 pathtemp = root + '03 Intermediate files' + fs + 'Files ' + region + fs
 paths["load"] = pathtemp + 'Load' + fs
@@ -371,6 +419,7 @@ if not os.path.isdir(paths["urbs"]):
     os.mkdir(paths["urbs"])
 if not os.path.isdir(paths["evrys"]):
     os.mkdir(paths["evrys"])
+
 
 # urbs
 paths["urbs_sites"] = paths["urbs"] + 'Site_urbs_' + year + '.csv'

@@ -149,6 +149,79 @@ def generate_intermittent_supply_timeseries(paths, param):
     timecheck('End')
 
 
+def generate_stratified_intermittent_supply_timeseries(paths, param):
+    '''
+    description
+    '''
+    timecheck('Start')
+    modes = param["modes"].keys()
+    # Loop Over the modes
+    for m in modes:
+        Timeseries = None
+        # Loop over the technologies
+        for tech in param["technology"]:
+            # Read coefs
+            if os.path.isfile(paths["reg_coef"][tech]):
+                Coef = pd.read_csv(paths["reg_coef"][tech], sep=';', decimal=',', index_col=[0])
+            else:
+                print("No regression Coefficients found for " + tech)
+                continue
+
+            # Extract hub heights and find the required TS
+            hub_heights = param["hub_heights"][tech]
+            regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
+            quantiles = param["modes"][m]
+
+            # Read the timeseries
+            TS = {}
+            paths = ts_paths(hub_heights, tech, paths)
+            if 'WindOn' == tech[:-1]:
+                tech = 'WindOn'
+            elif 'WindOff' == tech[:-1]:
+                tech = 'WindOff'
+
+            for height in hub_heights:
+                TS[height] = pd.read_csv(paths["raw_TS"][tech][height],
+                                         sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
+
+            # Prepare Dataframe to be filled
+            TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
+            sumcoef = {}
+            for reg in regions:
+                sumcoef[reg] = 0
+                for height in hub_heights:
+                    for quan in quantiles:
+                        if height != '':
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg + '_' + height].loc[
+                                                            quan])
+                            sumcoef[reg] = sumcoef[reg] + Coef[reg + '_' + height].loc[quan]
+                        else:
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
+                                                        (TS[height][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
+                            sumcoef[reg] = sumcoef[reg] + Coef[reg].loc[quan]
+
+                # If coef are zero compute average of the timeseries
+                if sumcoef[reg] == 0:
+                    for height in hub_heights:
+                        for quan in quantiles:
+                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + TS[height][reg, 'q' + str(quan)]
+                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / (len(quantiles) * len(hub_heights))
+                # else TS = TS / sum(Coef)
+                else:
+                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / sumcoef[reg]
+
+            TS_tech.set_index(np.arange(1, 8761), inplace=True)
+            if Timeseries is None:
+                Timeseries = TS_tech.copy()
+            else:
+                Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
+
+            Timeseries.to_csv(paths["strat_TS"] + tech + '_' + m + '.csv', sep=';', decimal=',')
+            print("File Saved: " + paths["strat_TS"] + tech + '_' + m + '.csv')
+    timecheck('End')
+
+
 def generate_load_timeseries(paths, param):
     '''
     The goal of this script is to extract and preprocess data to be used as load timeseries for every site modeled in evrys and urbs. The data is extracted from excel spreadsheets and raster maps, and output into two .csv files. The data needs to be disaggregated sectorially and spatially before being aggregated again into regions, formatted, and exported.
@@ -303,9 +376,9 @@ def generate_load_timeseries(paths, param):
         for i in stat.index:
             stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
 
-    if not (os.path.isfile(paths["load"] + 'df_sectors.csv') and
-            os.path.isfile(paths["load"] + 'load_sector.csv') and
-            os.path.isfile(paths["load"] + 'load_landuse.csv')):
+    if not (os.path.isfile(paths["df_sector"]) and
+            os.path.isfile(paths["load_sector"]) and
+            os.path.isfile(paths["load_landuse"])):
 
         countries = gpd.read_file(paths["Countries"])
         if param["region"] == 'California':
@@ -380,17 +453,17 @@ def generate_load_timeseries(paths, param):
                     display_progress("Computing regions load", (length, status))
 
         # Save the data into HDF5 files for faster execution
-        df_sectors.to_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', index=False, header=True)
-        print("Dataframe df_sector saved: " + paths["load"] + 'df_sector.csv')
-        load_sector.to_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index=True, header=True)
-        print("Dataframe load_sector saved: " + paths["load"] + 'load_sector.csv')
-        load_landuse.to_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index=True)
-        print("Dataframe load_landuse saved: " + paths["load"] + 'load_landuse.csv')
+        df_sectors.to_csv(paths["df_sector"], sep=';', decimal=',', index=False, header=True)
+        print("Dataframe df_sector saved: " + paths["df_sector"])
+        load_sector.to_csv(paths["load_sector"], sep=';', decimal=',', index=True, header=True)
+        print("Dataframe load_sector saved: " + paths["load_sector"])
+        load_landuse.to_csv(paths["load_landuse"], sep=';', decimal=',', index=True)
+        print("Dataframe load_landuse saved: " + paths["load_landuse"])
 
     # Read CSV files
-    df_sectors = pd.read_csv(paths["load"] + 'df_sectors.csv', sep=';', decimal=',', header=[0, 1])
-    load_sector = pd.read_csv(paths["load"] + 'load_sector.csv', sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
-    load_landuse = pd.read_csv(paths["load"] + 'load_landuse.csv', sep=';', decimal=',', index_col=[0, 1])
+    df_sectors = pd.read_csv(paths["df_sector"], sep=';', decimal=',', header=[0, 1])
+    load_sector = pd.read_csv(paths["load_sector"], sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
+    load_landuse = pd.read_csv(paths["load_landuse"], sep=';', decimal=',', index_col=[0, 1])
 
     # Split regions into subregions
     # (a region can overlap with many countries, but a subregion belongs to only one country)
@@ -519,8 +592,10 @@ def generate_load_timeseries(paths, param):
     annual_load = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
 
     # Output
+
     annual_load.to_csv(paths["annual_load"], sep=',', index=True)
     print("File Saved: " + paths["annual_load"])
+
 
     df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
     print("File Saved: " + paths["urbs_demand"])
