@@ -16,7 +16,7 @@ import os
 import glob
 import shutil
 from scipy.ndimage import convolve
-import datetime
+
 
 
 gdal.PushErrorHandler('CPLQuietErrorHandler')

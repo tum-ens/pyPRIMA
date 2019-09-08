@@ -8,18 +8,18 @@ from pathlib import Path
 ###########################
 
 param = {}
-param["region"] = 'Europe'
+param["region"] = 'Europe_wo_balkans'
 param["model_regions"] = 'NUTS0_wo_Balkans'# 'Bavaria_WGC'
 param["year"] = year = 2015
-param["technology"] = ['PV1']  # 'WindOff', 'PV', 'CSP'
+param["technology"] = ['WindOn3']  # 'WindOff', 'PV', 'CSP'
 
 # Stratified Timeseries
 # modes = {"high": [100, 95, 90, 85],
 #          "mid": [80, 70, 60, 50, 40],
 #          "low": [35, 20, 0]}
-modes = {"high": [100, 97, 95],
-         "mid": [90, 75, 67],
-         "low": [50, 30, 0]}
+modes = {"high": [100, 90, 80],
+         "mid": [70, 60, 50, 40, 30],
+         "low": [20, 10, 0]}
 param["modes"] = modes
 
 settings = {"WindOn1": [60, 80, 100],
@@ -28,7 +28,7 @@ settings = {"WindOn1": [60, 80, 100],
              "WindOff1": [80],
              "WindOff2": [100],
              "WindOff3": [120],
-             "PV1": [0, 180]}
+             "PV1": [0, 180, -90, 90]}
 param["settings"] = settings
 
 # Models input file Sheets
@@ -272,8 +272,8 @@ paths = {}
 
 # Shapefiles
 PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
-paths["SHP"] = PathTemp + "Germany_with_EEZ.shp"
-paths["Countries"] = PathTemp + "gadm36_DEU_0.shp"  # No EEZ!
+paths["SHP"] = PathTemp + "Europe_NUTS0_wo_Balkans_with_EEZ.shp"
+paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"  # No EEZ!
 # paths["Countries"] = PathTemp + "Europe_NUTS0_wo_Balkans.shp"
 # paths["SHP"] = paths["Countries"] #PathTemp + "Bavaria_WGC.shp"
 if param["region"] == "California":
@@ -326,7 +326,7 @@ paths["grid"] = root + '01 Raw inputs' + fs + 'Grid' + fs + 'gridkit_europe' + f
 # ## Renewable Capacities
 # Rasters for wind and solar
 
-timestamp = '20190617T142740'
+timestamp = '4NEMO'
 pathtemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Renewable energy" + fs + timestamp + fs
 
 paths["Renewable energy"] = pathtemp
@@ -416,9 +416,9 @@ paths["urbs"] = pathtemp + 'urbs' + fs
 paths["evrys"] = pathtemp + 'evrys' + fs
 
 if not os.path.isdir(paths["urbs"]):
-    os.mkdir(paths["urbs"])
+    os.makedirs(paths["urbs"])
 if not os.path.isdir(paths["evrys"]):
-    os.mkdir(paths["evrys"])
+    os.makedirs(paths["evrys"])
 
 
 # urbs
