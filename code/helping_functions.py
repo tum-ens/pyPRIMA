@@ -1,33 +1,282 @@
-from osgeo import gdal, ogr, gdalnumeric
-from osgeo.gdalconst import GA_ReadOnly
-import pandas as pd
-from pandas import ExcelWriter
-import geopandas as gpd
-import numpy as np
-from shapely import geometry
-from shapely.geometry import Point
-import shapefile as shp
-import pysal as ps
-from geopy import distance
-import sys
-import datetime
-import inspect
-import os
-import glob
-import shutil
-from scipy.ndimage import convolve
+from util import *
+
+def define_spatial_scope(scope_shp):
+    """
+    Missing description
+
+    :param scope_shp:
+    :return:
+    """
+    scope_shp = scope_shp.to_crs({'init': 'epsg:4326'})
+    r = scope_shp.total_bounds
+    box = r[::-1][np.newaxis]
+    return box
 
 
+def calc_geotiff(Crd_all, res_desired):
+    """
+    Returns dictionary containing the Georefferencing parameters for geotiff creation,
+    based on the desired extent and resolution
 
-gdal.PushErrorHandler('CPLQuietErrorHandler')
+    :param Crd_all: Extent
+    :type Crd_all: list
+
+    :param res_desired: resolution
+    :type res_desired: list
+
+    :return GeoRef: Dictionary containing ``RasterOrigin``, ``RasterOrigin_alt``, ``pixelWidth``, and ``pixelHeight``
+    :rtype: dict
+    """
+    GeoRef = {"RasterOrigin": [Crd_all[3], Crd_all[0]],
+              "RasterOrigin_alt": [Crd_all[3], Crd_all[2]],
+              "pixelWidth": res_desired[1],
+              "pixelHeight": -res_desired[0]}
+    return GeoRef
 
 
-def clean_load_data(paths, param, countries):
+def calc_region(region, Crd_reg, res_desired, GeoRef):
+    """
+    Missing description
+
+    :param region:
+    :param Crd_reg:
+    :param res_desired:
+    :param GeoRef:
+    :return:
+    """
+    latlim = Crd_reg[2] - Crd_reg[0]
+    lonlim = Crd_reg[3] - Crd_reg[1]
+    M = int(math.fabs(latlim) / res_desired[0])
+    N = int(math.fabs(lonlim) / res_desired[1])
+    A_region = np.ones((M, N))
+    origin = [Crd_reg[3], Crd_reg[2]]
+
+    if region.geometry.geom_type == 'MultiPolygon':
+        features = [feature for feature in region.geometry]
+    else:
+        features = [region.geometry]
+    west = origin[0]
+    south = origin[1]
+    profile = {'driver': 'GTiff',
+               'height': M,
+               'width': N,
+               'count': 1,
+               'dtype': rasterio.float64,
+               'crs': 'EPSG:4326',
+               'transform': rasterio.transform.from_origin(west, south, GeoRef["pixelWidth"], GeoRef["pixelHeight"])}
+
+    with MemoryFile() as memfile:
+        with memfile.open(**profile) as f:
+            f.write(A_region, 1)
+            out_image, out_transform = mask.mask(f, features, crop=False, nodata=0, all_touched=False, filled=True)
+        A_region = out_image[0]
+
+    return A_region
+    
+    
+def ind_global(Crd, res_desired):
+    """
+    This function converts longitude and latitude coordinates into indices on a global data scope, where the origin is at (-90, -180).
+
+    :param Crd: Coordinates to be converted into indices.
+    :type Crd: numpy array
+    :param res_desired: Desired resolution in the vertical and horizontal dimensions.
+    :type res_desired: list
+    
+    :return Ind: Indices on a global data scope.
+    :rtype: numpy array
+    """
+    if len(Crd.shape) == 1:
+        Crd = Crd[np.newaxis]
+    Ind = np.array([np.round((90 - Crd[:, 0]) / res_desired[0]) + 1,
+                    np.round((180 + Crd[:, 1]) / res_desired[1]),
+                    np.round((90 - Crd[:, 2]) / res_desired[0]),
+                    np.round((180 + Crd[:, 3]) / res_desired[1]) + 1])
+    Ind = np.transpose(Ind.astype(int))
+    return Ind
+
+
+def generate_landsea(paths, param):
+    """
+    This function reads the shapefiles of the countries (land areas) and of the exclusive economic zones (sea areas)
+    within the scope, and creates two rasters out of them.
+
+    :param paths: Dictionary including the paths *LAND* and *EEZ*.
+    :type paths: dict
+    :param param: Dictionary including the geodataframes of the shapefiles, the number of features, the coordinates of the bounding box of the spatial scope, and the number of rows and columns.
+    :type param: dict
+    :return: The tif files for *LAND* and *EEZ* are saved in their respective paths, along with their metadata in JSON files.
+    :rtype: None
+    """
+    m_high = param["m_high"]
+    n_high = param["n_high"]
+    Crd_all = param["Crd_all"]
+    res_desired = param["res_desired"]
+    GeoRef = param["GeoRef"]
+    nRegions_land = param["nRegions_land"]
+    nRegions_sea = param["nRegions_sea"]
+
+    timecheck('Start Land')
+    # Extract land areas
+    countries_shp = param["regions_land"]
+    Crd_regions_land = param["Crd_regions"][:nRegions_land]
+    Ind = ind_merra(Crd_regions_land, Crd_all, res_desired)
+    A_land = np.zeros((m_high, n_high))
+    status = 0
+    for reg in range(0, param["nRegions_land"]):
+        # Show status bar
+        status = status + 1
+        sys.stdout.write('\r')
+        sys.stdout.write('Creating A_land ' + '[%-50s] %d%%' % (
+            '=' * ((status * 50) // nRegions_land), (status * 100) // nRegions_land))
+        sys.stdout.flush()
+
+        # Calculate A_region
+        A_region = calc_region(countries_shp.iloc[reg], Crd_regions_land[reg, :], res_desired, GeoRef)
+
+        # Include A_region in A_land
+        A_land[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] = \
+            A_land[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] + A_region
+    # Saving file
+    array2raster(paths["LAND"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_land)
+    create_json(paths["LAND"], param,
+                ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_land"], paths,
+                ["Countries", "LAND"])
+    print('\nfiles saved: ' + paths["LAND"])
+    timecheck('Finish Land')
+
+    timecheck('Start Sea')
+    # Extract sea areas
+    eez_shp = param["regions_sea"]
+    Crd_regions_sea = param["Crd_regions"][-nRegions_sea:]
+    Ind = ind_merra(Crd_regions_sea, Crd_all, res_desired)
+    A_sea = np.zeros((m_high, n_high))
+    status = 0
+    for reg in range(0, param["nRegions_sea"]):
+        # Show status bar
+        status = status + 1
+        sys.stdout.write('\r')
+        sys.stdout.write('Creating A_sea ' + '[%-50s] %d%%' % (
+            '=' * ((status * 50) // param["nRegions_sea"]), (status * 100) // param["nRegions_sea"]))
+        sys.stdout.flush()
+
+        # Calculate A_region
+        A_region = calc_region(eez_shp.iloc[reg], Crd_regions_sea[reg, :], res_desired, GeoRef)
+
+        # Include A_region in A_sea
+        A_sea[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] = \
+            A_sea[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] + A_region
+
+    # Fixing pixels on the borders to avoid duplicates
+    A_sea[A_sea > 0] = 1
+    A_sea[A_land > 0] = 0
+    # Saving file
+    array2raster(paths["EEZ"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_sea)
+    create_json(paths["EEZ"], param,
+                ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_sea"], paths,
+                ["EEZ_global", "EEZ"])
+    print('\nfiles saved: ' + paths["EEZ"])
+    timecheck('Finish Sea')
+    
+    
+def generate_landuse(paths, param):
+    """
+    This function reads the global map of land use, and creates a raster out of it for the desired scope.
+    There are 17 discrete possible values from 0 to 16, corresponding to different land use classes.
+    See :mod:`config.py` for more information on the land use map.
+
+    :param paths: Dictionary including the paths to the global land use raster *LU_global* and to the output path *LU*.
+    :type paths: dict
+    :param param: Dictionary including the desired resolution, the coordinates of the bounding box of the spatial scope, and the georeference dictionary.
+    :type param: dict
+    :return: The tif file for *LU* is saved in its respective path, along with its metadata in a JSON file.
+    :rtype: None
+    """
+
+    timecheck('Start')
+    res_desired = param["res_desired"]
+    Crd_all = param["Crd_all"]
+    Ind = ind_global(Crd_all, res_desired)[0]
+    GeoRef = param["GeoRef"]
+    with rasterio.open(paths["LU_global"]) as src:
+        w = src.read(1, window=windows.Window.from_slices(slice(Ind[0] - 1, Ind[2]),
+                                                          slice(Ind[3] - 1, Ind[1])))
+    w = np.flipud(w)
+    array2raster(paths["LU"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], w)
+    create_json(paths["LU"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["LU_global", "LU"])
+    print("files saved: " + paths["LU"])
+    timecheck('End')
+    
+
+def generate_population(paths, param):
+    """
+    This function reads the tiles that make the global map of population, picks those that lie completely or partially in the scope,
+    and creates a raster out of them for the desired scope. The values are in population by pixel.
+
+    :param paths: Dictionary including the paths to the tiles of the global population raster Pop_tiles and to the output path POP.
+    :type paths: dict
+    :param param: Dictionary including the desired resolution, the coordinates of the bounding box of the spatial scope, and the georeference dictionary.
+    :type param: dict
+    :return: The tif file for POP is saved in its respective path, along with its metadata in a JSON file.
+    :rtype: None
+    """
+    timecheck('Start')
+    res_desired = param["res_desired"]
+    Crd_all = param["Crd_all"]
+    Ind = ind_global(Crd_all, res_desired)[0]
+    GeoRef = param["GeoRef"]
+    Pop = np.zeros((180 * 240, 360 * 240))
+    tile_extents = np.zeros((24, 4), dtype=int)
+    i = 1
+    j = 1
+
+    for letter in char_range('A', 'X'):
+        north = (i - 1) * 45 * 240 + 1
+        east = j * 60 * 240
+        south = i * 45 * 240
+        west = (j - 1) * 60 * 240 + 1
+        tile_extents[ord(letter) - ord('A'), :] = [north, east, south, west]
+        j = j + 1
+        if j == 7:
+            i = i + 1
+            j = 1
+    n_min = (Ind[0] // (45 * 240)) * 45 * 240 + 1
+    e_max = (Ind[1] // (60 * 240) + 1) * 60 * 240
+    s_max = (Ind[2] // (45 * 240) + 1) * 45 * 240
+    w_min = (Ind[3] // (60 * 240)) * 60 * 240 + 1
+
+    need = np.logical_and((np.logical_and((tile_extents[:, 0] >= n_min), (tile_extents[:, 1] <= e_max))),
+                          np.logical_and((tile_extents[:, 2] <= s_max), (tile_extents[:, 3] >= w_min)))
+
+    status = 0
+    for letter in char_range('A', 'X'):
+        index = ord(letter) - ord('A')
+        if need[index]:
+            # Show status bar
+            status = status + 1
+            sys.stdout.write('\r')
+            sys.stdout.write('Generating population map from tiles ' + '[%-50s] %d%%' % (
+                '=' * ((status * 50) // sum(need)), (status * 100) // sum(need)))
+            sys.stdout.flush()
+
+            with rasterio.open(paths["Pop_tiles"] + letter + '.tif') as src:
+                tile = src.read()
+            Pop[tile_extents[index, 0] - 1: tile_extents[index, 2],
+            tile_extents[index, 3] - 1: tile_extents[index, 1]] = \
+                tile[0]
+
+    A_POP = np.flipud(Pop[Ind[0] - 1:Ind[2], Ind[3] - 1:Ind[1]])
+    array2raster(paths["POP"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_POP)
+    create_json(paths["POP"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["Pop_tiles", "POP"])
+    print("\nfiles saved: " + paths["POP"])
+    timecheck('End')
+    
+    
+def clean_load_data(paths, param):
     """
 
     :param paths:
     :param param:
-    :param countries:
     :return:
     """
     timecheck('Start')
@@ -52,30 +301,26 @@ def clean_load_data(paths, param, countries):
     df_reshaped = pd.DataFrame(data, index=np.arange(data.shape[0]), columns=df_scaled['Country'].unique())
 
     # Rename countries
-    df_renamed = df_reshaped.T.rename(index=param["load"]["dict_countries"])
-    df_renamed = df_renamed.reset_index().rename(columns={'index': 'Country'})
-    df_renamed = df_renamed.groupby(['Country']).sum()
-    df_renamed.reset_index(inplace=True)
-
-    # Reshape Renamed_df
-    df_reshaped_renamed = pd.DataFrame(df_renamed.loc[:, df_renamed.columns != 'Country'].T.to_numpy(),
-                                       columns=df_renamed['Country'])
-
-    # Create time series for missing countries
-    df_completed = df_reshaped_renamed.copy()
-    missing_countries = param["load"]["missing_countries"]
-    replacement = param["load"]["replacement"]
-    for i in missing_countries.keys():
-        df_completed.loc[:, i] = df_completed.loc[:, replacement] / df_completed[replacement].sum() * missing_countries[
-            i]
-
-    # Select only countries needed
-
-    df_filtered = df_completed[countries['Country'].unique()]
+    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["ENTSO-E"], usecols=["ENTSO-E", "Countries shapefile"])
+    dict_countries = dict_countries.loc[dict_countries.index.dropna()]["Countries shapefile"].to_dict()
+    dict_countries_old = dict_countries.copy()
+    for k, v in dict_countries_old.items():
+        if ", " in k:
+            keys = k.split(', ')
+            for kk in keys:
+                dict_countries[kk] = v
+            del dict_countries[k]
+    df_renamed = df_reshaped.rename(columns=dict_countries)
+    
+    # Group countries with same name  
+    df_grouped = df_renamed.T
+    df_grouped = df_grouped.reset_index().rename(columns={'index': 'Country'})
+    df_grouped = df_grouped.groupby(['Country']).sum().T
+    df_grouped.reset_index(inplace=True, drop=True)
 
     # Fill missing data by values from the day before, adjusted based on the trend of the previous five hours
-    df_filled = df_filtered.copy()
-    for i, j in np.argwhere(np.isnan(df_filtered.values)):
+    df_filled = df_grouped.copy()
+    for i, j in np.argwhere(df_filled.values==0):
         df_filled.iloc[i, j] = df_filled.iloc[i - 5:i, j].sum() / df_filled.iloc[i - 5 - 24:i - 24, j].sum() * \
                                df_filled.iloc[i - 24, j].sum()
 
@@ -83,15 +328,70 @@ def clean_load_data(paths, param, countries):
     return df_filled
 
 
+def clean_sector_shares(paths, param):
+    """
+    For data from Eurostat, table: [nrg_105a]
+    GEO: Choose all countries, but not EU
+    INDIC_NRG: Choose all indices
+    PRODUCT: Electrical energy (code 6000)
+    TIME: Choose years
+    UNIT: GWh
+    Download in one single csv file
+    """
+    timecheck('Start')
+    
+    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["EUROSTAT"], usecols=["EUROSTAT", "Countries shapefile"])
+    dict_countries = dict_countries.loc[dict_countries.index.dropna()]["Countries shapefile"].to_dict()
+    dict_sectors = param["load"]["sectors_eurostat"]
+    
+    df_raw = pd.read_csv(paths["sector_shares"], sep=',', decimal='.',
+                         index_col=["TIME", "GEO", "INDIC_NRG"],
+                         usecols=["TIME", "GEO", "INDIC_NRG", "Value"])
+         
+    # Filter the data
+    filter_year = [param["year"]]
+    filter_countries = list(dict_countries.keys())
+    filter_indices = list(param["load"]["sectors_eurostat"].keys())
+    filter_all = pd.MultiIndex.from_product([filter_year, filter_countries, filter_indices], names=["Year", "Country", "Sector"])
+    df_filtered = df_raw.loc[filter_all]
+    
+    # Reclassify
+    df_reclassified = df_filtered.reset_index()
+    df_reclassified.drop(["Year"], axis=1, inplace=True)
+    for ind in df_reclassified.index:
+        df_reclassified.loc[ind, "Country"] = dict_countries[df_reclassified.loc[ind, "Country"]]
+        df_reclassified.loc[ind, "Sector"] = dict_sectors[df_reclassified.loc[ind, "Sector"]]
+        try:
+            df_reclassified.loc[ind, "Value"] = float(df_reclassified.loc[ind, "Value"].replace(" ", ""))
+        except:
+            df_reclassified.loc[ind, "Value"] = 0
+    
+    # Normalize
+    total = df_reclassified.groupby(["Country"]).sum()["Value"]
+    df_normalized = df_reclassified.groupby(["Country", "Sector"]).sum()
+    df_normalized.reset_index(inplace=True)
+    for ind in df_normalized.index:
+        if not total[df_normalized.loc[ind, "Country"]]:
+            df_normalized.loc[ind, "Value"] = 0
+        else:
+            df_normalized.loc[ind, "Value"] = df_normalized.loc[ind, "Value"] / total[df_normalized.loc[ind, "Country"]]
+    
+    # Reshape
+    df_reshaped = df_normalized.pivot(index="Country", columns="Sector", values="Value")
+
+    timecheck('End')
+    return df_reshaped
+
 def get_sectoral_profiles(paths, param):
     '''
-    Read and store the load profile for each sector in the table 'profiles'.
+    Read and store the normalized (sum over the year = 1) load profile for each sector in the dataframe *profiles*.
     '''
     timecheck('Start')
-    dict_daytype = param["load"]["dict_daytype"]
-    dict_season = param["load"]["dict_season"]
+    dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
+    dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
+    profiles_paths = paths["profiles"]
 
-    # Prepare the dataframe for the daily load:
+    # Prepare the dataframe for the daily load
     start = datetime.datetime(param["year"], 1, 1)
     end = datetime.datetime(param["year"], 12, 31)
     hours = [str(x) for x in list(range(0, 24))]
@@ -99,15 +399,13 @@ def get_sectoral_profiles(paths, param):
     time_series['Date'] = pd.date_range(start, end)
     time_series['Day'] = [dict_daytype[time_series.loc[i, 'Date'].day_name()] for i in time_series.index]
     time_series['Season'] = [dict_season[time_series.loc[i, 'Date'].month] for i in time_series.index]
+    
+    # Prepare the dataframe for the yearly load per sector
+    profiles = pd.DataFrame(columns=param["load"]["sectors"])
 
     # Residential load
-    if param["Region"] == "California":
-        residential_profile_raw = pd.read_excel(paths["profiles_ca"]["RES"], header=[0])
-        residential_profile = residential_profile_raw.ilco[:365, 2:].values
-        residential_profile = np.reshape(residential_profile, (8760, 1))
-
-    else:
-        residential_profile_raw = pd.read_excel(paths["profiles"]["RES"], header=[3, 4], skipinitialspace=True)
+    if 'RES' in param["load"]["sectors"]:
+        residential_profile_raw = pd.read_excel(profiles_paths["RES"], header=[3, 4], skipinitialspace=True)
         residential_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
                                                 'Werktag': 'Working day', 'Sonntag/Feiertag': 'Sunday',
                                                 'Samstag': 'Saturday'}, inplace=True)
@@ -117,59 +415,43 @@ def get_sectoral_profiles(paths, param):
                 residential_profile_raw[(residential_profile.loc[i, 'Season'], residential_profile.loc[i, 'Day'])])
         # Reshape the hourly load in one vector, where the rows are the hours of the year
         residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order='C')
-    profiles = pd.DataFrame(residential_profile / residential_profile.sum(), columns=['RES'])
+        profiles['RES'] = residential_profile / residential_profile.sum()
 
     # Industrial load
     if 'IND' in param["load"]["sectors"]:
-        if param["Region"] == "California":
-            industrial_profile_raw = pd.read_excel(paths["profiles_ca"]["IND"], header=0)
-            industrial_profile = industrial_profile_raw.iloc[:365, 2:].values
-            industrial_profile = np.reshape(industrial_profile, (8760, 1))
-        else:
-            industrial_profile_raw = pd.read_excel(paths["profiles"]["IND"], header=0)
-            industrial_profile_raw.rename(columns={'Stunde': 'Hour', 'Last': 'Load'}, inplace=True)
-            # Reshape the hourly load in one vector, where the rows are the hours of the year
-            industrial_profile = np.tile(industrial_profile_raw['Load'].values, 365)
+        industrial_profile_raw = pd.read_excel(profiles_paths["IND"], header=0)
+        industrial_profile_raw.rename(columns={'Stunde': 'Hour', 'Last': 'Load'}, inplace=True)
+        # Reshape the hourly load in one vector, where the rows are the hours of the year
+        industrial_profile = np.tile(industrial_profile_raw['Load'].values, 365)
         profiles['IND'] = industrial_profile / industrial_profile.sum()
-
+    
     # Commercial load
     if 'COM' in param["load"]["sectors"]:
-        if param["Region"] == "California":
-            commercial_profile_raw = pd.read_excel(paths["profiles_ca"]["COM"], header=0)
-            commercial_profile = commercial_profile_raw.iloc[:365, 2:].values
-            commercial_profile = np.reshape(commercial_profile, (8760, 1))
-        else:
-            commercial_profile_raw = pd.read_csv(paths["profiles"]["COM"], sep='[;]', engine='python', decimal=',',
-                                                 skiprows=[0, 99], header=[0, 1],
-                                                 skipinitialspace=True)
-            # commercial_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-            #                                     'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
-            #                               inplace=True)
-            commercial_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-                                                   'Werktag': 'Working day', 'Sonntag': 'Sunday',
-                                                   'Samstag': 'Saturday'},
-                                          inplace=True)
-            # Aggregate from 15 min --> hourly load
-            commercial_profile_raw[('Hour', 'All')] = [int(str(commercial_profile_raw.loc[i, ('G0', '[W]')])[:2])
-                                                       for i in commercial_profile_raw.index]
-            commercial_profile_raw = commercial_profile_raw.groupby([('Hour', 'All')]).sum()
-            commercial_profile_raw.reset_index(inplace=True)
-            commercial_profile = time_series.copy()
-            for i in commercial_profile.index:
-                commercial_profile.loc[i, hours] = list(
-                    commercial_profile_raw[(commercial_profile.loc[i, 'Season'], commercial_profile.loc[i, 'Day'])])
-            # Reshape the hourly load in one vector, where the rows are the hours of the year
-            commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order='C')
+        commercial_profile_raw = pd.read_csv(profiles_paths["COM"], sep='[;]', engine='python', decimal=',',
+                                             skiprows=[0, 99], header=[0, 1],
+                                             skipinitialspace=True)
+        commercial_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
+                                               'Werktag': 'Working day', 'Sonntag': 'Sunday',
+                                               'Samstag': 'Saturday'},
+                                      inplace=True)
+        # Aggregate from 15 min --> hourly load
+        commercial_profile_raw[('Hour', 'All')] = [int(str(commercial_profile_raw.loc[i, ('G0', '[W]')])[:2])
+                                                   for i in commercial_profile_raw.index]
+        commercial_profile_raw = commercial_profile_raw.groupby([('Hour', 'All')]).sum()
+        commercial_profile_raw.reset_index(inplace=True)
+        commercial_profile = time_series.copy()
+        for i in commercial_profile.index:
+            commercial_profile.loc[i, hours] = list(
+                commercial_profile_raw[(commercial_profile.loc[i, 'Season'], commercial_profile.loc[i, 'Day'])])
+        # Reshape the hourly load in one vector, where the rows are the hours of the year
+        commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order='C')
         profiles['COM'] = commercial_profile / commercial_profile.sum()
-
+    
     # Agricultural load
     if 'AGR' in param["load"]["sectors"]:
-        agricultural_profile_raw = pd.read_csv(paths["profiles"]["AGR"], sep='[;]', engine='python', decimal=',',
+        agricultural_profile_raw = pd.read_csv(profiles_paths["AGR"], sep='[;]', engine='python', decimal=',',
                                                skiprows=[0, 99], header=[0, 1],
                                                skipinitialspace=True)
-        # agricultural_profile_raw.rename(columns={'Übergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
-        #                                         'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
-        #                                 inplace=True)
         agricultural_profile_raw.rename(columns={'Ãœbergangszeit': 'Spring/Fall', 'Sommer': 'Summer',
                                                  'Werktag': 'Working day', 'Sonntag': 'Sunday', 'Samstag': 'Saturday'},
                                         inplace=True)
@@ -187,7 +469,7 @@ def get_sectoral_profiles(paths, param):
 
     # Street lights
     if 'STR' in param["load"]["sectors"]:
-        streets_profile_raw = pd.read_excel(paths["profiles"]["STR"], header=[4], skipinitialspace=True,
+        streets_profile_raw = pd.read_excel(profiles_paths["STR"], header=[4], skipinitialspace=True,
                                             usecols=[0, 1, 2])
         # Aggregate from 15 min --> hourly load
         streets_profile_raw['Hour'] = [int(str(streets_profile_raw.loc[i, 'Uhrzeit'])[:2]) for i in
@@ -204,22 +486,21 @@ def get_sectoral_profiles(paths, param):
     return profiles
 
 
-def intersection_regions_countries(paths):
+def intersection_subregions_countries(paths, param):
     '''
     description
     '''
 
     # load shapefiles, and create spatial indexes for both files
-    border_region = gpd.GeoDataFrame.from_file(paths["SHP"])
-    border_region['geometry'] = border_region.buffer(0)
-    border_country = gpd.GeoDataFrame.from_file(paths["Countries"])
+    subregions = param["regions_sub"]
+    subregions['geometry'] = subregions.buffer(0)
+    countries = param["regions_land"]
     data = []
-    for index, region in border_region.iterrows():
-        for index2, country in border_country.iterrows():
-            if (region.Population > 0):
-                if region['geometry'].intersects(country['geometry']):
-                    data.append({'geometry': region['geometry'].intersection(country['geometry']),
-                                 'NAME_SHORT': region['NAME_SHORT'] + '_' + country['NAME_SHORT']})
+    for index, subregion in subregions.iterrows():
+        for index2, country in countries.iterrows():
+            if subregion['geometry'].intersects(country['geometry']):
+                data.append({'geometry': subregion['geometry'].intersection(country['geometry']),
+                             'NAME_SHORT': subregion['NAME_SHORT'] + '_' + country['GID_0']})
 
     # Clean data
     i = 0
@@ -235,7 +516,9 @@ def intersection_regions_countries(paths):
 
     # Create GeoDataFrame
     intersection = gpd.GeoDataFrame(data, columns=['geometry', 'NAME_SHORT'])
-    intersection.to_file(paths["model_regions"] + 'intersection.shp')
+    intersection.to_file(paths["intersection_subregions_countries"])
+    
+    return intersection
 
 
 def bbox_to_pixel_offsets(gt, bbox):
@@ -253,189 +536,62 @@ def bbox_to_pixel_offsets(gt, bbox):
     ysize = y2 - y1
 
     return x1, y1, xsize, ysize
-
-
-def zonal_stats(vector_path, raster_path, raster_type, nodata_value=None, global_src_extent=False):
+    
+    
+def zonal_stats(regions_shp, raster_dict, param):
     """
-    Zonal Statistics
-    Vector-Raster Analysis
-    
-    Copyright 2013 Matthew Perry
-    
-    Usage:
-      zonal_stats.py VECTOR RASTER
-      zonal_stats.py -h | --help
-      zonal_stats.py --version
-    
-    Options:
-      -h --help     Show this screen.
-      --version     Show version.
     """
+    timecheck('Start')
+    Crd_all = param["Crd_all"]
+    res_desired = param["res_desired"]
+    GeoRef = param["GeoRef"]
+    nRegions = len(regions_shp)
+    
+    # Read rasters
+    for key, val in raster_dict.items():
+        with rasterio.open(val) as src:
+            raster_dict[key] = np.flipud(src.read(1))
+        
+    # Prepare output
+    df_columns = []
+    other_keys = list(raster_dict.keys())
+    if 'Population' in raster_dict.keys():
+        df_columns = df_columns + ['RES']
+        other_keys.remove('Population')
+    if 'Landuse' in raster_dict.keys():
+        df_columns = df_columns + param["landuse_types"]
+        other_keys.remove('Landuse')
+    if len(other_keys):
+        df_columns = df_columns + other_keys
+    df = pd.DataFrame(0, index = regions_shp.index, columns = df_columns)
+    
+    status = 0
+    for reg in range(0, nRegions):
+        # Show status bar
+        status = status + 1
+        sys.stdout.write('\r')
+        sys.stdout.write('Calculating statistics ' + '[%-50s] %d%%' % (
+            '=' * ((status * 50) // nRegions), (status * 100) // nRegions))
+        sys.stdout.flush()
 
-    rds = gdal.Open(raster_path, GA_ReadOnly)
-    assert (rds)
-    rb = rds.GetRasterBand(1)
-    rgt = rds.GetGeoTransform()
+        # Calculate A_region_extended
+        A_region_extended = calc_region(regions_shp.loc[reg], Crd_all, res_desired, GeoRef)
+        A_region_extended[A_region_extended == 0] = np.nan
+        
+        if 'Population' in raster_dict.keys():
+            df.loc[reg, 'RES'] = np.nansum(A_region_extended * raster_dict['Population'])
+            
+        if 'Landuse' in raster_dict.keys():
+            A_data = A_region_extended * raster_dict['Landuse'].astype(int)
+            unique, counts = np.unique(A_data[~np.isnan(A_data)], return_counts=True)
+            for element in range(0, len(unique)):
+                df.loc[reg, str(int(unique[element]))] = int(counts[element])
 
-    if nodata_value:
-        nodata_value = float(nodata_value)
-        rb.SetNoDataValue(nodata_value)
-
-    vds = ogr.Open(vector_path, GA_ReadOnly)  # TODO maybe open update if we want to write stats
-    assert (vds)
-    vlyr = vds.GetLayer(0)
-
-    # create an in-memory numpy array of the source raster data
-    # covering the whole extent of the vector layer
-    if global_src_extent:
-        # use global source extent
-        # useful only when disk IO or raster scanning inefficiencies are your limiting factor
-        # advantage: reads raster data in one pass
-        # disadvantage: large vector extents may have big memory requirements
-        src_offset = bbox_to_pixel_offsets(rgt, vlyr.GetExtent())
-        src_array = rb.ReadAsArray(*src_offset)
-
-        # calculate new geotransform of the layer subset
-        new_gt = (
-            (rgt[0] + (src_offset[0] * rgt[1])),
-            rgt[1],
-            0.0,
-            (rgt[3] + (src_offset[1] * rgt[5])),
-            0.0,
-            rgt[5]
-        )
-
-    mem_drv = ogr.GetDriverByName('Memory')
-    driver = gdal.GetDriverByName('MEM')
-
-    # Loop through vectors
-    stats = []
-    feat = vlyr.GetNextFeature()
-    while feat is not None:
-
-        if not global_src_extent:
-            # use local source extent
-            # fastest option when you have fast disks and well indexed raster (ie tiled Geotiff)
-            # advantage: each feature uses the smallest raster chunk
-            # disadvantage: lots of reads on the source raster
-            src_offset = bbox_to_pixel_offsets(rgt, feat.geometry().GetEnvelope())
-            src_array = rb.ReadAsArray(*src_offset)
-
-            # calculate new geotransform of the feature subset
-            new_gt = (
-                (rgt[0] + (src_offset[0] * rgt[1])),
-                rgt[1],
-                0.0,
-                (rgt[3] + (src_offset[1] * rgt[5])),
-                0.0,
-                rgt[5]
-            )
-
-        # Create a temporary vector layer in memory
-        mem_ds = mem_drv.CreateDataSource('out')
-        mem_layer = mem_ds.CreateLayer('poly', None, ogr.wkbPolygon)
-        mem_layer.CreateFeature(feat.Clone())
-
-        # Rasterize it
-        rvds = driver.Create('', src_offset[2], src_offset[3], 1, gdal.GDT_Byte)
-        rvds.SetGeoTransform(new_gt)
-        gdal.RasterizeLayer(rvds, [1], mem_layer, burn_values=[1])
-        rv_array = rvds.ReadAsArray()
-
-        # Mask the source data array with our current feature
-        # we take the logical_not to flip 0<->1 to get the correct mask effect
-        # we also mask out nodata values explicitly
-        masked = np.ma.MaskedArray(
-            src_array,
-            mask=np.logical_or(
-                src_array == nodata_value,
-                np.logical_not(rv_array)
-            )
-        )
-
-        if raster_type == 'landuse':
-            unique, counts = np.unique(masked, return_counts=True)
-            unique2 = [str(i) for i in unique.astype(int)]
-            count = dict(zip(unique2, counts.astype(int)))
-            feature_stats = {
-                # 'sum': float(masked.sum()),
-                'NAME_SHORT': str(feat.GetField('NAME_SHORT'))}
-            feature_stats.update(count)
-        elif raster_type == 'population':
-            feature_stats = {
-                # 'max': float(masked.max()),
-                'sum': float(masked.sum()),
-                # 'count': int(masked.count()),
-                # 'fid': int(feat.GetFID()),
-                'NAME_SHORT': str(feat.GetField('NAME_SHORT'))}
-        elif raster_type == 'renewable':
-            feature_stats = {
-                'max': float(masked.max()),
-                # 'sum': float(masked.sum()),
-                # 'count': int(masked.count()),
-                # 'fid': int(feat.GetFID()),
-                'NAME_SHORT': str(feat.GetField('NAME_SHORT'))}
-
-        stats.append(feature_stats)
-
-        rvds = None
-        mem_ds = None
-        feat = vlyr.GetNextFeature()
-
-    vds = None
-    rds = None
-
-    return stats
-
-
-def zonal_weighting(paths, df_load, df_stat, s):
-    shp_path = paths["Countries"]
-    raster_path = paths["LU"]
-    shp = ogr.Open(shp_path, 1)
-    raster = gdal.Open(raster_path)
-    lyr = shp.GetLayer()
-
-    # Create memory target raster
-    target_ds = gdal.GetDriverByName('GTiff').Create(paths["load"] + 'Europe_' + s + '_load_pax.tif',
-                                                     raster.RasterXSize,
-                                                     raster.RasterYSize,
-                                                     1, gdal.GDT_Float32)
-    target_ds.SetGeoTransform(raster.GetGeoTransform())
-    target_ds.SetProjection(raster.GetProjection())
-
-    # NoData value
-    mem_band = target_ds.GetRasterBand(1)
-    mem_band.Fill(0)
-    mem_band.SetNoDataValue(0)
-
-    # Add a new field
-    if not field_exists('Weight_' + s, shp_path):
-        new_field = ogr.FieldDefn('Weight_' + s, ogr.OFTReal)
-        lyr.CreateField(new_field)
-
-    for feat in lyr:
-        country = feat.GetField('NAME_SHORT')[:2]
-        if s == 'RES':
-            feat.SetField('Weight_' + s, df_load[country, s] / df_stat.loc[country, 'RES'])
-        else:
-            feat.SetField('Weight_' + s, df_load[country, s] / df_stat.loc[country, s])
-        lyr.SetFeature(feat)
-        feat = None
-
-    # Rasterize zone polygon to raster
-    gdal.RasterizeLayer(target_ds, [1], lyr, None, None, [0], ['ALL_TOUCHED=FALSE', 'ATTRIBUTE=Weight_' + s[:3]])
-
-
-def field_exists(field_name, shp_path):
-    shp = ogr.Open(shp_path, 0)
-    lyr = shp.GetLayer()
-    lyr_dfn = lyr.GetLayerDefn()
-
-    exists = False
-    for i in range(lyr_dfn.GetFieldCount()):
-        exists = exists or (field_name == lyr_dfn.GetFieldDefn(i).GetName())
-
-    return exists
+        for key in other_keys:
+            df.loc[reg, key] = np.nanmax(A_region_extended * raster_dict[key])
+            
+    timecheck('End')
+    return df
 
 
 # 05a_Distribution_Renewable_powerplants
@@ -579,40 +735,46 @@ def map_grid_plants(x, y, paths):
     outFeature = None
 
 
-def timecheck(*args):
-    if len(args) == 0:
-        print(inspect.stack()[1].function + str(datetime.datetime.now().strftime(": %H:%M:%S:%f")))
-
-    elif len(args) == 1:
-        print(inspect.stack()[1].function + ' - ' + str(args[0])
-              + str(datetime.datetime.now().strftime(": %H:%M:%S:%f")))
-
-    else:
-        raise Exception('Too many arguments have been passed.\nExpected: zero or one \nPassed: ' + format(len(args)))
-
-
-def display_progress(message, progress_stat):
-    length = progress_stat[0]
-    status = progress_stat[1]
-    sys.stdout.write('\r')
-    sys.stdout.write(message + ' ' + '[%-50s] %d%%' % ('=' * ((status * 50) // length), (status * 100) // length))
-    sys.stdout.flush()
-    if status == length:
-        print('\n')
-
-
 def crd_merra(Crd_regions, res_weather):
-    ''' description '''
-    Crd = np.array([(np.ceil((Crd_regions[:, 0] - res_weather[0] / 2) / res_weather[0])
-                     * res_weather[0] + res_weather[0] / 2),
-                    (np.ceil((Crd_regions[:, 1] - res_weather[1] / 2) / res_weather[1])
-                     * res_weather[1] + res_weather[1] / 2),
-                    (np.floor((Crd_regions[:, 2] + res_weather[0] / 2) / res_weather[0])
-                     * res_weather[0] - res_weather[0] / 2),
-                    (np.floor((Crd_regions[:, 3] + res_weather[1] / 2) / res_weather[1])
-                     * res_weather[1] - res_weather[1] / 2)])
+    """
+    Calculates coordinates of box covering MERRA2 data (centroids + half resolution)
+
+    :param Crd_regions: Cooridinates of Regions
+    :type Crd_regions: array
+
+    :param res_weather: Weather data resolution
+    :type res_weather: list
+
+    :return Crd: Coordinates in Weather resolution
+    :rtype: list
+    """
+    ''' Calculates coordinates of box covering MERRA2 data (centroids + half resolution)'''
+    Crd = np.array(
+        [np.ceil((Crd_regions[:, 0] + res_weather[0] / 2) / res_weather[0]) * res_weather[0] - res_weather[0] / 2,
+         np.ceil(Crd_regions[:, 1] / res_weather[1]) * res_weather[1],
+         np.floor((Crd_regions[:, 2] + res_weather[0] / 2) / res_weather[0]) * res_weather[0] - res_weather[0] / 2,
+         np.floor(Crd_regions[:, 3] / res_weather[1]) * res_weather[1]])
     Crd = Crd.T
     return Crd
+
+
+def ind_merra(Crd, Crd_all, res):
+    """
+    Missing description
+
+    :param Crd:
+    :param Crd_all:
+    :param res:
+    :return:
+    """
+    if len(Crd.shape) == 1:
+        Crd = Crd[np.newaxis]
+    Ind = np.array([(Crd[:, 0] - Crd_all[2]) / res[0],
+                    (Crd[:, 1] - Crd_all[3]) / res[1],
+                    (Crd[:, 2] - Crd_all[2]) / res[0] + 1,
+                    (Crd[:, 3] - Crd_all[3]) / res[1] + 1])
+    Ind = np.transpose(Ind.astype(int))
+    return Ind
 
 
 def filter_life_time(param, raw, depreciation):
@@ -712,34 +874,42 @@ def reverse_lines(df):
     return df_final
 
 
-def string_to_int(mylist):
-    """This function converts list entries from strings to integers.
-
-    Args:
-        mylist: list eventually containing some integers interpreted
-        as string elements.
-
-    Returns:
-        The same list after the strings where converted to integers.
+def expand_dataframe(df, column_names):
     """
-    result = [int(i) for i in mylist]
-    return result
-
-
-def zero_free(mylist):
-    """This function deletes zero entries from a list.
-
-    Args:
-        mylist: list eventually containing zero entries.
-
-    Returns:
-        The same list after the zero entries where removed.
     """
-    result = []
-    for j in np.arange(len(mylist)):
-        if mylist[j] > 0:
-            result = result + [mylist[j]]
-    return result
+    
+    list_col = list(df.columns)
+    df_dict = {}
+    n_col = 0
+    
+    for col in column_names:
+        df_dict[col] = df[col].str.split(";").apply(pd.Series)
+        n_col = max(n_col, len(df_dict[col].columns))
+        for cc in range(len(df_dict[col].columns), n_col):
+            df_dict[col][cc] = np.nan
+        list_col.remove(col)
+            
+    # Concatenate expanded columns into a dataframe of tuples
+    df_concat = pd.concat(df_dict.values()) \
+                  .groupby(level=0).apply(lambda x: tuple(map(tuple, x.values.T)))
+    df_concat = pd.DataFrame(list(df_concat))
+                  
+    # Merge with original dataframe
+    df_merged = df_concat.merge(df, left_index=True, right_index=True) \
+                         .drop(column_names, axis = 1) \
+                         .melt(id_vars=list_col, value_name="Combi") \
+                         .drop(["variable"], axis = 1)
+                      
+    # Replace column of tuples with individual columns
+    df_final = df_merged.copy()
+    df_final[column_names] = pd.DataFrame(df_merged['Combi'].tolist(), index=df_merged.index)
+    df_final = df_final.drop(["Combi"], axis = 1)
+    
+    # Columns should contain floats
+    df_final[column_names] = df_final[column_names].astype(float)
+    
+    return df_final
+    
 
 
 def add_suffix(df, suffix):
@@ -775,150 +945,16 @@ def deduplicate_lines(df):
     return df_final
 
 
-def match_wire_voltages(grid_sorted):
+def assign_values_based_on_series(series, dict):
     """
-    the columns 'voltage' and 'wires' may contain multiple values separated with a semicolon. The goal is to assign
-    a voltage to every circuit, whenever possible.
-
-    Algorithm:
-
-    [Case #1] If (n_voltages_count = 1), then every circuit is on that voltage level. We can replace the list
-    entries in 'wires' with their sum;
-    Else:
-    [Case #2] If (n_circuits_count = n_voltages_count), then update the value in the list 'wires' so that each
-    voltage level has only one circuit;
-    [Case #3] If (n_circuits_count < n_voltages_count), then ignore the exceeding voltages and update the value in
-    the list 'Circuits' so that each voltage level has only one circuit;
-    [Case #4] If (n_voltages_count < n_circuits), then assign the highest voltage to the rest of the circuits;
-    [Case #5] If (n_circuits < n_voltages_count) and (n_voltages_count < n_circuits_count), then ignore
-    the exceeding voltages so that each voltage level has as many circuits as in the list entries of 'wires'.
-
-    :param grid_sorted:
-    :return:
     """
-
-    timecheck('Start')
-
-    n_circuits = pd.Series(map(string_to_int, grid_sorted.wires.str.split(';')))
-    n_circuits_count = pd.Series(map(sum, n_circuits), index=grid_sorted.index)
-    n_circuits = pd.Series(map(len, n_circuits), index=grid_sorted.index)
-    n_voltages = pd.Series(map(zero_free, map(string_to_int, grid_sorted.voltage.str.split(';'))))
-    n_voltages_count = pd.Series(map(len, n_voltages), index=grid_sorted.index)
-    n_voltages = pd.Series(n_voltages, index=grid_sorted.index)
-    grid_sorted.voltage = n_voltages
-
-    # Case 1: (n_voltages_count = 1)
-    ind_excerpt = grid_sorted[n_voltages_count == 1].index
-    grid_clean = grid_sorted.loc[ind_excerpt]
-    grid_dirty = grid_sorted.loc[grid_sorted[n_voltages_count != 1].index]
-    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
-    grid_clean.loc[:, 'wires'] = n_circuits.loc[ind_excerpt]
-
-    # Reindex in order to avoid user warnings later
-    n_circuits_count = n_circuits_count.reindex(grid_dirty.index)
-    n_circuits = n_circuits.reindex(grid_dirty.index)
-    n_voltages_count = n_voltages_count.reindex(grid_dirty.index)
-    n_voltages = n_voltages.reindex(grid_dirty.index)
-
-    # Case 2: (n_circuits_count = n_voltages_count)
-    ind_excerpt = grid_dirty[n_circuits_count == n_voltages_count].index
-    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
-    grid_dirty.loc[ind_excerpt, 'wires'] = [';'.join(['1'] * n_circuits_count.loc[i]) for i in ind_excerpt]
-
-    # Case 3: (n_circuits_count < n_voltages_count)
-    ind_excerpt = grid_dirty[n_circuits_count < n_voltages_count].index
-    n_circuits.loc[ind_excerpt] = n_circuits_count.loc[ind_excerpt]
-    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
-    n_voltages.loc[ind_excerpt] = [grid_dirty.loc[i, 'voltage'][:n_circuits_count.loc[i]] for i in ind_excerpt]
-    grid_dirty.loc[ind_excerpt, 'voltage'] = n_voltages.loc[ind_excerpt]
-    grid_dirty.loc[ind_excerpt, 'wires'] = [';'.join(['1'] * n_circuits_count.loc[i]) for i in ind_excerpt]
-
-    # Case 4: (n_voltages_count < n_circuits)
-    ind_excerpt = grid_dirty[(n_voltages_count < n_circuits) & (n_voltages_count > 0)].index
-    missing_voltages = n_circuits.loc[ind_excerpt] - n_voltages_count.loc[ind_excerpt]
-    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
-    for i in ind_excerpt:
-        for j in np.arange(missing_voltages[i]):
-            n_voltages.loc[i].append(max(grid_dirty.loc[i, 'voltage']))
-            grid_dirty.loc[i, 'voltage'].append(max(grid_dirty.loc[i, 'voltage']))
-
-    # Case 5: (n_circuits < n_voltages_count) and (n_voltages_count < n_circuits_count)
-    ind_excerpt = grid_dirty[(n_circuits < n_voltages_count) & (n_voltages_count < n_circuits_count)].index
-    n_voltages_count.loc[ind_excerpt] = n_circuits.loc[ind_excerpt]
-    n_voltages.loc[ind_excerpt] = [grid_dirty.loc[i, 'voltage'][:n_circuits.loc[i]] for i in ind_excerpt]
-    grid_dirty.loc[ind_excerpt, 'voltage'] = n_voltages.loc[ind_excerpt]
-
-    # By now n_circuits = n_voltages_count, so that we can split the list entries of 'voltage' and 'wires'
-    # in exactly the same amount of rows:
-
-    suffix = 1  # When we create a new row, we will add a suffix to the old index
-    status = 0
-    count = len(grid_dirty)
-    while len(grid_dirty):
-        status = count - len(grid_dirty) + 1
-        display_progress("Cleaning GridKit progress: ", (count, status))
-        # In case the first line is clean
-        if grid_dirty.wires.iloc[0].count(';') == 0:
-            grid_clean = grid_clean.append(grid_dirty.iloc[0], ignore_index=True)
-            grid_dirty = grid_dirty.drop(grid_dirty.index[[0]])
-        else:
-            # Append a copy of the first row of grid_dirty at the top of the same dataframe
-            grid_dirty = grid_dirty.iloc[0].to_frame().transpose().append(grid_dirty, ignore_index=True)
-            # Extract the first number of circuits from that row and remove the rest of the string
-            grid_dirty.wires.iloc[0] = grid_dirty.wires.iloc[0][:grid_dirty.wires.iloc[0].find(';')]
-            # Extract the first voltage level from that row and remove the rest of the list
-            grid_dirty.voltage.iloc[0] = grid_dirty.voltage.iloc[0][:1]
-
-            # Add the right suffix
-            grid_dirty, suffix = add_suffix(grid_dirty, suffix)
-
-            # Update the string in the original row
-            grid_dirty.wires.iloc[1] = grid_dirty.wires.iloc[1][grid_dirty.wires.iloc[1].find(';') + 1:]
-            grid_dirty.voltage.iloc[1] = grid_dirty.voltage.iloc[1][1:]
-
-            # Move the 'clean' row to grid_clean, and drop it from grid_dirty
-            grid_clean = grid_clean.append(grid_dirty.iloc[0], ignore_index=True)
-            grid_dirty = grid_dirty.drop(grid_dirty.index[[0]])
-
-    # Express voltage in kV
-    grid_clean.voltage = pd.Series([grid_clean.loc[i, 'voltage'][0] / 1000 for i in grid_clean.index],
-                                   index=grid_clean.index)
-    timecheck('End')
-    return grid_clean
-
-
-def set_loadability(grid_filled, param):
-    loadability = param["grid"]["loadability"]
-    grid_filled.loc[grid_filled[grid_filled.length_m <= float(80)].index, 'loadability_c'] = loadability["80"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 80) & (grid_filled.length_m <= 100)].index, 'loadability_c'] \
-        = loadability["100"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 100) & (grid_filled.length_m <= 150)].index, 'loadability_c'] \
-        = loadability["150"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 150) & (grid_filled.length_m <= 200)].index, 'loadability_c'] \
-        = loadability["200"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 200) & (grid_filled.length_m <= 250)].index, 'loadability_c'] \
-        = loadability["250"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 250) & (grid_filled.length_m <= 300)].index, 'loadability_c'] \
-        = loadability["300"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 300) & (grid_filled.length_m <= 350)].index, 'loadability_c'] \
-        = loadability["350"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 350) & (grid_filled.length_m <= 400)].index, 'loadability_c'] \
-        = loadability["400"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 400) & (grid_filled.length_m <= 450)].index, 'loadability_c'] \
-        = loadability["450"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 450) & (grid_filled.length_m <= 500)].index, 'loadability_c'] \
-        = loadability["500"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 500) & (grid_filled.length_m <= 550)].index, 'loadability_c'] \
-        = loadability["550"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 550) & (grid_filled.length_m <= 600)].index, 'loadability_c'] \
-        = loadability["600"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 600) & (grid_filled.length_m <= 650)].index, 'loadability_c'] \
-        = loadability["650"]
-    grid_filled.loc[grid_filled[(grid_filled.length_m > 650) & (grid_filled.length_m <= 700)].index, 'loadability_c'] \
-        = loadability["700"]
-    grid_filled.loc[grid_filled[grid_filled["length_m"] > 700].index, 'loadability_c'] = loadability["750"]
-
-    return grid_filled
+    dict_sorted = sorted(list(dict.keys()), reverse=True)
+    
+    result = series.copy()
+    for key in dict_sorted:
+        result[series <= key] = dict[key]
+    
+    return result
 
 
 def format_process_model(process_compact, param):
@@ -1683,3 +1719,90 @@ def read_assumptions_storage(assumptions):
     }
 
     return storage
+
+
+
+def array2raster(newRasterfn, rasterOrigin, pixelWidth, pixelHeight, array):
+    """
+    Saves array to geotiff raster format based on EPSG 4326.
+
+    :param newRasterfn: Output path of the raster.
+    :type newRasterfn: string
+    :param rasterOrigin: Latitude and longitude of the Northwestern corner of the raster.
+    :type rasterOrigin: list of two floats
+    :param pixelWidth:  Pixel width (might be negative).
+    :type pixelWidth: integer
+    :param pixelHeight: Pixel height (might be negative).
+    :type pixelHeight: integer
+    :param array: Array to be converted into a raster.
+    :type array: numpy array
+    :return: The raster file will be saved in the desired path *newRasterfn*.
+    :rtype: None
+    """
+    cols = array.shape[1]
+    rows = array.shape[0]
+    originX = rasterOrigin[0]
+    originY = rasterOrigin[1]
+
+    driver = gdal.GetDriverByName('GTiff')
+    outRaster = driver.Create(newRasterfn, cols, rows, 1, gdal.GDT_Float64, ['COMPRESS=PACKBITS'])
+    outRaster.SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
+    outRasterSRS = osr.SpatialReference()
+    outRasterSRS.ImportFromEPSG(4326)
+    outRaster.SetProjection(outRasterSRS.ExportToWkt())
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(np.flipud(array))
+    outband.FlushCache()
+    outband = None
+
+
+def create_json(filepath, param, param_keys, paths, paths_keys):
+    """
+    Creates a metadata json file containing information about the file in filepath by storing the relevant keys from
+    both the param and path dictionaries.
+
+    :param filepath: Path to the file for which the json file will be created
+    :type filepath: string
+
+    :param param: Dictionary of dictionaries containing the user input parameters and intermediate outputs
+    :type param: dict
+
+    :param param_keys: Keys of the parameters to be extracted from the param dictionary and saved into the json file
+    :type param_keys: iterable of strings
+
+    :param paths: Dictionary of dictionaries containing the paths information for all files
+    :type paths: dict
+
+    :param paths_keys: Keys of the paths to be extracted from the paths dictionary and saved into the json file
+    :type paths_keys: iterable of strings
+
+    :return: The json file will be saved in the desired path *filepath*.
+    :rtype: None
+    """
+    new_file = os.path.splitext(filepath)[0] + '.json'
+    new_dict = {}
+    # Add standard keys
+    param_keys = param_keys + ["author", "comment"]
+    for key in param_keys:
+        new_dict[key] = param[key]
+        if type(param[key]) == np.ndarray:
+            new_dict[key] = param[key].tolist()
+        if type(param[key]) == dict:
+            for k, v in param[key].items():
+                if type(v) == np.ndarray:
+                    new_dict[key][k] = v.tolist()
+                if type(v) == dict:
+                    for k2, v2 in v.items():
+                        if type(v2) == np.ndarray:
+                            new_dict[key][k][k2] = v2.tolist()
+
+    for key in paths_keys:
+        new_dict[key] = paths[key]
+    # Add timestamp
+    new_dict["timestamp"] = str(datetime.datetime.now().strftime("%Y%m%dT%H%M%S"))
+    # Add caller function's name
+    new_dict["function"] = inspect.stack()[1][3]
+    with open(new_file, 'w') as json_file:
+        json.dump(new_dict, json_file)
+        
+

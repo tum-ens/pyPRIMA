@@ -1,41 +1,109 @@
 from helping_functions import *
-from config import ts_paths
-import os
+# from config import ts_paths
 
 
 def initialization():
     ''' documentation '''
     timecheck('Start')
 
-    from config import paths, param
-    res_weather = param["dist_ren"]["res_weather"]
-    res_desired = param["dist_ren"]["res_desired"]
+    # import param and paths
+    from config import configuration
+    paths, param = configuration()
 
-    # read shapefile of regions
-    regions_shp = gpd.read_file(paths["SHP"])
-    # Extract onshore and offshore areas separately
-    param["regions_land"] = regions_shp.drop(regions_shp[regions_shp["Population"] == 0].index)
-    param["regions_eez"] = regions_shp.drop(regions_shp[regions_shp["Population"] != 0].index)
-    # Recombine the maps in this order: onshore then offshore
+    # Read shapefile of scope
+    scope_shp = gpd.read_file(paths["spatial_scope"])
+    param["spatial_scope"] = define_spatial_scope(scope_shp)
 
-    regions_all = gpd.GeoDataFrame(pd.concat([param["regions_land"], param["regions_eez"]],
-                                             ignore_index=True), crs=param["regions_land"].crs)
-
-    param["nRegions_land"] = len(param["regions_land"])
-    param["nRegions_eez"] = len(param["regions_eez"])
-
-    nRegions = param["nRegions_land"] + param["nRegions_eez"]
-    Crd_regions = np.zeros((nRegions, 4))
-    for reg in range(0, nRegions):
-        # Box coordinates for MERRA2 data
-        r = regions_all.bounds.iloc[reg]
-        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
-        Crd_regions[reg, :] = crd_merra(box, res_weather)
-    Crd_all = np.array([max(Crd_regions[:, 0]), max(Crd_regions[:, 1]), min(Crd_regions[:, 2]), min(Crd_regions[:, 3])])
-    param["Crd_regions"] = Crd_regions
+    res_weather = param["res_weather"]
+    res_desired = param["res_desired"]
+    Crd_all = crd_merra(param["spatial_scope"], res_weather)[0]
     param["Crd_all"] = Crd_all
+    ymax, xmax, ymin, xmin = Crd_all
+    bounds_box = Polygon([(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
 
+    timecheck('Read shapefile of countries')
+    # Extract land areas
+    countries_shp = gpd.read_file(paths["Countries"], bbox=scope_shp)
+    countries_shp = countries_shp.to_crs({'init': 'epsg:4326'})
+    
+    # Crop all polygons and take the part inside the bounding box
+    countries_shp['geometry'] = countries_shp['geometry'].intersection(bounds_box)
+    countries_shp = countries_shp[countries_shp.geometry.area > 0]
+    param["regions_land"] = countries_shp
+    param["nRegions_land"] = len(param["regions_land"])
+    
+    if not (os.path.exists(paths["LAND"]) and os.path.exists(paths["EEZ"])):
+        Crd_regions_land = np.zeros((param["nRegions_land"], 4))
+        
+        for reg in range(0, param["nRegions_land"]):
+            # Box coordinates for MERRA2 data
+            r = countries_shp.bounds.iloc[reg]
+            box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+            Crd_regions_land[reg, :] = crd_merra(box, res_weather)
+        
+        timecheck('Read shapefile of EEZ')
+        # Extract sea areas
+        eez_shp = gpd.read_file(paths["EEZ_global"], bbox=scope_shp)
+        eez_shp = eez_shp.to_crs({'init': 'epsg:4326'})
+        
+        # Crop all polygons and take the part inside the bounding box
+        eez_shp['geometry'] = eez_shp['geometry'].intersection(bounds_box)
+        eez_shp = eez_shp[eez_shp.geometry.area > 0]
+        param["regions_sea"] = eez_shp
+        param["nRegions_sea"] = len(param["regions_sea"])
+        Crd_regions_sea = np.zeros((param["nRegions_sea"], 4))
+        
+        for reg in range(0, param["nRegions_sea"]):
+            # Box coordinates for MERRA2 data
+            r = eez_shp.bounds.iloc[reg]
+            box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+            Crd_regions_sea[reg, :] = crd_merra(box, res_weather)
+            
+        # Saving parameters
+        param["Crd_regions"] = np.concatenate((Crd_regions_land, Crd_regions_sea), axis=0)
+
+    timecheck('Read shapefile of subregions')
+    # Read shapefile of regions
+    regions_shp = gpd.read_file(paths["subregions"], bbox=scope_shp)
+    regions_shp = regions_shp.to_crs({'init': 'epsg:4326'})
+
+    # Crop all polygons and take the part inside the bounding box
+    regions_shp['geometry'] = regions_shp['geometry'].intersection(bounds_box)
+    regions_shp = regions_shp[regions_shp.geometry.area > 0]
+    regions_shp.sort_values(by=['NAME_SHORT'], inplace=True)
+    regions_shp = regions_shp.reset_index().rename(columns={'index': 'original_index'})
+    param["regions_sub"] = regions_shp
+    param["nRegions_sub"] = len(param["regions_sub"])
+    Crd_regions_sub = np.zeros((param["nRegions_sub"], 4))
+
+    for reg in range(0, param["nRegions_sub"]):
+        # Box coordinates for MERRA2 data
+        r = regions_shp.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions_sub[reg, :] = crd_merra(box, res_weather)
+
+    # Saving parameters
+    param["Crd_subregions"] = Crd_regions_sub
+    
+    # Indices and matrix dimensions
+    Ind_all_low = ind_merra(Crd_all, Crd_all, res_weather)
+    Ind_all_high = ind_merra(Crd_all, Crd_all, res_desired)
+
+    param["m_high"] = int((Ind_all_high[:, 0] - Ind_all_high[:, 2] + 1)[0])  # number of rows
+    param["n_high"] = int((Ind_all_high[:, 1] - Ind_all_high[:, 3] + 1)[0])  # number of columns
+    param["m_low"] = int((Ind_all_low[:, 0] - Ind_all_low[:, 2] + 1)[0])  # number of rows
+    param["n_low"] = int((Ind_all_low[:, 1] - Ind_all_low[:, 3] + 1)[0])  # number of columns
+    param["GeoRef"] = calc_geotiff(Crd_all, res_desired)
+    
+    if not (os.path.exists(paths["LAND"]) and os.path.exists(paths["EEZ"])):
+        # Generate land and sea rasters
+        generate_landsea(paths, param)
+        
     timecheck('End')
+
+    # Display initial information
+    print('\nRegion: ' + param["subregions_name"] + ' - Year: ' + str(param["year"]))
+    print('Folder Path: ' + paths["region"] + '\n')
     return paths, param
 
 
@@ -45,52 +113,98 @@ def generate_sites_from_shapefile(paths):
     '''
     timecheck('Start')
 
-    # Read the shapefile containing the map data
-    regions = gpd.read_file(paths["SHP"])
-    for i in regions.index:
-        regions.loc[i, 'Longitude'] = regions.geometry.centroid.iloc[i].x
-        regions.loc[i, 'Latitude'] = regions.geometry.centroid.iloc[i].y
+    # Initialize region masking parameters
+    Crd_all = param["Crd_all"]
+    GeoRef = param["GeoRef"]
+    res_desired = param["res_desired"]
+    nRegions = param["nRegions_sub"]
+    regions_shp = param["regions_sub"]
+    
+    # Initialize dataframe
+    regions = pd.DataFrame(0, index=range(0, nRegions),
+                           columns=['Name', 'Index_shapefile', 'Area_m2', 'Longitude', 'Latitude',
+                                    'slacknode', 'syncarea', 'ctrarea', 'primpos', 'primneg',
+                                    'secpos', 'secneg', 'terpos', 'terneg'])
+                                    
+    # Read masks
+    with rasterio.open(paths["LAND"]) as src:
+        A_land = src.read(1)
+        A_land = np.flipud(A_land).astype(int)
+    with rasterio.open(paths["EEZ"]) as src:
+        A_sea = src.read(1)
+        A_sea = np.flipud(A_sea).astype(int)
+    
+    status = 0
+    for reg in range(0, nRegions):
+        # Display Progress
+        status += 1
+        display_progress('Generating sites ', (nRegions, status))
 
-    # Remove duplicates
-    df = regions.set_index('NAME_SHORT')
-    df = df.loc[((~df.index.duplicated(keep=False)) & (df['Population'] > 0)) |
-                ((df.index.duplicated(keep=False)) & (~df['Population'] == 0))]
-    df.reset_index(inplace=True)
-    regions = df.copy()
+        # Compute region_mask
+        A_region_extended = calc_region(regions_shp.loc[reg], Crd_all, res_desired, GeoRef)
+        
+        # Get name of region
+        if np.nansum(A_region_extended * A_land) > np.nansum(A_region_extended * A_sea):
+            regions.loc[reg, "Name"] = regions_shp.loc[reg]["NAME_SHORT"]
+        else:
+            regions.loc[reg, "Name"] = regions_shp.loc[reg]["NAME_SHORT"] + "_offshore"
+    
+        # Calculate longitude and latitude of centroids
+        regions.loc[reg, 'Longitude'] = regions_shp.geometry.centroid.loc[reg].x
+        regions.loc[reg, 'Latitude'] = regions_shp.geometry.centroid.loc[reg].y
+        
+    import pdb; pdb.set_trace()
+    # Calculate area using Lambert Cylindrical Equal Area EPSG:9835
+    regions_shp = regions_shp.to_crs('+proj=cea')
+    regions['Area_m2'] = regions_shp.geometry.area
+    regions_shp = regions_shp.to_crs({'init': 'epsg:4326'})
+    
+    # Get original index in shapefile
+    regions['Index_shapefile'] = regions_shp['original_index']
+    
+    # Assign slack node
+    regions['slacknode'] = 0
+    regions.loc[0, 'slacknode'] = 1
+    
+    # Define synchronous areas and control areas
+    regions['syncharea'] = 1
+    regions['ctrarea'] = 1
+    
+    # Define reserves
+    regions['primpos'] = 0
+    regions['primneg'] = 0
+    regions['secpos'] = 0
+    regions['secneg'] = 0
+    regions['terpos'] = 0
+    regions['terneg'] = 0
 
-    # Extract series of site names, rename it and convert it into a dataframe
-    zones = pd.DataFrame(
-        regions[['NAME_SHORT', 'Area', 'Population', 'Longitude', 'Latitude']].rename(columns={'NAME_SHORT': 'Site'}))
-    zones = zones[['Site', 'Area', 'Population', 'Longitude', 'Latitude']]
-    zones.sort_values(['Site'], inplace=True)
-    zones.reset_index(inplace=True, drop=True)
+    # Export model-independent list of regions
+    regions.to_csv(paths["sites_sub"], index=False, sep=';', decimal=',')
 
-    zones.to_csv(paths["sites"], index=False, sep=';', decimal=',')
+    # # Preparing output for evrys
+    # zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
+    # zones_evrys['slacknode'] = 0
+    # zones_evrys.loc[0, 'slacknode'] = 1
+    # zones_evrys['syncharea'] = 1
+    # zones_evrys['ctrarea'] = 1
+    # zones_evrys['primpos'] = 0
+    # zones_evrys['primneg'] = 0
+    # zones_evrys['secpos'] = 0
+    # zones_evrys['secneg'] = 0
+    # zones_evrys['terpos'] = 0
+    # zones_evrys['terneg'] = 0
+    # zones_evrys = zones_evrys[
+        # ['Site', 'slacknode', 'syncharea', 'lat', 'long', 'ctrarea', 'primpos', 'primneg', 'secpos', 'secneg', 'terpos',
+         # 'terneg']]
 
-    # Preparing output for evrys
-    zones_evrys = zones[['Site', 'Latitude', 'Longitude']].rename(columns={'Latitude': 'lat', 'Longitude': 'long'})
-    zones_evrys['slacknode'] = 0
-    zones_evrys.loc[0, 'slacknode'] = 1
-    zones_evrys['syncharea'] = 1
-    zones_evrys['ctrarea'] = 1
-    zones_evrys['primpos'] = 0
-    zones_evrys['primneg'] = 0
-    zones_evrys['secpos'] = 0
-    zones_evrys['secneg'] = 0
-    zones_evrys['terpos'] = 0
-    zones_evrys['terneg'] = 0
-    zones_evrys = zones_evrys[
-        ['Site', 'slacknode', 'syncharea', 'lat', 'long', 'ctrarea', 'primpos', 'primneg', 'secpos', 'secneg', 'terpos',
-         'terneg']]
+    # # Preparing output for urbs
+    # zones_urbs = zones[['Site', 'Area']].rename(columns={'Site': 'Name', 'Area': 'area'})
+    # zones_urbs['area'] = zones_urbs['area'] * 1000000  # in m²
 
-    # Preparing output for urbs
-    zones_urbs = zones[['Site', 'Area']].rename(columns={'Site': 'Name', 'Area': 'area'})
-    zones_urbs['area'] = zones_urbs['area'] * 1000000  # in m²
-
-    zones_evrys.to_csv(paths["evrys_sites"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["evrys_sites"])
-    zones_urbs.to_csv(paths["urbs_sites"], index=False, sep=';', decimal=',')
-    print("File Saved: " + paths["urbs_sites"])
+    # zones_evrys.to_csv(paths["evrys_sites"], index=False, sep=';', decimal=',')
+    # print("File Saved: " + paths["evrys_sites"])
+    # zones_urbs.to_csv(paths["urbs_sites"], index=False, sep=';', decimal=',')
+    # print("File Saved: " + paths["urbs_sites"])
 
     timecheck('End')
 
@@ -146,77 +260,6 @@ def generate_intermittent_supply_timeseries(paths, param):
     print("File Saved: " + paths["suplm_TS"])
     Timeseries.to_csv(paths["urbs_suplm"], sep=';', decimal=',')
     print("File Saved: " + paths["urbs_suplm"])
-    timecheck('End')
-
-
-def generate_stratified_intermittent_supply_timeseries(paths, param):
-    '''
-    description
-    '''
-    timecheck('Start')
-    modes = param["modes"].keys()
-    # Loop Over the modes
-    for m in modes:
-        Timeseries = None
-        # Loop over the technologies
-        for tech in param["technology"]:
-            # Read coefs
-            if os.path.isfile(paths["reg_coef"][tech]):
-                Coef = pd.read_csv(paths["reg_coef"][tech], sep=';', decimal=',', index_col=[0])
-            else:
-                print("No regression Coefficients found for " + tech)
-                continue
-
-            # Extract hub heights and find the required TS
-            settings = np.sort(np.array(param["settings"][tech])).astype(str)
-            regions = pd.Series(Coef.columns).str.slice(0, 2).unique()
-            quantiles = param["modes"][m]
-
-            # Read the timeseries
-            TS = {}
-            paths = ts_paths(settings, tech, paths)
-
-            for set in settings:
-                TS[set] = pd.read_csv(paths["raw_TS"][tech][set],
-                                      sep=';', decimal=',', header=[0, 1], index_col=[0], dtype=np.float)
-
-            # Prepare Dataframe to be filled
-            tech = tech[:-1]
-            TS_tech = pd.DataFrame(np.zeros((8760, len(regions))), columns=regions + '.' + tech)
-            sumcoef = {}
-            for reg in regions:
-                sumcoef[reg] = 0
-                for set in settings:
-                    for quan in quantiles:
-                        if set != '':
-                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
-                                                        (TS[set][reg, 'q' + str(quan)] *
-                                                         Coef[reg + '_' + set].loc[
-                                                             quan])
-                            sumcoef[reg] = sumcoef[reg] + Coef[reg + '_' + set].loc[quan]
-                        else:
-                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + \
-                                                        (TS[set][reg, 'q' + str(quan)] * Coef[reg].loc[quan])
-                            sumcoef[reg] = sumcoef[reg] + Coef[reg].loc[quan]
-
-                # If coef are zero compute average of the timeseries
-                if sumcoef[reg] == 0:
-                    for set in settings:
-                        for quan in quantiles:
-                            TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] + TS[set][reg, 'q' + str(quan)]
-                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / (len(quantiles) * len(settings))
-                # else TS = TS / sum(Coef)
-                else:
-                    TS_tech[reg + '.' + tech] = TS_tech[reg + '.' + tech] / sumcoef[reg]
-
-            TS_tech.set_index(np.arange(1, 8761), inplace=True)
-            if Timeseries is None:
-                Timeseries = TS_tech.copy()
-            else:
-                Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
-
-            Timeseries.to_csv(paths["strat_TS"] + tech + '_' + m + '.csv', sep=';', decimal=',')
-            print("File Saved: " + paths["strat_TS"] + tech + '_' + m + '.csv')
     timecheck('End')
 
 
@@ -339,105 +382,89 @@ def generate_load_timeseries(paths, param):
     timecheck('Start')
 
     # Sector land use allocation
-    # The land use coefficients found in the assumptions table are normalized over each sector, and the results are
-    #  stored in the table 'sector_lu'
-    sector_lu = pd.read_excel(paths["assumptions"], sheet_name='Landuse', index_col=0, usecols=[0, 2, 3, 4])
+    sector_lu = pd.read_csv(paths["assumptions_landuse"], index_col=0, sep=";", decimal=",")
+    shared_sectors = set(sector_lu.columns).intersection(set(param["load"]["sectors"]))
+    sector_lu = sector_lu[sorted(list(shared_sectors))]
+    shared_sectors.add('RES')
+    if not shared_sectors == set(param["load"]["sectors"]):
+        warn('The following sectors are not included in ' + paths["assumptions_landuse"] + ": " + str(set(param["load"]["sectors"]) - shared_sectors), UserWarning)
+    
     landuse_types = [str(i) for i in sector_lu.index]
+    param["landuse_types"] = landuse_types
+    # Normalize the land use coefficients found in the assumptions table over each sector
     sector_lu = sector_lu.transpose().div(np.repeat(sector_lu.sum(axis=0)[:, None], len(sector_lu), axis=1))
     sec = [str(i) for i in sector_lu.index]
-    sec_dict = dict(zip(sec, param["load"]["sectors"]))
+    
 
     # Share of sectors in electricity demand
-    if param["region"] == 'California':
-        sec_share = pd.DataFrame.from_dict(param["load"]["sector_shares_Cal"])
+    sec_share = clean_sector_shares(paths, param)
+    
+    # Create landuse and population maps, if they do not exist already
+    if not os.path.exists(paths["LU"]):
+        generate_landuse(paths, param)
+    if not os.path.exists(paths["POP"]):
+        generate_population(paths, param)
+    
+    # Count pixels of each land use type and create weighting factors for each country
+    if not os.path.exists(paths["stats_countries"]):
+        df = zonal_stats2(param["regions_land"],
+                          {'Population': paths["POP"],
+                           'Landuse': paths["LU"]},
+                           param)
+        stat = param["regions_land"][["GID_0"]].rename(columns={'GID_0': 'Country'}).join(df).set_index('Country')
+        stat.to_csv(paths["stats_countries"], sep=";", decimal=",", index=True)
     else:
-        sec_share = pd.read_csv(paths["sector_shares"], sep=';', decimal=',', index_col=0)
-    stat = None
-
-    # Count pixels of each land use type and create weighting factors for each country:
-    # Population
-    stat_pop = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["POP"], 'population'))
-    stat_pop.rename(columns={'NAME_SHORT': 'Country', 'sum': 'RES'}, inplace=True)
-    stat_pop.set_index('Country', inplace=True)
-
-    # Land use
-    stat = pd.DataFrame.from_dict(zonal_stats(paths["Countries"], paths["LU"], 'landuse'))
-    stat.rename(columns={'NAME_SHORT': 'Country'}, inplace=True)
-    stat.set_index('Country', inplace=True)
-    stat = stat.loc[:, landuse_types].fillna(0)
-
-    # Join the two dataframes
-    stat = stat.join(stat_pop[['RES']])
-
+        stat = pd.read_csv(paths["stats_countries"], sep=";", decimal=",", index_col=0)
+    
     # Weighting by sector
     for s in sec:
-        for i in stat.index:
-            stat.loc[i, s] = np.dot(stat.loc[i, landuse_types], sector_lu.loc[s])
+        stat.loc[:, s] = np.dot(stat.loc[:, landuse_types], sector_lu.loc[s])
 
     if not (os.path.isfile(paths["df_sector"]) and
             os.path.isfile(paths["load_sector"]) and
             os.path.isfile(paths["load_landuse"])):
 
-        countries = gpd.read_file(paths["Countries"])
-        if param["region"] == 'California':
-            countries = countries[['NAME_0']].rename(columns={'NAME_0': 'Country'})
-        else:
-            countries = countries.drop(countries[countries["Population"] == 0].index)
-            countries = countries[['NAME_SHORT', 'Population']].rename(
-                columns={'NAME_SHORT': 'Country'})  # Eventually add GDP
-
         # Get dataframe with cleaned timeseries for countries
-        if param["region"] == 'California':
-            df_load_countries = pd.read_csv(paths["load_ts_ca"], header=0, sep=';', decimal=',')
-        else:
-            df_load_countries = clean_load_data(paths, param, countries)
-
-        # ADD IF statement to jump to urbs/evrys, if countries = desired resolution
-        # I didn't get it *
-
-        # Get sectoral profiles
+        df_load_countries = clean_load_data(paths, param)
+        countries = param["regions_land"].rename(columns={'GID_0': 'Country'})
+        
+        # Get sectoral normalized profiles
         profiles = get_sectoral_profiles(paths, param)
-
+        
         # Prepare an empty table of the hourly load for the five sectors in each countries.
         df_sectors = pd.DataFrame(0, index=df_load_countries.index, columns=pd.MultiIndex.from_product(
-            [df_load_countries.columns.tolist(), sec + ['RES']], names=['Country', 'Sector']))
-
+            [df_load_countries.columns.tolist(), param["load"]["sectors"]], names=['Country', 'Sector']))
+        
         # Copy the load profiles for each sector in the columns of each country, and multiply each sector by the share
-        # defined in 'sec_share'.
-        # Note that at the moment the values are the same for all countries
-
+        # defined in 'sec_share'. Note that at the moment the values are the same for all countries
         for c in df_load_countries.columns:
-            for s in sec + ['RES']:
-                if param["region"] == 'California':
-                    df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[s]
-                else:
+            for s in param["load"]["sectors"]:
+                try:
                     df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[c, s]
-
-        # Normalize the loads profiles over all sectors by the hour ei. The Sum of the loads of all sectors = 1
-        # for each hour
-
+                except KeyError:
+                    df_sectors.loc[:, (c, s)] = profiles[s] * sec_share.loc[param["load"]["default_sec_shares"], s]
+        
+        # Normalize the load profiles over all sectors by the hour so that the sum of the loads of all sectors = 1
+        # for each hour, then multiply with the actual hourly loads for each country
         df_scaling = df_sectors.groupby(level=0, axis=1).sum()
         for c in df_load_countries.columns:
             for s in sec + ['RES']:
-                df_sectors.loc[:, (c, s)] = df_sectors.loc[:, (c, s)] / df_scaling[c]
-
-        # Multiply the normalized hourly loads profiles by the actual hourly loads for each country 
-        # e.i. the share of the actual load for each sector is captured and stored in the table 'df_sectors' 
-        for c in df_load_countries.columns:
-            for s in sec + ['RES']:
-                df_sectors.loc[:, (c, s)] = df_sectors.loc[:, (c, s)] * df_load_countries[c]
-
+                df_sectors.loc[:, (c, s)] = df_sectors.loc[:, (c, s)] / df_scaling[c] * df_load_countries[c]
+        
         # Calculate the yearly load per sector and country
         load_sector = df_sectors.sum(axis=0).rename('Load in MWh')
-
+        
+        # Prepare dataframe load_landuse, that calculates the hourly load for each land use unit in each country
         rows = landuse_types.copy()
         rows.append('RES')
-        m_index = pd.MultiIndex.from_product([stat.index.tolist(), rows], names=['Country', 'Land use'])
+        countries = sorted(list(set(stat.index.tolist()).intersection(set(df_load_countries.columns))))
+        m_index = pd.MultiIndex.from_product([countries, rows], names=['Country', 'Land use'])
         load_landuse = pd.DataFrame(0, index=m_index, columns=df_sectors.index)
+        
         status = 0
-        length = len(stat.index.tolist()) * len(landuse_types) * len(sec)
+        length = len(countries) * len(landuse_types) * len(sec)
         display_progress("Computing regions load", (length, status))
-        for c in stat.index.tolist():  # Countries
+        for c in countries:  # Countries
             load_landuse.loc[c, 'RES'] = load_landuse.loc[c, 'RES'] \
                                          + df_sectors[(c, 'RES')] \
                                          / stat.loc[c, 'RES']
@@ -449,156 +476,74 @@ def generate_load_timeseries(paths, param):
                                               / stat.loc[c, s]
                     status = status + 1
                     display_progress("Computing regions load", (length, status))
-
+        
         # Save the data into HDF5 files for faster execution
         df_sectors.to_csv(paths["df_sector"], sep=';', decimal=',', index=False, header=True)
-        print("Dataframe df_sector saved: " + paths["df_sector"])
+        print("Dataframe with time series for each country and sector saved: " + paths["df_sector"])
         load_sector.to_csv(paths["load_sector"], sep=';', decimal=',', index=True, header=True)
-        print("Dataframe load_sector saved: " + paths["load_sector"])
+        print("Dataframe with yearly demand for each country and sector saved: " + paths["load_sector"])
         load_landuse.to_csv(paths["load_landuse"], sep=';', decimal=',', index=True)
-        print("Dataframe load_landuse saved: " + paths["load_landuse"])
+        print("Dataframe with time series for each land use pixel saved: " + paths["load_landuse"])
 
     # Read CSV files
     df_sectors = pd.read_csv(paths["df_sector"], sep=';', decimal=',', header=[0, 1])
     load_sector = pd.read_csv(paths["load_sector"], sep=';', decimal=',', index_col=[0, 1])["Load in MWh"]
     load_landuse = pd.read_csv(paths["load_landuse"], sep=';', decimal=',', index_col=[0, 1])
 
-    # Split regions into subregions
-    # (a region can overlap with many countries, but a subregion belongs to only one country)
-    intersection_regions_countries(paths)
+    # Split subregions into country parts
+    # (a subregion can overlap with many countries, but a country part belongs to only one country)
+    reg_intersection = intersection_subregions_countries(paths, param)
 
-    # Count number of pixels for each subregion
-
-    # Population
-    stat_pop_sub = pd.DataFrame.from_dict(
-        zonal_stats(paths["model_regions"] + 'intersection.shp', paths["POP"], 'population'))
-    stat_pop_sub.rename(columns={'NAME_SHORT': 'Subregion', 'sum': 'RES'}, inplace=True)
-    stat_pop_sub.set_index('Subregion', inplace=True)
-
-    # Land use
-    stat_sub = pd.DataFrame.from_dict(zonal_stats(paths["model_regions"] + 'intersection.shp', paths["LU"], 'landuse'))
-    stat_sub.rename(columns={'NAME_SHORT': 'Subregion'}, inplace=True)
-    stat_sub.set_index('Subregion', inplace=True)
-
-    stat_sub = stat_sub.loc[:, landuse_types].fillna(0)
-
-    # Join the two dataframes
-    stat_sub = stat_sub.join(stat_pop_sub[['RES']])
+    # Count number of pixels for each country part
+    if not os.path.exists(paths["stats_country_parts"]):
+        df = zonal_stats2(reg_intersection,
+                          {'Population': paths["POP"],
+                           'Landuse': paths["LU"]},
+                           param)
+        stat_sub = reg_intersection[["NAME_SHORT"]].rename(columns={'NAME_SHORT': 'Country_part'}).join(df).set_index('Country_part')
+        stat_sub.to_csv(paths["stats_country_parts"], sep=";", decimal=",", index=True)
+    else:
+        stat_sub = pd.read_csv(paths["stats_country_parts"], sep=";", decimal=",", index_col=0)
 
     # Add attributes for country/region
     stat_sub['Region'] = 0
     stat_sub['Country'] = 0
     for i in stat_sub.index:
         stat_sub.loc[i, ['Region', 'Country']] = i.split('_')
+        if stat_sub.loc[i, 'Country'] not in list(df_sectors.columns.get_level_values(0).unique()):
+            stat_sub.drop(index=i, inplace=True)
 
+    # Prepare dataframe to save the hourly load in each country part
+    load_country_part = pd.DataFrame(0, index=stat_sub.index,
+                                     columns=df_sectors.index.tolist() + ['Region', 'Country'])
+    load_country_part[['Region', 'Country']] = stat_sub[['Region', 'Country']]
+    
     # Calculate the hourly load for each subregion
-
-    load_subregions = pd.DataFrame(0, index=stat_sub.index,
-                                   columns=df_sectors.index.tolist() + ['Region', 'Country'])
-    load_subregions[['Region', 'Country']] = stat_sub[['Region', 'Country']]
     status = 0
-    length = len(load_subregions.index) * len(landuse_types)
-
+    length = len(load_country_part.index) * len(landuse_types)
     display_progress("Computing sub regions load:", (length, status))
-
-    for sr in load_subregions.index:
-        c = load_subregions.loc[sr, 'Country']
+    for cp in load_country_part.index:
+        c = load_country_part.loc[cp, 'Country']
         # For residential:
-        load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
-                                                             + stat_sub.loc[sr, 'RES'] \
+        load_country_part.loc[cp, df_sectors.index.tolist()] = load_country_part.loc[cp, df_sectors.index.tolist()] \
+                                                             + stat_sub.loc[cp, 'RES'] \
                                                              * load_landuse.loc[c, 'RES'].to_numpy()
         for lu in landuse_types:
-            load_subregions.loc[sr, df_sectors.index.tolist()] = load_subregions.loc[sr, df_sectors.index.tolist()] \
-                                                                 + stat_sub.loc[sr, lu] \
+            load_country_part.loc[cp, df_sectors.index.tolist()] = load_country_part.loc[cp, df_sectors.index.tolist()] \
+                                                                 + stat_sub.loc[cp, lu] \
                                                                  * load_landuse.loc[c, lu].to_numpy()
             # show_progress
             status = status + 1
-            display_progress("Computing sub regions load", (length, status))
+            display_progress("Computing load in country parts", (length, status))
 
-    load_regions = load_subregions.groupby(['Region', 'Country']).sum()
+    # Aggregate into subregions
+    load_regions = load_country_part.groupby(['Region', 'Country']).sum()
     load_regions.reset_index(inplace=True)
-    load_regions.set_index(['Region'], inplace=True)
-
-    for s in sec + ['RES']:
-        zonal_weighting(paths, load_sector, stat, s)
-
-    # Export to evrys/urbs
-
-    # Aggregate subregions
-    load_regions.reset_index(inplace=True)
-    load_regions = load_regions.groupby(['Region']).sum()
-
-    # Calculate the sum (yearly consumption) in a separate vector
-    yearly_load = load_regions.sum(axis=1)
-
-    # Calculte the ratio of the hourly load to the yearly load
-    df_normed = load_regions / np.tile(yearly_load.to_numpy(), (8760, 1)).transpose()
-
-    # Prepare the output in the desired format
-    df_output = pd.DataFrame(list(df_normed.index) * 8760, columns=['sit'])
-    df_output['value'] = np.reshape(df_normed.to_numpy(), -1, order='F')
-    df_output['t'] = df_output.index // len(df_normed) + 1
-    df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
-
-    df_evrys = df_output[['t', 'sit', 'co', 'value']]  # .rename(columns={'Region': 'sit'})
-
-    # Transform the yearly load into a dataframe
-    df_load = pd.DataFrame()
-
-    df_load['annual'] = yearly_load
-
-    # Preparation of dataframe
-    df_load = df_load.reset_index()
-    df_load = df_load.rename(columns={'Region': 'sit'})
-
-    # Merging load dataframes and calculation of total demand
-    df_load['total'] = param["load"]["degree_of_eff"] * df_load['annual']
-
-    if param["load"]["distribution_type"] == 'population_GDP':
-        try:
-            # Calculate regional information for load destribution
-            demand_des_sum = demand_des.groupby(['Countries']).sum()
-            demand_des_sum = demand_des_sum.reset_index().rename(
-                columns={'GDP': 'GDP_Sum', 'Population': 'Population_Sum'})
-
-            # Merging of regional information, annual load and normalized load
-            df_help = pd.merge(df_load, demand_des_sum, how='inner', on=['Countries'])
-            df_merged = pd.merge(df_output, demand_des, how='inner', on=['Site'])
-            df_merged = df_merged.rename(columns={'Countries_x': 'Countries'})
-            df_merged = pd.merge(df_merged, df_help, how='inner', on=['Countries'])
-
-            # Calculation of the distributed load per region
-            df_merged['value_normal'] = df_merged['value'] * df_merged['total'] * (
-                    factor_GDP * df_merged['GDP'] / df_merged['GDP_Sum'] + factor_Pop * df_merged['Population'] /
-                    df_merged['Population_Sum'])
-        except:
-            raise Exception('Demand_des not implemented')
-    else:
-        df_merged = pd.merge(df_output, df_load, how='outer', on=['sit'])
-        df_merged['value_normal'] = df_merged['value'] * df_merged['total']
-
-    # Calculation of the absolute load per country
-    df_absolute = df_merged  # .reset_index()[['t','Countries','value_normal']]
-
-    # Rename the countries
-    df_absolute['sitco'] = df_absolute['sit'] + '.Elec'
-
-    df_urbs = df_absolute.pivot(index='t', columns='sitco', values='value_normal')
-    df_urbs = df_urbs.reset_index()
-
-    # Yearly consumption for each zone
-    annual_load = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
-
+    load_regions = load_regions.groupby(['Region']).sum().T
+    
     # Output
-
-    annual_load.to_csv(paths["annual_load"], sep=',', index=True)
-    print("File Saved: " + paths["annual_load"])
-
-    df_urbs.to_csv(paths["urbs_demand"], sep=';', decimal=',', index=False)
-    print("File Saved: " + paths["urbs_demand"])
-
-    df_evrys.to_csv(paths["evrys_demand"], sep=';', decimal=',', index=False)
-    print("File Saved: " + paths["evrys_demand"])
+    load_regions.to_csv(paths["load_regions"], sep=';', decimal=',', index=True)
+    print("File saved: " + paths["load_regions"])
 
     timecheck('End')
 
@@ -1332,7 +1277,7 @@ def generate_processes_and_storage_california(paths, param):
 
 def clean_grid_data(paths, param):
     """
-
+    @all-contributors please add @kais-siala for bug, code, doc, ideas, maintenance, review, test and talk
     :param paths:
     :param param:
     :return:
@@ -1340,10 +1285,10 @@ def clean_grid_data(paths, param):
     timecheck("Start")
 
     # Read CSV file containing the lines data
-    grid_raw = pd.read_csv(paths["grid"], header=0, sep=',', decimal='.')
+    grid_raw = pd.read_csv(paths["transmission_lines"], header=0, sep=',', decimal='.')
+    #import pdb; pdb.set_trace()
 
     # Extract the string with the coordinates from the last column
-
     grid_raw["wkt_srid_4326"] = pd.Series(map(lambda s: s[21:-1], grid_raw["wkt_srid_4326"]), grid_raw.index)
 
     # Extract the coordinates into a new dataframe with four columns for each coordinate
@@ -1356,107 +1301,55 @@ def clean_grid_data(paths, param):
     # Drop the old column and the coordinates dataframe
     grid_raw.drop('wkt_srid_4326', axis=1, inplace=True)
     del coordinates
-
-    # Compte the columns voltage and wire if they have no value
-    grid_completed = grid_raw.copy()
-    grid_completed.loc[grid_completed["voltage"].isnull(), 'voltage'] = '220000'
-    grid_completed.loc[grid_completed["wires"].isnull(), 'wires'] = '2'
-
-    # Remove all the entries where the voltage is zero
-    n_voltages = map(zero_free, map(string_to_int, grid_completed.voltage.str.split(';')))
-    n_voltages_count = pd.Series(map(len, n_voltages), index=grid_completed.index)
-    grid_filtered = grid_completed[(n_voltages_count > 0)]
-
-    # Reset the indices
-    grid_sorted = grid_filtered.reset_index(drop=False)
-    grid_sorted.rename(columns={'index': 'index_old'}, inplace=True)
-
-    # Save the old indices as a series of objects
-    grid_sorted = grid_sorted.astype({'index_old': object})
-
-    # Match multiple entries for wires and voltage to one circuit
-    grid_clean = match_wire_voltages(grid_sorted)
-
-    # Special correction for the USA: DC and AC split
-    if os.path.basename(paths["grid"]) == 'gridkit_north_america-highvoltage-links.csv':
-        ind_excerpt = grid_clean[grid_clean["frequency"] == '60;0'].index
-        suffix = 1  # When we create a new row, we will add a suffix to the old index
-
-        grid_clean_f = grid_clean
-        for i in ind_excerpt:
-            # Append a copy of the ith row of grid at the end of the same dataframe
-            grid_clean_f = grid_clean_f.append(grid_clean_f.loc[i], ignore_index=True)
-            # Extract the first frequency from that row and remove the rest of the string
-            grid_clean_f.loc[i, 'frequency'] = grid_clean_f.loc[i, 'frequency'][
-                                               :grid_clean_f.loc[i, 'frequency'].find(';')]
-            # Extract the last frequency from the last row and remove the rest of the string
-            grid_clean_f.frequency.iloc[-1] = grid_clean_f.frequency.iloc[-1][
-                                              grid_clean_f.frequency.iloc[-1].find(';') + 1:]
-
-            # Update the number of circuits in the ith row
-            grid_clean_f.wires.loc[i] = grid_clean_f.wires.loc[i] - 1
-            # Update the number of circuits in the last row
-            grid_clean_f.wires.iloc[-1] = 1
-
-            # Check whether there is only one copy of the ith row, or more
-            if str(grid_clean_f.index_old.iloc[-1]).find('_') > 0:  # There are more than one copy of the row
-                # Increment the suffix and replace the old one
-                suffix = suffix + 1
-                grid_clean_f.index_old.iloc[-1] = grid_clean_f.index_old.iloc[-1].replace('_' + str(suffix - 1),
-                                                                                          '_' + str(suffix))
-            else:  # No other copy has been created so far
-                # Reinitialize the suffix and concatenate it at the end of the old index
-                suffix = 1
-                grid_clean_f.index_old.iloc[-1] = str(grid_clean_f.index_old.iloc[-1]) + '_' + str(suffix)
-
-            # Set the voltage of the DC line
-            grid_clean_f.voltage.iloc[-1] = 500
-
-        # Replace empty values in the column frequency with 60 Hz
-        grid_clean_f.frequency.fillna(60, inplace=True)
-        grid_clean_f.loc[grid_clean_f.index, 'frequency'] = grid_clean_f.frequency.astype(int)
-    else:
-        grid_clean_f = grid_clean
-
-        # Replace empty values in the column frequency with 50 Hz
-        grid_clean_f.frequency.fillna(50, inplace=True)
-
-    grid_filled = grid_clean.copy()
+    
+    # Expand columns with multiple values
+    grid_expanded = grid_raw.copy()
+    grid_expanded = expand_dataframe(grid_expanded, ["voltage", "wires", "cables", "frequency"])
+    grid_expanded.to_csv(paths["grid_expanded"], index=False, sep=';', decimal=',')
+    
+    # If data is trustworthy, remove NaN values
+    grid_filtered = grid_expanded.copy()
+    for col in ["voltage", "wires", "cables", "frequency"]:
+        if param["grid"]["quality"][col] == 1:
+            grid_filtered = grid_filtered[~grid_filtered[col].isnull()]
+    grid_filtered.to_csv(paths["grid_filtered"], index=False, sep=';', decimal=',')
+    
+    # Fill missing data with most common value
+    grid_corrected = grid_filtered.copy()
+    for col in ["voltage", "wires", "cables", "frequency"]:
+        grid_corrected.loc[grid_corrected[col].isnull(), col] = grid_corrected[col].value_counts().index[0]
+    
+    # Replace voltage = 0 with most common value
+    grid_corrected.loc[grid_corrected["voltage"] == 0, "voltage"] = grid_corrected["voltage"].value_counts().index[0]
+    
+    # Eventually overwrite the values in 'wires' using 'cables'
+    if param["grid"]["quality"]["cables"] > param["grid"]["quality"]["wires"]:
+        grid_corrected.loc[:, "wires"] = np.minimum(grid_corrected.loc[:, "cables"] // 3, 1)
+    grid_corrected.to_csv(paths["grid_corrected"], index=False, sep=';', decimal=',')
+    
+    # Complete missing information
+    grid_filled = grid_corrected.copy()
     grid_filled["length_m"] = grid_filled["length_m"].astype(float)
-
-    # Filling the values for X_ohmkm and calculating X_ohm
-    grid_filled.loc[grid_filled[grid_filled.voltage <= 230].index, 'x_ohmkm'] = 0.3315
-    grid_filled.loc[grid_filled[grid_filled.voltage > 230].index, 'x_ohmkm'] = 0.2613
-    grid_filled['X_ohm'] = grid_filled['x_ohmkm'] * grid_filled['length_m'] / 1000 / grid_filled['wires'].astype(float)
-
-    # Filling the values for the loadability c
-    grid_filled = set_loadability(grid_filled, param)
-
-    # Filling the values for SIL_MW and calculating Capacity_MVA
-    grid_filled.loc[grid_filled[grid_filled["voltage"] <= 230].index, 'SIL_MW'] = 230
-    grid_filled.loc[grid_filled[grid_filled["voltage"] > 230].index, 'SIL_MW'] = 670
-    grid_filled.loc[grid_filled.index, 'Capacity_MVA'] = \
-        pd.Series([s * c * int(w) for s, c, w in zip(grid_filled.SIL_MW, grid_filled.loadability_c, grid_filled.wires)],
-                  index=grid_filled.index)
-
-    # Sum the capacities of tines with same ID
-    grid_cleaned = grid_filled[['Capacity_MVA', 'l_id']].groupby(['l_id']).sum()
-    grid_cleaned = grid_cleaned.join(
-        grid_filled[['l_id', 'V1_long', 'V1_lat', 'V2_long', 'V2_lat', 'frequency', 'X_ohm']].set_index(['l_id']))
-    grid_cleaned.drop_duplicates(inplace=True)
-    grid_cleaned.reset_index(inplace=True)
-
-    # Clean entries in frequency
-    grid_cleaned.loc[grid_cleaned['frequency'] == '0', 'tr_type'] = 'DC_CAB'
-    grid_cleaned.loc[~(grid_cleaned['frequency'] == '0'), 'tr_type'] = 'AC_OHL'
-
-    # Drop column 'frequency'
-    grid_cleaned.drop(['frequency'], axis=1, inplace=True)
-
-    grid_cleaned[['V1_long', 'V1_lat', 'V2_long', 'V2_lat']] = grid_cleaned[
-        ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']].astype(float)
-    grid_cleaned.to_csv(paths["grid_cleaned"], index=False, sep=';', decimal=',')
+    grid_filled["x_ohmkm"] = assign_values_based_on_series(grid_filled["voltage"] / 1000, param["grid"]["specific_reactance"])
+    grid_filled["X_ohm"] = grid_filled['x_ohmkm'] * grid_filled['length_m'] / 1000 / grid_filled['wires']
+    grid_filled["loadability"] = assign_values_based_on_series(grid_filled["length_m"] / 1000, param["grid"]["loadability"])
+    grid_filled["SIL_MW"] = assign_values_based_on_series(grid_filled["voltage"] / 1000, param["grid"]["SIL"])
+    grid_filled["Capacity_MVA"] = grid_filled["SIL_MW"] * grid_filled["loadability"] * grid_filled["wires"]
+    grid_filled["Y_mho_ref_380kV"] = 1 / (grid_filled["X_ohm"] * ((380000 / grid_filled["voltage"]) ** 2))
+    grid_filled.loc[grid_filled['frequency'] == 0, 'tr_type'] = 'DC_CAB'
+    grid_filled.loc[~(grid_filled['frequency'] == 0), 'tr_type'] = 'AC_OHL'
+    grid_filled.to_csv(paths["grid_filled"], index=False, sep=';', decimal=',')
+    
+    # Group lines with same IDs
+    grid_grouped = grid_filled[["l_id", "tr_type", "Capacity_MVA", "Y_mho_ref_380kV", "V1_long", "V1_lat", "V2_long", "V2_lat"]] \
+                              .groupby(["l_id", "tr_type", "V1_long", "V1_lat", "V2_long", "V2_lat"]).sum()
+    grid_grouped.reset_index(inplace=True)
+    grid_grouped.loc[:, ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']] = grid_grouped.loc[:, ['V1_long', 'V1_lat', 'V2_long', 'V2_lat']].astype(float)
+    #import pdb; pdb.set_trace()
+    grid_grouped.to_csv(paths["grid_cleaned"], index=False, sep=';', decimal=',')
     print("File Saved: " + paths["grid_cleaned"])
+
+    #import pdb; pdb.set_trace()
 
     # Writing to shapefile
     with shp.Writer(paths["grid_shp"], shapeType=3) as w:
@@ -1464,14 +1357,14 @@ def clean_grid_data(paths, param):
         w.field('ID', 'N', 6, 0)
         w.field('Cap_MVA', 'N', 8, 2)
         w.field('Type', 'C', 6, 0)
-        count = len(grid_cleaned.index)
+        count = len(grid_grouped.index)
         status = 0
-        for i in grid_cleaned.index:
+        for i in grid_grouped.index:
             status += 1
-            display_progress("Writing grid to Shapefile: ", (count, status))
-            w.line([[grid_cleaned.loc[i, ['V1_long', 'V1_lat']].astype(float),
-                     grid_cleaned.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
-            w.record(grid_cleaned.loc[i, 'l_id'], grid_cleaned.loc[i, 'Capacity_MVA'], grid_cleaned.loc[i, 'tr_type'])
+            display_progress("Writing grid to shapefile: ", (count, status))
+            w.line([[grid_grouped.loc[i, ['V1_long', 'V1_lat']].astype(float),
+                     grid_grouped.loc[i, ['V2_long', 'V2_lat']].astype(float)]])
+            w.record(grid_grouped.loc[i, 'l_id'], grid_grouped.loc[i, 'Capacity_MVA'], grid_grouped.loc[i, 'tr_type'])
 
     print("File Saved: " + paths["grid_shp"])
     timecheck("End")
@@ -1575,92 +1468,159 @@ def generate_urbs_model(paths, param):
     """
     timecheck('Start')
 
-    # List all files present in urbs folder
-    urbs_paths = glob.glob(paths["urbs"] + '*.csv')
-    # create empty dictionary
     urbs_model = {}
-    # read .csv files and associate them with relevant sheet
-    for name in urbs_paths:
-        # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
-        urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
+    
+    # Read sites
+    if os.path.exists(paths["sites_sub"]):
+        sites = pd.read_csv(paths["sites_sub"], sep=';', decimal=',')
+        sites = sites[['Name', 'Area_m2']].rename(columns = {'Area_m2': 'area'})
+        urbs_model["Site"] = sites
+        
+    # Read electricity demand
+    if os.path.exists(paths["load_regions"]):
+        demand = pd.read_csv(paths["load_regions"], sep=';', decimal=',', index_col=0)
+        demand.columns = demand.columns + '.Elec'
+        demand.index.name = "t"
+        demand.index = range(1,8761)
+        demand.loc[0] = 0
+        demand.sort_index(inplace=True)
+        urbs_model["Demand"] = demand
+        
+    # # List all files present in urbs folder
+    # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
+    # # create empty dictionary
+    # urbs_model = {}
+    # # read .csv files and associate them with relevant sheet
+    # for name in urbs_paths:
+        # # clean input names and associate them with the relevant dataframe
+        # sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
+        # urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
-    # Add global parameters
-    urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
+    # # Add global parameters
+    # urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
 
-    # Add Process-Commodity parameters
-    urbs_model["Process-Commodity"] = pd.read_excel(paths["assumptions"], sheet_name='Process-Commodity').fillna(0)
+    # # Add Process-Commodity parameters
+    # urbs_model["Process-Commodity"] = pd.read_excel(paths["assumptions"], sheet_name='Process-Commodity').fillna(0)
 
-    # Filter processes if not in Process-Commodity
-    urbs_model["Process"] = urbs_model["Process"].loc[
-        urbs_model["Process"]["Process"].isin(urbs_model["Process-Commodity"]["Process"].unique())]
+    # # Filter processes if not in Process-Commodity
+    # urbs_model["Process"] = urbs_model["Process"].loc[
+        # urbs_model["Process"]["Process"].isin(urbs_model["Process-Commodity"]["Process"].unique())]
 
-    # Verify Commodity
-    missing_commodities = urbs_model["Process-Commodity"]["Commodity"].loc[
-        ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
-    if len(missing_commodities) > 0:
-        print("Error: Missing Commodities from Process-Commodity: ")
-        print(missing_commodities)
-        return
+    # # Verify Commodity
+    # missing_commodities = urbs_model["Process-Commodity"]["Commodity"].loc[
+        # ~urbs_model["Process-Commodity"]["Commodity"].isin(urbs_model["Commodity"]["Commodity"].unique())]
+    # if len(missing_commodities) > 0:
+        # print("Error: Missing Commodities from Process-Commodity: ")
+        # print(missing_commodities)
+        # return
 
-    # Add DSM and Buy-Sell-Price
-    DSM_header = ['Site', 'Commodity', 'delay', 'eff', 'recov', 'cap-max-do', 'cap-max-up']
-    urbs_model["DSM"] = pd.DataFrame(columns=DSM_header)
-    urbs_model["Buy-Sell-Price"] = pd.DataFrame(np.arange(0, 8761), columns=['t'])
+    # # Add DSM and Buy-Sell-Price
+    # DSM_header = ['Site', 'Commodity', 'delay', 'eff', 'recov', 'cap-max-do', 'cap-max-up']
+    # urbs_model["DSM"] = pd.DataFrame(columns=DSM_header)
+    # urbs_model["Buy-Sell-Price"] = pd.DataFrame(np.arange(0, 8761), columns=['t'])
 
     # Create ExcelWriter
     with ExcelWriter(paths["urbs_model"], mode='w') as writer:
         # populate excel file with available sheets
         status = 0
-        for sheet in param["urbs_model_sheets"]:
-            if sheet in urbs_model.keys():
-                urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
+        for sheet in urbs_model.keys():
+            urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
             status += 1
-            display_progress("Writing to Excel File in progress: ", (len(param["urbs_model_sheets"]), status))
+            display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
 
-    print("File Saved: " + paths["urbs_model"])
+    print("File saved: " + paths["urbs_model"])
 
     timecheck('End')
 
+    # # Calculate the sum (yearly consumption) in a separate vector
+    # yearly_load = load_regions.sum(axis=1)
+
+    # # Calculte the ratio of the hourly load to the yearly load
+    # df_normed = load_regions / np.tile(yearly_load.to_numpy(), (8760, 1)).transpose()
+
+    # # Prepare the output in the desired format
+    # df_output = pd.DataFrame(list(df_normed.index) * 8760, columns=['sit'])
+    # df_output['value'] = np.reshape(df_normed.to_numpy(), -1, order='F')
+    # df_output['t'] = df_output.index // len(df_normed) + 1
+    # df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
+
+    # df_evrys = df_output[['t', 'sit', 'co', 'value']]  # .rename(columns={'Region': 'sit'})
+
+    # # Transform the yearly load into a dataframe
+    # df_load = pd.DataFrame()
+
+    # df_load['annual'] = yearly_load
+
+    # # Preparation of dataframe
+    # df_load = df_load.reset_index()
+    # df_load = df_load.rename(columns={'Region': 'sit'})
+
+    # # Merging load dataframes and calculation of total demand
+    # df_load['total'] = param["load"]["degree_of_eff"] * df_load['annual']
+    # df_merged = pd.merge(df_output, df_load, how='outer', on=['sit'])
+    # df_merged['value_normal'] = df_merged['value'] * df_merged['total']
+
+    # # Calculation of the absolute load per country
+    # df_absolute = df_merged  # .reset_index()[['t','Countries','value_normal']]
+
+    # # Rename the countries
+    # df_absolute['sitco'] = df_absolute['sit'] + '.Elec'
+
+    # df_urbs = df_absolute.pivot(index='t', columns='sitco', values='value_normal')
+    # df_urbs = df_urbs.reset_index()
+
+    # # Yearly consumption for each zone
+    # annual_load = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
 
 def generate_evrys_model(paths, param):
     """
-        Read model's .csv files, and create relevant dataframes.
-        Writes dataframes to evrys input excel file.
-        """
+    Read model's .csv files, and create relevant dataframes.
+    Writes dataframes to evrys input excel file.
+    """
     timecheck('Start')
 
-    # List all files present in urbs folder
-    evrys_paths = glob.glob(paths["evrys"] + '*.csv')
-    # create empty dictionary
     evrys_model = {}
-    # read .csv files and associate them with relevant sheet
-    for name in evrys_paths:
-        # clean input names and associate them with the relevant dataframe
-        sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
-        evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
+    
+    # Read sites
+    if os.path.exists(paths["sites_sub"]):
+        sites = pd.read_csv(paths["sites_sub"], sep=';', decimal=',')
+        sites = sites[['Name', 'slacknode', 'syncharea', 'Latitude', 'Longitude', 'ctrarea', 'primpos', 'primneg', 'secpos', 'secneg', 'terpos', 'terneg']].rename(
+            columns = {'Name': 'Site', 'Latitude': 'lat', 'Longitude': 'long'})
+        evrys_model["Site"] = sites
+    
+    # # List all files present in urbs folder
+    # evrys_paths = glob.glob(paths["evrys"] + '*.csv')
+    # # create empty dictionary
+    # evrys_model = {}
+    # # read .csv files and associate them with relevant sheet
+    # for name in evrys_paths:
+        # # clean input names and associate them with the relevant dataframe
+        # sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
+        # evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
 
     # Create ExcelWriter
     with ExcelWriter(paths["evrys_model"], mode='w') as writer:
         # populate excel file with available sheets
         status = 0
-        for sheet in param["evrys_model_sheets"]:
-            if sheet in evrys_model.keys():
-                evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+        for sheet in evrys_model.keys():
+            evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
             status += 1
-            display_progress("Writing to Excel File in progress: ", (len(param["evrys_model_sheets"]), status))
+            display_progress("Writing to excel file in progress: ", (len(evrys_model.keys()), status))
 
-    print("File Saved: " + paths["evrys_model"])
+    print("File saved: " + paths["evrys_model"])
 
     timecheck('End')
 
 
 if __name__ == '__main__':
     paths, param = initialization()
-    # generate_sites_from_shapefile(paths)  # done
+    # generate_sites_from_shapefile(paths)
+    # generate_load_timeseries(paths, param)
+    clean_grid_data(paths, param)  # corresponds to 06a - done
+    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
+    
     # generate_intermittent_supply_timeseries(paths, param)  # separate module
-    generate_stratified_intermittent_supply_timeseries(paths, param)
-    # generate_load_timeseries(paths, param)  # done - Added California's param
+    # generate_stratified_intermittent_supply_timeseries(paths, param)
     # generate_commodity(paths, param)  # corresponds to 04 - done
     # distribute_renewable_capacities(paths, param)  # corresponds to 05a - done
     # if param["region"] == 'California':
@@ -1670,7 +1630,6 @@ if __name__ == '__main__':
     #     clean_processes_and_storage_data_FRESNA(paths, param)  # Optional
     #     generate_processes(paths, param)  # corresponds to 05c - done
     #     generate_storage(paths, param)  # corresponds to 05d - done (Weird code at the end)
-    # clean_grid_data(paths, param)  # corresponds to 06a - done
-    # generate_aggregated_grid(paths, param)  # corresponds to 06b - done
-    # generate_urbs_model(paths, param)  # Done
+    
+    # generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)
