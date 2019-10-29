@@ -1,12 +1,15 @@
+================
 generate-models
 ================
+
+-----------------------------------------------------------------------------------------------
 A pre-processing tool to automate the creation of energy system models using a common database
 -----------------------------------------------------------------------------------------------
 
 :Code developers: Kais Siala, Houssame Houmy
 :Documentation authors:	Kais Siala		
 :Maintainers: Kais Siala <kais.siala@tum.de>
-:Organization: `Chair of Renewable and Sustainable Energy Systems`_, Technical University of Munich
+:Organization: `Chair of Renewable and Sustainable Energy Systems <http://www.ens.ei.tum.de/en/homepage/>`_, Technical University of Munich
 :Version: |version|
 :Date: |today|
 :License:
@@ -40,7 +43,14 @@ Contents
 User manual
 ^^^^^^^^^^^^^
 
-to be completed
+These documents give a general overview and help you getting started from the installation to you first running model.
+
+.. the following section contains the links to the other parts of the documentation, the 'maxdepth' component define how many sub sections should be displayed
+
+.. toctree::
+   :maxdepth: 3
+   
+   user_manual
 
 Technical documentation
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -51,9 +61,23 @@ Continue here if you want to understand in detail the model implementation.
    
    implementation
 
+Dependencies
+------------
+
+A list of the used libraries is available in the environment file:
+
+.. literalinclude:: ../env/gen_mod.yml
+
+Bibliography	
+------------
+
+.. toctree::
+   :maxdepth: 1
+   
+   zref
+
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`

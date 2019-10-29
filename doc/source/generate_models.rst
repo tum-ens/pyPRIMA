@@ -1,7 +1,7 @@
 generate\_models module
 =======================
 
-.. automodule:: generate_models
+.. automodule:: lib.generate_models
    :members:
    :undoc-members:
    :show-inheritance:
