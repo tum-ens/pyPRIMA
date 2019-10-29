@@ -1,0 +1,9 @@
+name: gen_mod
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - Work in progress
+
+prefix: C:\ProgramData\Anaconda3\envs\gen_mod
+

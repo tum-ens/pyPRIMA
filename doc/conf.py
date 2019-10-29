@@ -14,7 +14,7 @@ import os
 import sys
 sys.path.append(os.path.abspath('../code/'))
 import sphinx_rtd_theme
-
+import sphinxcontrib.bibtex
 
 # -- Project information -----------------------------------------------------
 
@@ -33,6 +33,7 @@ release = '1.0.0'
 # ones.
 extensions = ['sphinx.ext.autodoc',
               "sphinx_rtd_theme",
+              'sphinxcontrib.bibtex'
               ]
 
 master_doc = 'index'
@@ -68,6 +69,36 @@ html_theme_options = {
     'titles_only': False
 }
 
+# -- Options for LatexPDF output ---------------------------------------------- 
+
+# 'startdocname': '',  # (path) Start file for the documentation to be included in PDF, can be left empty to use default index.rst
+# 'targetname': project,  # (str) Output name of the Latex file generated
+# 'title':'',  # (str) Title of the Latex/pdf file, can be left empty to use the title of startdocname
+# 'author': 'Kais Siala, \\Sergio Alejandro Huezo Rodriguez, \\and Houssame Houmy. ',  # (str) Authors, use \\ to separate authors (e.i. 'John \\and Sarah')
+# 'documentclass': '',  # not clear
+# 'toctree_only': True  # (bool) Include startdocname in the latex/pdf ? can be used to have different first pages. The first toctree entry in startdocname will be used.
+
+latex_documents = [(master_doc, project+'.tex', project, 'Kais Siala \\ \\and Houssame Houmy', 'manual', True)]
+
+# Remove redundant white pages 
+latex_elements = {
+    'classoptions': 'oneside',
+    'papersize': 'letterpaper',
+    'pointsize': '11pt',
+    'preamble': r'''
+        \usepackage{charter}
+        \usepackage[T1]{fontenc}
+        \usepackage{inconsolata}
+    ''',
+}
+
+# latex_toplevel_sectioning = 'section'
+# This value determines the topmost sectioning unit. It should be chosen from 'part', 'chapter' or 'section'. 
+# The default is None; the topmost sectioning unit is switched by documentclass: section is used if documentclass will be howto, otherwise chapter will be used.
+# Note that if LaTeX uses \part command, then the numbering of sectioning units one level deep gets off-sync with HTML numbering, because LaTeX numbers continuously \chapter
+
+
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
@@ -76,5 +107,5 @@ html_static_path = ['_static']
 # Modules to be ignored
 autodoc_mock_imports = ["pathlib", "os", "datetime", "numpy", "osgeo", "pandas", "geopandas",
                         "shapely", "shapefile", "pysal", "geopy", "sys", "inspect", "scipy", "os",
-                        "shutil", "glob"]
+                        "shutil", "glob","rasterio"]
 
