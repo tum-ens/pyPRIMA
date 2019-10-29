@@ -6,8 +6,8 @@ import numpy as np
 from shapely import geometry
 from shapely.geometry import Polygon, Point
 import shapefile as shp
-# import pysal as ps
-# from geopy import distance
+import pysal as ps
+from geopy import distance
 import sys
 import datetime
 import inspect

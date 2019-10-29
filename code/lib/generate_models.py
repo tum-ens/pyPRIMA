@@ -1,6 +1,4 @@
-from helping_functions import *
 # from config import ts_paths
-
 
 def generate_urbs_model(paths, param):
     """
@@ -36,6 +34,12 @@ def generate_urbs_model(paths, param):
         # # clean input names and associate them with the relevant dataframe
         # sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
         # urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
+        
+    # TRANSMISSION
+    # # Change the order of the columns
+    # output_urbs = output_urbs[
+        # ['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
+         # 'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
 
     # # Add global parameters
     # urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
@@ -138,6 +142,13 @@ def generate_evrys_model(paths, param):
         # # clean input names and associate them with the relevant dataframe
         # sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
         # evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
+        
+    # TRANSMISSION
+    # # evrys
+    # output_evrys = pd.DataFrame(icl_final,
+                                # columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up',
+                                         # 'reactance',
+                                         # 'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
 
     # Create ExcelWriter
     with ExcelWriter(paths["evrys_model"], mode='w') as writer:

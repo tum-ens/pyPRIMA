@@ -330,10 +330,18 @@ def generate_load_timeseries(paths, param):
 
 def generate_transmission(paths, param):
     """
-
-    :param paths:
-    :param param:
-    :return:
+    This function reads the cleaned grid data and the shapefile of the subregions. It first determines the names of the regions
+    connected by each line, *Region_start* and *Region_end*, and only keeps those between two different subregions. Then it estimates
+    the length between the centroids of the regions and uses it to estimate the efficiency of the lines and their costs. Finally,
+    it completes the missing attributes with general assumptions and saves the result in a CSV file.
+    
+    :param paths: Dictionary including the paths to *grid_cleaned*, *sites_sub*, *subregions*, *dict_lines_costs*, and the output *grid_completed*.
+    :type param: dict
+    :param param: Dictionary including the geodataframe of the subregions and grid-related assumptions.
+    :type param: dict
+    
+    :return: The CSV file with the completed transmission data is saved directly in the desired path, along with its metadata in a JSON file.
+    :rtype: None
     """
     timecheck("Start")
 
@@ -378,7 +386,7 @@ def generate_transmission(paths, param):
     # Remove intraregional and extraregional lines
     lines_concatenated = grid_regions.loc[
         (grid_regions['Region_start'] != grid_regions['Region_end']) &
-        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())]
+        ~(grid_regions['Region_start'].isnull() | grid_regions['Region_end'].isnull())].copy()
 
     # Sort alphabetically and reindex
     lines_reversed = reverse_lines(lines_concatenated)
@@ -389,19 +397,73 @@ def generate_transmission(paths, param):
     # Aggregate lines starting and ending in the same regions
     lines_grouped = lines.groupby(['Region_start', 'Region_end', 'tr_type']).sum()
     
-    # Reindex
-    lines_final = lines_grouped.reset_index()
-    import pdb; pdb.set_trace()
-
-    # Transmission evrys, urbs
-    evrys_transmission, urbs_transmission = format_transmission_model(icl_final, paths, param)
+    # Reindex and rename columns
+    lines_final = lines_grouped.reset_index().rename(columns={"Region_start": "Site In", "Region_end": "Site Out", "Capacity_MVA": "cap-up-therm"})
+    lines_final["reactance"] = 1 / lines_final["Y_mho_ref_380kV"]
+    
+    # Create a dataframe to store all the possible combinations of pairs of 1st order neighbors
+    df = pd.DataFrame(columns=['Site In', 'Site Out'])
+    zones = pd.read_csv(paths["sites_sub"], index_col=0, decimal=",", sep=";")
+    weights = ps.lib.weights.Queen.from_shapefile(paths["subregions"])
+    for z in range(len(zones)):
+        for n in weights.neighbors[z]:
+            if (zones.iloc[z].name < zones.iloc[n].name):
+                df = df.append(pd.DataFrame([[zones.iloc[z].name, zones.iloc[n].name]], columns=['Site In', 'Site Out']), ignore_index=True)
+                
+    # Join that dataframe with existing lines
+    df["tr_type"] = "AC_OHL"
+    df.set_index(['Site In', 'Site Out', "tr_type"], inplace=True)
+    df_joined = df.join(lines_final.set_index(['Site In', 'Site Out', "tr_type"]), how='outer')
+    
+    # Fill empty values for capacity (inexistent lines)
+    df_joined['cap-up-therm'].fillna(0, inplace=True)
+    
+    # Calculate length of lines based on distance between centroids
+    df_joined.reset_index(drop=False, inplace=True)
+    df_joined = df_joined.join(zones[['Longitude', 'Latitude']], on='Site In', rsuffix='_1', how='inner')
+    df_joined = df_joined.join(zones[['Longitude', 'Latitude']], on='Site Out', rsuffix='_2', how='inner')
+    df_joined['length'] = [distance.distance(tuple(df_joined.loc[i, ['Latitude', 'Longitude']].astype(float)),
+                                             tuple(df_joined.loc[i, ['Latitude_2', 'Longitude_2']].astype(
+                                                 float))).km for i in df_joined.index]
+    df_joined.drop(['Longitude', 'Latitude', 'Longitude_2', 'Latitude_2'], axis=1, inplace=True)
+    
+    # Calculate efficiency
+    dict_eff = param["grid"]["efficiency"]
+    df_joined.reset_index(drop=True, inplace=True)
+    df_joined["eff"] = 1
+    for ind in df_joined.index:
+        df_joined.loc[ind, "eff"] = dict_eff[df_joined.loc[ind, "tr_type"]] ** (df_joined.loc[ind, "length"] / 1000)
+    
+    # Calculate costs
+    dict_lines_costs = pd.read_csv(paths["dict_lines_costs"], sep=";", decimal=",")
+    dict_lines_costs.loc[dict_lines_costs["length_limit_km"] == "inf", "length_limit_km"] = np.inf
+    df_joined["inv-cost"] = 0
+    df_joined["fix-cost"] = 0
+    df_joined["var-cost"] = 0
+    for ind in df_joined.index:
+        filter = (dict_lines_costs["tr_type"] == df_joined.loc[ind, "tr_type"]) & (dict_lines_costs["length_limit_km"] > df_joined.loc[ind, "length"])
+        dict_costs = dict_lines_costs.loc[filter].sort_values(by=['length_limit_km'], axis=0).head(1)
+        df_joined.loc[ind, "inv-cost"] = float(dict_costs["inv-cost-length"]) * df_joined.loc[ind, "length"] + float(dict_costs["inv-cost-fix"])
+        df_joined.loc[ind, "fix-cost"] = float(dict_costs["fix-cost-length"]) * df_joined.loc[ind, "length"]
+    
+    # Add attributes
+    df_completed = df_joined.copy()
+    df_completed["Commodity"] = "Elec"
+    df_completed['inst-cap'] = df_completed['cap-up-therm']
+    df_completed['act-lo'] = 0
+    df_completed['act-up'] = 1
+    df_completed['angle-up'] = 45
+    df_completed['PSTmax'] = 0
+    df_completed['cap-lo'] = 0
+    df_completed['cap-up'] = df_completed['inst-cap']
+    df_completed['idx'] = df_completed.index + 1
+    df_completed["wacc"] = param["grid"]["wacc"]
+    df_completed["depreciation"] = param["grid"]["depreciation"]
 
     # Ouput
-    urbs_transmission.to_csv(paths["urbs_transmission"], sep=';', decimal=',', index=False)
-    print("File Saved: " + paths["urbs_transmission"])
-
-    evrys_transmission.to_csv(paths["evrys_transmission"], sep=';', decimal=',')
-    print("File Saved: " + paths["evrys_transmission"])
+    df_completed.to_csv(paths["grid_completed"], sep=';', decimal=',', index=False)
+    create_json(paths["grid_completed"], param, ["grid"], paths, ["transmission_lines", "grid_cleaned", "subregions", "dict_lines_costs"])
+    print("File Saved: " + paths["grid_completed"])
 
     timecheck("End")
 
