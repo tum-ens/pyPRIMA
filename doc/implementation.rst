@@ -19,10 +19,9 @@ You can run the code by typing::
    
    source/generate_models
    source/initialization
-   source/input_maps
    
 
-Helping functions for the models are included in ``helping_functions.py``.
+Helping functions for the models are included in ``generate_intermediate_files.py``, ``correction_functions.py``, ``spatial_functions.py``.
 
 .. toctree::
    :maxdepth: 3
