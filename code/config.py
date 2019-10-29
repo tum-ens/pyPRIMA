@@ -98,7 +98,7 @@ def scope_paths_and_parameters(paths, param):
     param["technology"] = ['WindOn', 'PV', 'WindOff', 'CSP']  # ['PV', 'CSP', 'WindOn', 'WindOff']
     
     # Frameworks
-    param["frameworks"] = ['urbs', 'evrys'] # ['urbs', 'evrys']
+    # param["frameworks"] = ['urbs', 'evrys'] # ['urbs', 'evrys']
     
     return paths, param
 
@@ -356,6 +356,8 @@ def output_paths(paths, param):
     
     # Load
     paths["stats_countries"] = paths["load"] + "Statistics_countries.csv"
+    paths["sector_shares_clean"] = paths["load"] + "Sector_shares_" + year + ".csv"
+    paths["load_ts_clean"] = paths["load"] + "TS_countries_clean_" + year + ".csv"
     paths["df_sector"] = paths["load"] + "TS_countries_sectors_" + year + ".csv"
     paths["load_sector"] = paths["load"] + "Yearly_demand_countries_sectors_" + year + ".csv"
     paths["load_landuse"] = paths["load"] + "TS_countries_land_use_" + year + ".csv"
