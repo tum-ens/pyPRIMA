@@ -7,7 +7,7 @@ A pre-processing tool to automate the creation of energy system models using a c
 * Aggregation of input data for any user-defined regions provided as a shapefile
 * Automation of the pre-processing to document assumptions and avoid human errors
 * Cleaning of raw input data and creation of model-independent intermediate files
-* Adaptation to the intermediate files to the models urbs and evrys as of the current version
+* Adaptation of the intermediate files to the models urbs and evrys
 
 ## Applications
 This code is useful if:
