@@ -1,3 +1,5 @@
 code/__pycache__
 code/lib/__pycache__
+.idea
+code/.idea
 Database*
