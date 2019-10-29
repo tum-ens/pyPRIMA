@@ -188,7 +188,14 @@ def grid_parameters(param):
                              500: 1200,
                              765: 2736,
                              1000: 6312, # upper bound
-                             }
+                             },
+                     "efficiency": {"AC_OHL": 0.92, # 8% losses / 1000 km
+                                    "AC_CAB": 0.90,
+                                    "DC_OHL": 0.95,
+                                    "DC_CAB": 0.95,
+                                    },
+                     "wacc": 0.07,
+                     "depreciation": 50,
                     }
 
     return param
@@ -239,6 +246,7 @@ def assumption_paths(paths):
     paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
     paths["dict_daytype"] = root + "00 Assumptions" + fs + "dict_day_type.csv"
     paths["dict_countries"] = root + "00 Assumptions" + fs + "dict_countries.csv"
+    paths["dict_lines_costs"] = root + "00 Assumptions" + fs + "dict_lines_costs.csv"
     
     return paths
     
@@ -309,7 +317,7 @@ def output_folders(paths, param):
         os.makedirs(paths["local_maps"])
         
     # Output folder for sites
-    paths["sites"] = paths["region"] + "Sites" + fs
+    paths["sites"] = paths["region"] + "Sites" + fs + subregions + fs
     if not os.path.isdir(paths["sites"]):
         os.makedirs(paths["sites"])
         
@@ -372,6 +380,7 @@ def output_paths(paths, param):
     paths["grid_filled"] = paths["grid"] + "grid_filled.csv"
     paths["grid_cleaned"] = paths["grid"] + "grid_cleaned.csv"
     paths["grid_shp"] = paths["grid"] + "grid_cleaned.shp"
+    paths["grid_completed"] = paths["grid_sub"] + "transmission.csv"
     
     # Framework models
     paths["urbs_model"] = paths["urbs"] + region + '_' + subregions + '_' + year + '.xlsx'
