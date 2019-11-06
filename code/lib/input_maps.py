@@ -1,3 +1,6 @@
+#from lib.spatial_functions import calc_region
+from lib.util import *
+
 def generate_landsea(paths, param):
     """
     This function reads the shapefiles of the countries (land areas) and of the exclusive economic zones (sea areas)
@@ -18,7 +21,7 @@ def generate_landsea(paths, param):
     nRegions_land = param["nRegions_land"]
     nRegions_sea = param["nRegions_sea"]
 
-    timecheck('Start Land')
+    timecheck("Start Land")
     # Extract land areas
     countries_shp = param["regions_land"]
     Crd_regions_land = param["Crd_regions"][:nRegions_land]
@@ -28,26 +31,26 @@ def generate_landsea(paths, param):
     for reg in range(0, param["nRegions_land"]):
         # Show status bar
         status = status + 1
-        sys.stdout.write('\r')
-        sys.stdout.write('Creating A_land ' + '[%-50s] %d%%' % (
-            '=' * ((status * 50) // nRegions_land), (status * 100) // nRegions_land))
+        sys.stdout.write("\r")
+        sys.stdout.write("Creating A_land " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions_land), (status * 100) // nRegions_land))
         sys.stdout.flush()
 
         # Calculate A_region
         A_region = calc_region(countries_shp.iloc[reg], Crd_regions_land[reg, :], res_desired, GeoRef)
 
         # Include A_region in A_land
-        A_land[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] = \
-            A_land[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] + A_region
+        A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
+            A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] + A_region
+        )
     # Saving file
     array2raster(paths["LAND"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_land)
-    create_json(paths["LAND"], param,
-                ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_land"], paths,
-                ["Countries", "LAND"])
-    print('\nfiles saved: ' + paths["LAND"])
-    timecheck('Finish Land')
+    create_json(
+        paths["LAND"], param, ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_land"], paths, ["Countries", "LAND"]
+    )
+    print("\nfiles saved: " + paths["LAND"])
+    timecheck("Finish Land")
 
-    timecheck('Start Sea')
+    timecheck("Start Sea")
     # Extract sea areas
     eez_shp = param["regions_sea"]
     Crd_regions_sea = param["Crd_regions"][-nRegions_sea:]
@@ -57,30 +60,32 @@ def generate_landsea(paths, param):
     for reg in range(0, param["nRegions_sea"]):
         # Show status bar
         status = status + 1
-        sys.stdout.write('\r')
-        sys.stdout.write('Creating A_sea ' + '[%-50s] %d%%' % (
-            '=' * ((status * 50) // param["nRegions_sea"]), (status * 100) // param["nRegions_sea"]))
+        sys.stdout.write("\r")
+        sys.stdout.write(
+            "Creating A_sea " + "[%-50s] %d%%" % ("=" * ((status * 50) // param["nRegions_sea"]), (status * 100) // param["nRegions_sea"])
+        )
         sys.stdout.flush()
 
         # Calculate A_region
         A_region = calc_region(eez_shp.iloc[reg], Crd_regions_sea[reg, :], res_desired, GeoRef)
 
         # Include A_region in A_sea
-        A_sea[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] = \
-            A_sea[(Ind[reg, 2] - 1):Ind[reg, 0], (Ind[reg, 3] - 1):Ind[reg, 1]] + A_region
+        A_sea[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
+            A_sea[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] + A_region
+        )
 
     # Fixing pixels on the borders to avoid duplicates
     A_sea[A_sea > 0] = 1
     A_sea[A_land > 0] = 0
     # Saving file
     array2raster(paths["EEZ"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_sea)
-    create_json(paths["EEZ"], param,
-                ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_sea"], paths,
-                ["EEZ_global", "EEZ"])
-    print('\nfiles saved: ' + paths["EEZ"])
-    timecheck('Finish Sea')
-    
-    
+    create_json(
+        paths["EEZ"], param, ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_sea"], paths, ["EEZ_global", "EEZ"]
+    )
+    print("\nfiles saved: " + paths["EEZ"])
+    timecheck("Finish Sea")
+
+
 def generate_landuse(paths, param):
     """
     This function reads the global map of land use, and creates a raster out of it for the desired scope.
@@ -107,7 +112,7 @@ def generate_landuse(paths, param):
     create_json(paths["LU"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["LU_global", "LU"])
     print("files saved: " + paths["LU"])
     timecheck("End")
-    
+
 
 def generate_population(paths, param):
     """
@@ -136,4 +141,88 @@ def generate_population(paths, param):
     array2raster(paths["POP"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_POP)
     create_json(paths["POP"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["Pop_global", "POP"])
     print("\nfiles saved: " + paths["POP"])
+    timecheck("End")
+
+
+def generate_protected_areas(paths, param):
+    """
+    This function reads the shapefile of the globally protected areas, adds an attribute whose values are based on the dictionary 
+    of conversion (protected_areas) to identify the protection category, then converts the shapefile into a raster for the scope.
+    The values are integers from 0 to 10.
+
+    :param paths: Dictionary including the paths to the shapefile of the globally protected areas, to the landuse raster of the scope, and to the output path PA.
+    :type paths: dict
+    :param param: Dictionary including the dictionary of conversion of protection categories (protected_areas).
+    :type param: dict
+    :return: The tif file for PA is saved in its respective path, along with its metadata in a JSON file.
+    :rtype: None
+    """
+
+    timecheck("Start")
+    protected_areas = param["protected_areas"]
+    # set up protected areas dictionary
+    protection_type = dict(zip(protected_areas["IUCN_Category"], protected_areas["type"]))
+
+    # First we will open our raster image, to understand how we will want to rasterize our vector
+    raster_ds = gdal.Open(paths["LU"], gdal.GA_ReadOnly)
+
+    # Fetch number of rows and columns
+    ncol = raster_ds.RasterXSize
+    nrow = raster_ds.RasterYSize
+
+    # Fetch projection and extent
+    proj = raster_ds.GetProjectionRef()
+    ext = raster_ds.GetGeoTransform()
+
+    raster_ds = None
+    shp_path = paths["Protected"]
+    # Open the dataset from the file
+    dataset = ogr.Open(shp_path, 1)
+    layer = dataset.GetLayerByIndex(0)
+
+    # Add a new field
+    if not field_exists("Raster", shp_path):
+        new_field = ogr.FieldDefn("Raster", ogr.OFTInteger)
+        layer.CreateField(new_field)
+
+        for feat in layer:
+            pt = feat.GetField("IUCN_CAT")
+            feat.SetField("Raster", protection_type[pt])
+            layer.SetFeature(feat)
+            feat = None
+
+    # Create a second (modified) layer
+    outdriver = ogr.GetDriverByName("MEMORY")
+    source = outdriver.CreateDataSource("memData")
+
+    # Create the raster dataset
+    memory_driver = gdal.GetDriverByName("GTiff")
+    out_raster_ds = memory_driver.Create(paths["PA"], ncol, nrow, 1, gdal.GDT_Byte)
+
+    # Set the ROI image's projection and extent to our input raster's projection and extent
+    out_raster_ds.SetProjection(proj)
+    out_raster_ds.SetGeoTransform(ext)
+
+    # Fill our output band with the 0 blank, no class label, value
+    b = out_raster_ds.GetRasterBand(1)
+    b.Fill(0)
+
+    # Rasterize the shapefile layer to our new dataset
+    gdal.RasterizeLayer(
+        out_raster_ds,  # output to our new dataset
+        [1],  # output to our new dataset's first band
+        layer,  # rasterize this layer
+        None,
+        None,  # don't worry about transformations since we're in same projection
+        [0],  # burn value 0
+        [
+            "ALL_TOUCHED=FALSE",  # rasterize all pixels touched by polygons
+            "ATTRIBUTE=Raster",
+        ],  # put raster values according to the 'Raster' field values
+    )
+    create_json(paths["PA"], param, ["region_name", "protected_areas", "Crd_all", "res_desired", "GeoRef"], paths, ["Protected", "PA"])
+
+    # Close dataset
+    out_raster_ds = None
+    print("files saved: " + paths["PA"])
     timecheck("End")
