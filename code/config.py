@@ -17,11 +17,13 @@ def configuration():
     param = load_parameters(param)
     param = grid_parameters(param)
     param = processes_parameters(param)
+    param = renewable_potential_parameters(param)
 
     paths = global_maps_input_paths(paths)
     paths = assumption_paths(paths)
     paths = load_input_paths(paths)
     paths = grid_input_paths(paths)
+    paths = renewable_potential_input_paths(paths, param)
     paths = processes_input_paths(paths, param)
     paths = output_folders(paths, param)
     paths = output_paths(paths, param)
@@ -139,6 +141,24 @@ def load_parameters(param):
         },
         "default_sec_shares": "DEU",
     }
+    return param
+
+
+def renewable_potential_parameters(param):
+    """
+    This function defined parameters relating to the potential time-series to be used in the models.
+    :param param: Dictionary including the user preferences.
+    :type param: dict
+
+    :return param: The updated dictionary param.
+    :rtype: dict
+    """
+
+    param["ren_potential"] = {"WindOn": ([], "all"),  # "Technology":([list of settings], "TS tier")
+                              "WindOff": ([], "all"),
+                              "PV": ([], "all"),
+                              "CSP": ([], "all")}
+
     return param
 
 
@@ -304,6 +324,31 @@ def load_input_paths(paths):
     return paths
 
 
+def renewable_potential_input_paths(paths, param):
+    """
+
+    :param paths:
+    :param param:
+    :return:
+    """
+    global root
+    global fs
+
+    region = param["region_name"]
+    subregions = param["subregions_name"]
+    year = str(param["year"])
+
+    paths["TS_ren"] = {}
+    pathtemp = paths[
+                   "region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
+    for tech in param["technology"]:
+        quantiles = "_".join(sorted(param["ren_potential"][tech][0]))
+        paths["TS_ren"][
+            tech] = pathtemp + subregions + "_" + tech + "_reg_TimeSeries_" + quantiles + "_" + year + ".csv"
+
+    return paths
+
+
 def grid_input_paths(paths):
     """
     """
@@ -342,9 +387,6 @@ def processes_input_paths(paths, param):
     paths["FRESNA"] = PathTemp + 'EU_Powerplants' + fs + 'FRESNA2' + fs + 'Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv'
     
     return paths
-    
-
-
 
 
 def output_folders(paths, param):
@@ -462,7 +504,8 @@ def output_paths(paths, param):
         "Bioenergy": paths["proc"] + "Bioenergy.shp",
         "Hydro": paths["proc"] + "Hydro.shp",
     }
-    
+    paths["potential_ren"] = paths["proc"] + "Renewables_potential.csv"
+
     # Other processes and storage
     paths["process_raw"] = paths["proc"] + "processes_raw.csv"
 

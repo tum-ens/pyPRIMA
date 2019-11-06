@@ -1,6 +1,7 @@
 #from lib.spatial_functions import calc_region
 from lib.util import *
 
+
 def generate_landsea(paths, param):
     """
     This function reads the shapefiles of the countries (land areas) and of the exclusive economic zones (sea areas)
