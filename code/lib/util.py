@@ -2,10 +2,11 @@
 import pandas as pd
 
 # from pandas import ExcelWriter
+# import fiona
 import geopandas as gpd
 import numpy as np
 from shapely import geometry
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, Point#, mapping
 import shapefile as shp
 import pysal as ps
 from geopy import distance
@@ -24,10 +25,10 @@ from rasterio import MemoryFile, mask, windows
 # import osr
 import json
 
-# import warnings
-# from warnings import warn
+import warnings
+from warnings import warn
 # gdal.PushErrorHandler('CPLQuietErrorHandler')
-# warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
 def timecheck(*args):
@@ -260,6 +261,29 @@ def assign_values_based_on_series(series, dict):
 # }
 
 # return storage
+
+
+def changem(A, newval, oldval):
+    """
+    This function replaces existing values *oldval* in a data array *A* by new values *newval*.
+    
+    *oldval* and *newval* must have the same size.
+
+    :param A: Input matrix.
+    :type A: numpy array
+    :param newval: Vector of new values to be set.
+    :type newval: numpy array
+    :param oldval: Vector of old values to be replaced.
+    :type oldval: numpy array
+
+    :return Out: The updated array.
+    :rtype: numpy array
+    """
+    Out = np.zeros(A.shape)
+    z = np.array((oldval, newval)).T
+    for i, j in z:
+        np.place(Out, A == i, j)
+    return Out
 
 
 def create_json(filepath, param, param_keys, paths, paths_keys):

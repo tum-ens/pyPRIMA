@@ -1,3 +1,4 @@
+from lib.input_maps import generate_protected_areas
 from lib.util import *
 
 
@@ -68,6 +69,24 @@ def ind_merra(Crd, Crd_all, res):
     )
     Ind = np.transpose(Ind.astype(int))
     return Ind
+
+
+def crd_exact_points(Ind_points, Crd_all, res):
+    """
+    This function converts indices of points in high resolution rasters into longitude and latitude coordinates.
+
+    :param Ind_points: Tuple of arrays of indices in the vertical and horizontal axes.
+    :type Ind_points: tuple of arrays
+    :param Crd_all: Array of coordinates of the bounding box of the spatial scope.
+    :type Crd_all: numpy array
+    :param res: Data resolution in the vertical and horizontal dimensions.
+    :type res: list
+    
+    :return Crd_points: Coordinates of the points in the vertical and horizontal dimensions.
+    :rtype: list of arrays
+    """
+    Crd_points = [Ind_points[0] * res[0] + Crd_all[2], Ind_points[1] * res[1] + Crd_all[3]]
+    return Crd_points
 
 
 def calc_geotiff(Crd_all, res_desired):
@@ -304,6 +323,124 @@ def zonal_stats(regions_shp, raster_dict, param):
     return df
 
 
+def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
+    """
+    This module iterates over the countries in the IRENA summary report, applies a mask of each country on a raster of potential of the technology *tech* that
+    spans over the whole geographic scope, and calculates a probability distribution for that country which takes into account the potential but also a random factor.
+    It selects the pixels with the highest probabilities, such that the number of pixels is equal to the number of units in that country and for that technology.
+    After deriving the coordinates of those pixels, it saves them into a shapefile of points for each technology.
+    
+    :param paths: Dictionary containing the paths for the potential maps of each technology. If a map is missing, the map of protected areas *PA* is used per default.
+      It contains also the paths to the final shapefiles *locations_ren*.
+    :type paths: dict
+    :param param: Dictionary containing information about the coordinates of the bounding box, the resolution, the georeferencing dictionary, geodataframes of land and sea areas,
+      several parameters related to the distribution of renewable capacities.
+    :type param: dict
+    :param inst_cap: Dataframe of the IRENA report after some processing in the module :mod:`distribute_renewable_capacities_IRENA`.
+    :type inst_cap: pandas dataframe
+    :param tech: Name of the renewable technology, as used in the dictionary *dist_ren* and in the dataframe *inst_cap*.
+    :type tech: string
+    
+    :return: The shapefile of points corresponding to the locations of power plants for the renewable energy technology *tech* is saved in the desired path, along with
+      its corresponding metadata in a JSON file.
+    :rtype: None
+    """
+        
+    Crd_all = param["Crd_all"]
+    res_desired = param["res_desired"]
+    GeoRef = param["GeoRef"]
+    nRegions = len(inst_cap["Country/area"].unique())
+    raster_path = paths["dist_ren"]["rasters"][tech]
+    units = param["dist_ren"]["units"]
+    
+    # Read rasters
+    try:
+        with rasterio.open(raster_path) as src:
+            raster = np.flipud(src.read(1))
+    except:
+        # Use a mask of protected areas
+        if not os.path.exists(paths["PA"]):
+            generate_protected_areas(paths, param)
+        with rasterio.open(paths["PA"]) as src:
+            A_protect = np.flipud(src.read(1)).astype(int) 
+        raster = changem(A_protect, param["dist_ren"]["default_pa_availability"], param["dist_ren"]["default_pa_type"]).astype(float)
+
+    status = 0
+    ind_needed = {}
+    x = y = p = c = []
+    for reg in inst_cap["Country/area"].unique():
+        # Show status bar
+        status = status + 1
+        sys.stdout.write("\r")
+        sys.stdout.write("Distribution for " + tech + ": " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions), (status * 100) // nRegions))
+        sys.stdout.flush()
+        
+        if not inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values[0]:
+            continue
+
+        # Calculate A_region_extended
+        if tech == "WindOff":
+            regions_shp = param["regions_sea"]
+            mask = regions_shp.loc[regions_shp["ISO_Ter1"]==reg].dissolve(by="ISO_Ter1").squeeze()
+            A_region_extended = calc_region(mask, Crd_all, res_desired, GeoRef)
+        else:
+            regions_shp = param["regions_land"]
+            mask = regions_shp.loc[regions_shp["GID_0"]==reg].squeeze()
+            A_region_extended = calc_region(mask, Crd_all, res_desired, GeoRef)
+        A_region_extended[A_region_extended == 0] = np.nan
+
+        # Calculate potential distribution
+        distribution = A_region_extended * raster
+        potential = distribution.flatten()
+
+        # Calculate the part of the probability that is based on the potential
+        potential_nan = np.isnan(potential) | (potential == 0)
+        if (np.nanmax(potential) - np.nanmin(potential)):
+            potential = (potential - np.nanmin(potential)) / (np.nanmax(potential) - np.nanmin(potential))
+        else:
+            potential = np.zeros(potential.shape)
+        potential[potential_nan] = 0
+    
+        # Calculate the random part of the probability
+        potential_random = np.random.random_sample(potential.shape)
+        potential_random[potential_nan] = 0
+    
+        # Combine the two parts
+        potential_new = (1 - param["dist_ren"]["randomness"]) * potential + param["dist_ren"]["randomness"] * potential_random
+    
+        # Sort elements based on their probability and keep the indices
+        ind_sort = np.argsort(potential_new, axis=None)  # Ascending
+        ind_needed = ind_sort[-int(inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values):]
+        
+        # Get the coordinates of the power plants and their respective capacities
+        power_plants = [units[tech]] * len(ind_needed)
+        if inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "inst-cap (MW)"].values % units[tech] > 0:
+            power_plants[-1] = (inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "inst-cap (MW)"].values % units[tech])[0]
+        y_pp, x_pp = np.unravel_index(ind_needed, distribution.shape)
+        
+        Crd_y_pp, Crd_x_pp = crd_exact_points((y_pp, x_pp), Crd_all, res_desired)
+
+        x = x + Crd_x_pp.tolist()
+        y = y + Crd_y_pp.tolist()
+        p = p + power_plants
+        c = c + potential_new[ind_needed].tolist()  # Power_plants
+    
+    # Format point locations
+    points = [(x[i], y[i]) for i in range(0, len(y))]
+    
+    # Create shapefile
+    locations_ren = pd.DataFrame()
+    locations_ren["geometry"] = [Point(points[i]) for i in range(0, len(points))]
+    locations_ren["Technology"] = tech
+    locations_ren["Capacity"] = p
+    locations_ren["Prob"] = c
+    locations_ren = gpd.GeoDataFrame(locations_ren, geometry = "geometry", crs = {'init' :'epsg:4326'})
+    locations_ren.to_file(driver='ESRI Shapefile', filename=paths["locations_ren"][tech])
+    
+    print("\n")
+    timecheck("End")
+    return (x, y, p, c)
+    
 # # ## Functions:
 
 # # https://pcjericks.github.io/py-gdalogr-cookbook/raster_layers.html#clip-a-geotiff-with-shapefile
@@ -392,31 +529,7 @@ def zonal_stats(regions_shp, raster_dict, param):
 # return poly.GetField('NAME_SHORT'), xoffset, yoffset, clip
 
 
-# def map_power_plants(p, x, y, c, outSHPfn):
-# # Create the output shapefile
-# shpDriver = ogr.GetDriverByName("ESRI Shapefile")
-# if os.path.exists(outSHPfn):
-# shpDriver.DeleteDataSource(outSHPfn)
-# outDataSource = shpDriver.CreateDataSource(outSHPfn)
-# outLayer = outDataSource.CreateLayer(outSHPfn, geom_type=ogr.wkbPoint)
 
-# # create point geometry
-# point = ogr.Geometry(ogr.wkbPoint)
-# # create a field
-# idField = ogr.FieldDefn('CapacityMW', ogr.OFTReal)
-# outLayer.CreateField(idField)
-# # Create the feature
-# featureDefn = outLayer.GetLayerDefn()
-
-# # Set values
-# for i in range(0, len(x)):
-# point.AddPoint(x[i], y[i])
-# outFeature = ogr.Feature(featureDefn)
-# outFeature.SetGeometry(point)
-# outFeature.SetField('CapacityMW', c[i])
-# outLayer.CreateFeature(outFeature)
-# outFeature = None
-# print("File Saved: " + outSHPfn)
 
 
 # def map_grid_plants(x, y, paths):

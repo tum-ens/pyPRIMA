@@ -43,35 +43,34 @@ def initialization():
     param["regions_land"] = countries_shp
     param["nRegions_land"] = len(param["regions_land"])
 
-    if not (os.path.exists(paths["LAND"]) and os.path.exists(paths["EEZ"])):
-        Crd_regions_land = np.zeros((param["nRegions_land"], 4))
+    Crd_regions_land = np.zeros((param["nRegions_land"], 4))
 
-        for reg in range(0, param["nRegions_land"]):
-            # Box coordinates for MERRA2 data
-            r = countries_shp.bounds.iloc[reg]
-            box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
-            Crd_regions_land[reg, :] = crd_merra(box, res_weather)
+    for reg in range(0, param["nRegions_land"]):
+        # Box coordinates for MERRA2 data
+        r = countries_shp.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions_land[reg, :] = crd_merra(box, res_weather)
 
-        timecheck("Read shapefile of EEZ")
-        # Extract sea areas
-        eez_shp = gpd.read_file(paths["EEZ_global"], bbox=scope_shp)
-        eez_shp = eez_shp.to_crs({"init": "epsg:4326"})
+    timecheck("Read shapefile of EEZ")
+    # Extract sea areas
+    eez_shp = gpd.read_file(paths["EEZ_global"], bbox=scope_shp)
+    eez_shp = eez_shp.to_crs({"init": "epsg:4326"})
 
-        # Crop all polygons and take the part inside the bounding box
-        eez_shp["geometry"] = eez_shp["geometry"].intersection(bounds_box)
-        eez_shp = eez_shp[eez_shp.geometry.area > 0]
-        param["regions_sea"] = eez_shp
-        param["nRegions_sea"] = len(param["regions_sea"])
-        Crd_regions_sea = np.zeros((param["nRegions_sea"], 4))
+    # Crop all polygons and take the part inside the bounding box
+    eez_shp["geometry"] = eez_shp["geometry"].intersection(bounds_box)
+    eez_shp = eez_shp[eez_shp.geometry.area > 0]
+    param["regions_sea"] = eez_shp
+    param["nRegions_sea"] = len(param["regions_sea"])
+    Crd_regions_sea = np.zeros((param["nRegions_sea"], 4))
 
-        for reg in range(0, param["nRegions_sea"]):
-            # Box coordinates for MERRA2 data
-            r = eez_shp.bounds.iloc[reg]
-            box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
-            Crd_regions_sea[reg, :] = crd_merra(box, res_weather)
+    for reg in range(0, param["nRegions_sea"]):
+        # Box coordinates for MERRA2 data
+        r = eez_shp.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions_sea[reg, :] = crd_merra(box, res_weather)
 
-        # Saving parameters
-        param["Crd_regions"] = np.concatenate((Crd_regions_land, Crd_regions_sea), axis=0)
+    # Saving parameters
+    param["Crd_regions"] = np.concatenate((Crd_regions_land, Crd_regions_sea), axis=0)
 
     timecheck("Read shapefile of subregions")
     # Read shapefile of regions

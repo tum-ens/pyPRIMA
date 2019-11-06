@@ -1,3 +1,4 @@
+from lib.spatial_functions import create_shapefiles_of_ren_power_plants
 from lib.util import *
 
 # def filter_life_time(param, raw, depreciation):
@@ -444,28 +445,27 @@ def clean_sector_shares_Eurostat(paths, param):
 # timecheck("End")
 
 
-# def clean_processes_and_storage_data_FRESNA(paths, param):
-# ''' documentation '''
-# timecheck("Start")
+def clean_processes_and_storage_data_FRESNA(paths, param):
+    """ documentation """
+    timecheck("Start")
 
-# assumptions = pd.read_excel(paths["assumptions"], sheet_name='Process')
+    assumptions = pd.read_csv(paths["assumptions_processes"], sep=";", decimal=",")
 # depreciation = dict(zip(assumptions['Process'], assumptions['depreciation'].astype(float)))
 # year_mu = dict(zip(assumptions['Process'], assumptions['year_mu'].astype(float)))
 # year_stdev = dict(zip(assumptions['Process'], assumptions['year_stdev'].astype(float)))
 
-# # Get data from fresna database
-# Process = pd.read_csv(paths["database_FRESNA"], header=0, skipinitialspace=True,
-# usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-# Process.rename(columns={'Capacity': 'inst-cap', 'lat': 'Latitude', 'lon': 'Longitude'},
-# inplace=True)
-# print('Number of power plants: ', len(Process))
+    # Get data from FRESNA database
+    Process = pd.read_csv(paths["FRESNA"], header=0, skipinitialspace=True, usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    Process.rename(columns={'Capacity': 'inst-cap', 'lat': 'Latitude', 'lon': 'Longitude'}, inplace=True)
+    print('Number of power plants: ', len(Process))
+    import pdb; pdb.set_trace()
 
-# Process['Technology'].fillna('NaN', inplace=True)
-# Process['inst-cap'].fillna(0, inplace=True)
+    Process['Technology'].fillna('NaN', inplace=True)
+    Process['inst-cap'].fillna(0, inplace=True)
 # Process[['Fueltype', 'Technology', 'Set']].drop_duplicates()
 # Process[(Process['Technology'] == 'Run-Of-River') & (Process['Fueltype'] == 'Hydro')].groupby(['Country']).sum()
-# Process.groupby(['Fueltype', 'Technology', 'Set']).sum().to_csv(paths["process_raw"], sep=';',
-# decimal=',', index=True)
+    Process.groupby(['Fueltype', 'Technology', 'Set']).sum().to_csv(paths["process_raw"], sep=';', decimal=',', index=True)
+    
 # # Type
 # Process['CoIn'] = np.nan
 
@@ -639,7 +639,7 @@ def clean_sector_shares_Eurostat(paths, param):
 # P_located.to_file(driver='ESRI Shapefile', filename=paths["pro_sto"])
 
 # print("File Saved: " + paths["pro_sto"])
-# timecheck("End")
+    timecheck("End")
 
 
 def clean_GridKit_Europe(paths, param):
@@ -748,94 +748,125 @@ def clean_GridKit_Europe(paths, param):
     timecheck("End")
 
 
-# def distribute_renewable_capacities(paths, param):
-# ''' documentation '''
-# timecheck("Start")
+def clean_IRENA_summary(paths, param):
+    """
+    This function reads the IRENA database, format the output for selected regions and computes the FLH based on the
+    installed capacity and yearly energy production. The results are saved in CSV file.
 
-# # Shapefile with countries
-# countries = gpd.read_file(paths["Countries"])
+    :param param: Dictionary of dictionaries containing list of subregions, and year.
+    :type param: dict
+    :param paths: Dictionary of dictionaries containing the paths to the IRENA country name dictionary, and IRENA database.
+    :type paths: dict
 
-# # Countries to be considered
-# sites = pd.DataFrame(countries[['NAME_SHORT']].rename(columns={'NAME_SHORT': 'Site'}))
-# sites = sites.sort_values(by=['Site'], axis=0)['Site'].unique()
+    :return: The CSV file containing the summary of IRENA data for the countries within the scope is saved directly in the desired path, along with the corresponding metadata in a JSON file.
+    :rtype: None
+    """
+    year = str(param["year"])
+    filter_countries = param["regions_land"]["GID_0"].to_list()
+    IRENA_dict = pd.read_csv(paths["dict_countries"], sep=";", index_col=0)
+    IRENA_dict = IRENA_dict["Countries shapefile"].to_dict()
+    IRENA = pd.read_csv(paths["IRENA"], skiprows=7, sep=";", index_col=False, usecols=[0, 1, 2, 3])
+    for i in IRENA.index:
+        if pd.isnull(IRENA.loc[i, "Country/area"]):
+            IRENA.loc[i, "Country/area"] = IRENA.loc[i - 1, "Country/area"]
+        if pd.isnull(IRENA.loc[i, "Technology"]):
+            IRENA.loc[i, "Technology"] = IRENA.loc[i - 1, "Technology"]
 
-# # Read input file, extracted from IRENA
-# data_raw = pd.read_excel(paths["IRENA"], skiprows=[0, 1, 2, 3, 4, 5, 6])
+    for c in IRENA["Country/area"].unique():
+        IRENA.loc[IRENA["Country/area"] == c, "Country/area"] = IRENA_dict[c]
 
-# # Add missing country names
-# for i in np.arange(1, len(data_raw.index)):
-# if data_raw.isnull().loc[i, 'Country/area']:
-# data_raw.loc[i, 'Country/area'] = data_raw.loc[i - 1, 'Country/area']
+    IRENA = IRENA.set_index(["Country/area", "Technology"])
 
-# # Select technologies needed in urbs and rename them
-# data_raw = data_raw.loc[data_raw["Technology"].isin(param["dist_ren"]["renewables"])].reset_index(drop=True)
-# data_raw["Technology"] = data_raw["Technology"].replace(param["dist_ren"]["renewables"])
-# data_raw = data_raw.rename(columns={'Country/area': 'Site', 'Technology': 'Process', 2015: 'inst-cap'})
+    IRENA = IRENA.fillna(0).sort_index()
 
-# # Create new dataframe with needed information, rename sites and extract chosen sites
-# data = data_raw[["Site", "Process", "inst-cap"]]
-# data = data.replace({"Site": param["dist_ren"]["country_names"]}).fillna(value=0)
-# data = data.loc[data["Site"].isin(sites)].reset_index(drop=True)
+    for (c, t) in IRENA.index.unique():
+        sub_df = IRENA.loc[(c, t), :]
+        inst_cap = sub_df.loc[sub_df["Indicator"] == "Electricity capacity (MW)", year][0]
+        if isinstance(inst_cap, str):
+            inst_cap = int(inst_cap.replace(" ", ""))
+            IRENA.loc[(IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity capacity (MW)"), year] = inst_cap
+        gen_prod = sub_df.loc[sub_df["Indicator"] == "Electricity generation (GWh)", year][0]
+        if isinstance(gen_prod, str):
+            gen_prod = 1000 * int(gen_prod.replace(" ", ""))
+            IRENA.loc[(IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity generation (GWh)"), year] = gen_prod
+        if inst_cap == 0:
+            FLH = 0
+        else:
+            FLH = gen_prod / inst_cap
+        IRENA = IRENA.append(pd.DataFrame([["FLH (h)", FLH]], index=[(c, t)], columns=["Indicator", year])).sort_index()
 
-# # Group by and sum
-# data = data.groupby(["Site", "Process"]).sum().reset_index()
+    # Filter countries
+    IRENA = IRENA.reset_index()
+    IRENA = IRENA.set_index(["Country/area"]).sort_index()
+    IRENA = IRENA.loc[IRENA.index.isin(filter_countries)]
+    # Reshape
+    IRENA = IRENA.reset_index()
+    IRENA = IRENA.set_index(["Country/area", "Technology"])
+    IRENA = IRENA.pivot(columns="Indicator")[year].rename(
+        columns={"Electricity capacity (MW)": "inst-cap (MW)", "Electricity generation (GWh)": "prod (MWh)"}
+    )
+    IRENA = IRENA.astype(float)
+    IRENA.to_csv(paths["IRENA_summary"], sep=";", decimal=",", index=True)
+    create_json(paths["IRENA_summary"], param, ["author", "comment", "region_name", "year"], paths, ["regions_land", "IRENA", "IRENA_dict"])
+    print("files saved: " + paths["IRENA_summary"])
+    
 
-# # Estimate number of units
-# units = param["dist_ren"]["units"]
-# for p in data["Process"].unique():
-# data.loc[data["Process"] == p, "Unit"] = data.loc[data["Process"] == p, "inst-cap"] // units[p] \
-# + (data.loc[data["Process"] == p, "inst-cap"] % units[p] > 0)
-# for p in data["Process"].unique():
-# x = y = c = []
-# for counter in range(0, len(countries) - 1):
-# print(counter)
-# if float(data.loc[(data["Site"] == countries.loc[counter, "NAME_SHORT"]) & (
-# data["Process"] == p), 'inst-cap']) == 0:
-# continue
-# if (countries.loc[counter, "Population"]) & (p == 'WindOff'):
-# continue
-# if (countries.loc[counter, "Population"] == 0) & (p != 'WindOff'):
-# continue
-# name, x_off, y_off, potential = rasclip(paths["rasters"][p], paths["Countries"], counter)
-# raster_shape = potential.shape
-# potential = potential.flatten()
-
-# # Calculate the part of the probability that is based on the potential
-# potential_nan = np.isnan(potential) | (potential == 0)
-# potential = (potential - np.nanmin(potential)) / (np.nanmax(potential) - np.nanmin(potential))
-# potential[potential_nan] = 0
-
-# # Calculate the random part of the probability
-# potential_random = np.random.random_sample(potential.shape)
-# potential_random[potential_nan] = 0
-
-# # Combine the two parts
-# potential_new = (1 - param["dist_ren"]["randomness"]) * potential \
-# + param["dist_ren"]["randomness"] * potential_random
-
-# # Sort elements based on their probability and keep the indices
-# ind_sort = np.argsort(potential_new, axis=None)  # Ascending
-# ind_needed = ind_sort[-int(data.loc[(data["Site"] == name) & (data["Process"] == p), "Unit"].values):]
-
-# # Free memory
-# del ind_sort, potential, potential_nan, potential_random
-
-# # Get the coordinates of the power plants and their respective capacities
-# power_plants = [units[p]] * len(ind_needed)
-# if data.loc[(data["Site"] == name) & (data["Process"] == p), "inst-cap"].values % units[p] > 0:
-# power_plants[-1] = data.loc[(data["Site"] == name) & (data["Process"] == p), "inst-cap"].values % units[
-# p]
-# y_pp, x_pp = np.unravel_index(ind_needed, raster_shape)
-# x = x + ((x_pp + x_off + 0.5) * param["res_desired"][1] + param["Crd_all"][3]).tolist()
-# y = y + (param["Crd_all"][0] - (y_pp + y_off + 0.5) * param["res_desired"][0]).tolist()
-# c = c + potential_new[ind_needed].tolist()  # Power_plants
-
-# del potential_new
-
-# # Create map
-# import pdb;
-# pdb.set_trace()
-# map_power_plants(p, x, y, c, paths["map_power_plants"] + p + '.shp')
+def distribute_renewable_capacities_IRENA(paths, param):
+    """
+    This function reads the installed capacities of renewable power in each country, and distributes that capacity spatially.
+    In the first part, it generates a summary report of IRENA for the countries within the scope, if such a report does not already exist.
+    It then matches the names of technologies in IRENA with those that are defined by the user. Afterwards how many units or projects exist per
+    country and technology, using a user-defined unit size.
+    
+    In the second part, it allocates coordinates for each unit, based on a potential raster map and on a random factor. This is done by calling the module
+    :mod:`create_shapefiles_of_ren_power_plants` in :mod:`lib.spatial_functions`.
+    
+    :param paths: Dictionary containing the paths to *IRENA_summary* and to *dict_technologies*, as well as otehr paths needed by :mod:`create_shapefiles_of_ren_power_plants`.
+    :type paths: dict
+    :param param: Dictionary containing the dictionary of units' size for each technology, and other parameters needed by :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`.
+    :type param: dict
+    
+    :return: The submodules :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`, which are called by this module, have outputs of their own.
+    :rtype: None
+    """
+    
+    timecheck("Start")
+    units = param["dist_ren"]["units"]
+    
+    # Clean IRENA data and filter them for desired scope
+    if not os.path.isfile(paths["IRENA_summary"]):
+        clean_IRENA_summary(param, paths)
+        
+    # Get the installed capacities
+    inst_cap = pd.read_csv(paths["IRENA_summary"], sep=";", decimal=",", index_col=0, usecols=[0, 1, 2])
+    
+    # Read the dictionary of technology names
+    tech_dict = pd.read_csv(paths["dict_technologies"], sep=";").set_index(["IRENA"])
+    tech_dict = tech_dict["Model names"].dropna().to_dict()
+    
+    # Rename technologies
+    for key in tech_dict.keys():
+        inst_cap.loc[inst_cap["Technology"] == key, "Technology"] = tech_dict[key]
+    
+    # Reindex, group
+    inst_cap.reset_index(drop = False, inplace = True)
+    inst_cap = inst_cap.groupby(["Country/area", "Technology"]).sum()
+    inst_cap.reset_index(drop = False, inplace = True)
+    
+    # Only distribute technologies in units.keys()
+    filter_tech = list(units.keys())
+    inst_cap.set_index(["Technology"], inplace = True)
+    inst_cap = inst_cap.loc[inst_cap.index.isin(filter_tech)]
+    inst_cap.reset_index(drop = False, inplace = True)
+    
+    # Estimate number of units
+    for key in units.keys():
+        inst_cap.loc[(inst_cap["Technology"] == key), "Units"] = inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] // units[key] + (inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] % units[key] > 0)
+    
+    for tech in filter_tech:
+        create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech)
+    
+    timecheck("End")
 
 
 # def format_process_model(process_compact, param):
