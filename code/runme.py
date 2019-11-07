@@ -9,10 +9,8 @@ if __name__ == "__main__":
     # clean_GridKit_Europe(paths, param)
     # clean_sector_shares_Eurostat(paths, param)
     # clean_load_data_ENTSOE(paths, param)
-    distribute_renewable_capacities_IRENA(paths, param)
-    
-    # clean_processes_and_storage_data(paths, param)
-    # clean_processes_and_storage_data_FRESNA(paths, param)
+    # distribute_renewable_capacities_IRENA(paths, param)
+    clean_processes_and_storage_FRESNA(paths, param)
 
     ## Generate intermediate files
     # generate_sites_from_shapefile(paths, param)

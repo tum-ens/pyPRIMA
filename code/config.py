@@ -216,16 +216,19 @@ def processes_parameters(param):
 
     param["dist_ren"] = {
         "units": {
-            "Solar": 2,
-            "WindOn": 5,
-            "WindOff": 10,
-            "Bioenergy": 5,
+            "Solar": 5,
+            "WindOn": 10,
+            "WindOff": 20,
+            "Bioenergy": 10,
             "Hydro": 50,
         },
         "randomness": 0.99,
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
     }
+    param["process"] = {
+        "cohorts": 5, # 5-year steps
+        }
     return param
 
 
@@ -272,6 +275,7 @@ def assumption_paths(paths):
 
     paths["assumptions_landuse"] = root + "00 Assumptions" + fs + "assumptions_landuse.csv"
     paths["assumptions_processes"] = root + "00 Assumptions" + fs + "assumptions_processes.csv"
+    paths["assumptions_storage"] = root + "00 Assumptions" + fs + "assumptions_storage.csv"
     paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
     paths["dict_daytype"] = root + "00 Assumptions" + fs + "dict_day_type.csv"
     paths["dict_countries"] = root + "00 Assumptions" + fs + "dict_countries.csv"
@@ -464,7 +468,11 @@ def output_paths(paths, param):
     }
     
     # Other processes and storage
-    paths["process_raw"] = paths["proc"] + "processes_raw.csv"
+    paths["process_raw"] = paths["proc"] + "agg_processes_bef_cleaning.csv"
+    paths["process_filtered"] = paths["proc"] + "processes_and_storage_filtered.csv"
+    paths["process_joined"] = paths["proc"] + "processes_and_storage_including_ren.csv"
+    paths["process_completed"] = paths["proc"] + "processes_and_storage_completed.csv"
+    paths["process_cleaned"] = paths["proc"] + "processes_and_storage_cleaned.shp"
 
     # Framework models
     paths["urbs_model"] = paths["urbs"] + region + "_" + subregions + "_" + year + ".xlsx"

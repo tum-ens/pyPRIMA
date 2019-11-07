@@ -436,10 +436,11 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
     locations_ren["Prob"] = c
     locations_ren = gpd.GeoDataFrame(locations_ren, geometry = "geometry", crs = {'init' :'epsg:4326'})
     locations_ren.to_file(driver='ESRI Shapefile', filename=paths["locations_ren"][tech])
-    
+    print("\n")
+    create_json(paths["locations_ren"][tech], param, ["region_name", "year", "dist_ren", "Crd_all", "res_desired", "GeoRef"], paths, ["dist_ren", "PA", "IRENA_summary", "dict_technologies"])
+    print("File saved: " + paths["locations_ren"][tech])
     print("\n")
     timecheck("End")
-    return (x, y, p, c)
     
 # # ## Functions:
 
