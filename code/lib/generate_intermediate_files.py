@@ -131,7 +131,7 @@ def generate_intermittent_supply_timeseries(paths, param):
         if os.path.isfile(paths["TS_ren"][tech]):
             TS = pd.read_csv(paths["TS_ren"][tech], sep=';', decimal=',', index_col=[0])
         else:
-            warn("No time series found for the specified settings: " + ",".join(sorted(paths["ren_potential"][tech][0])), UserWarning)
+            warn("No time series found for the specified settings: " + ",".join(sorted(param["ren_potential"][tech][0])), UserWarning)
             continue
 
         # Retrieve available modes and sub-regions from TS file
@@ -175,8 +175,9 @@ def generate_intermittent_supply_timeseries(paths, param):
         else:
             Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
 
-    Timeseries.to_csv(paths["potential_ren"] , sep=';', decimal=',')
+    Timeseries.to_csv(paths["potential_ren"], sep=';', decimal=',')
     print("File Saved: " + paths["potential_ren"])
+    create_json(paths["potential_ren"], param, ["region_name", "subregions_name", "technology", "ren_potential"], paths, ["TS_ren"])
     timecheck('End')
 
 
