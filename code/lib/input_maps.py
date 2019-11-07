@@ -31,10 +31,7 @@ def generate_landsea(paths, param):
     status = 0
     for reg in range(0, param["nRegions_land"]):
         # Show status bar
-        status = status + 1
-        sys.stdout.write("\r")
-        sys.stdout.write("Creating A_land " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions_land), (status * 100) // nRegions_land))
-        sys.stdout.flush()
+        display_progress("Creating A_land ", (nRegions_land, status))
 
         # Calculate A_region
         A_region = calc_region(countries_shp.iloc[reg], Crd_regions_land[reg, :], res_desired, GeoRef)
@@ -43,6 +40,7 @@ def generate_landsea(paths, param):
         A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
             A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] + A_region
         )
+        status = status + 1
     # Saving file
     array2raster(paths["LAND"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_land)
     create_json(
@@ -60,12 +58,7 @@ def generate_landsea(paths, param):
     status = 0
     for reg in range(0, param["nRegions_sea"]):
         # Show status bar
-        status = status + 1
-        sys.stdout.write("\r")
-        sys.stdout.write(
-            "Creating A_sea " + "[%-50s] %d%%" % ("=" * ((status * 50) // param["nRegions_sea"]), (status * 100) // param["nRegions_sea"])
-        )
-        sys.stdout.flush()
+        display_progress("Creating A_land ", (param["nRegions_sea"], status))
 
         # Calculate A_region
         A_region = calc_region(eez_shp.iloc[reg], Crd_regions_sea[reg, :], res_desired, GeoRef)
@@ -74,6 +67,7 @@ def generate_landsea(paths, param):
         A_sea[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
             A_sea[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] + A_region
         )
+        status = status + 1
 
     # Fixing pixels on the borders to avoid duplicates
     A_sea[A_sea > 0] = 1
