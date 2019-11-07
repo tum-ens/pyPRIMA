@@ -298,10 +298,7 @@ def zonal_stats(regions_shp, raster_dict, param):
     status = 0
     for reg in range(0, nRegions):
         # Show status bar
-        status = status + 1
-        sys.stdout.write("\r")
-        sys.stdout.write("Calculating statistics " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions), (status * 100) // nRegions))
-        sys.stdout.flush()
+        display_progress("Calculating statistics ", (nRegions, status))
 
         # Calculate A_region_extended
         A_region_extended = calc_region(regions_shp.loc[reg], Crd_all, res_desired, GeoRef)
@@ -319,6 +316,7 @@ def zonal_stats(regions_shp, raster_dict, param):
         for key in other_keys:
             df.loc[reg, key] = np.nanmax(A_region_extended * raster_dict[key])
 
+        status = status + 1
     timecheck("End")
     return df
 
@@ -368,12 +366,10 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
     status = 0
     ind_needed = {}
     x = y = p = c = []
+    length = len(inst_cap["Country/area"].unique())
     for reg in inst_cap["Country/area"].unique():
         # Show status bar
-        status = status + 1
-        sys.stdout.write("\r")
-        sys.stdout.write("Distribution for " + tech + ": " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions), (status * 100) // nRegions))
-        sys.stdout.flush()
+        display_progress("Distribution for " + tech + ": ", (length, status))
 
         if not inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values[0]:
             continue
@@ -426,6 +422,8 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         y = y + Crd_y_pp.tolist()
         p = p + power_plants
         c = c + potential_new[ind_needed].tolist()  # Power_plants
+
+        status = status + 1
 
     # Format point locations
     points = [(x[i], y[i]) for i in range(0, len(y))]
