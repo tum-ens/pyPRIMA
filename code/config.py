@@ -198,25 +198,8 @@ def grid_parameters(param):
             1000: 0.6,  # upper bound
         },
         # dummy values??
-        "SIL": {
-            10: 0.3, # in MW
-            30: 2.7,
-            69: 15,
-            110: 32,
-            138: 59.4,
-            220: 175,
-            345: 504,
-            380: 602,
-            500: 1200,
-            765: 2736,
-            1000: 6312, # upper bound
-        }, 
-        "efficiency": {
-            "AC_OHL": 0.92, # 8% losses / 1000 km
-            "AC_CAB": 0.90,
-            "DC_OHL": 0.95,
-            "DC_CAB": 0.95,
-        },  
+        "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736, 1000: 6312},  # in MW
+        "efficiency": {"AC_OHL": 0.92, "AC_CAB": 0.90, "DC_OHL": 0.95, "DC_CAB": 0.95},  # efficiency / 1000 km
         "wacc": 0.07,
         "depreciation": 50,
     }
@@ -227,28 +210,20 @@ def grid_parameters(param):
 def processes_parameters(param):
     """
     """
-# dist_ren = {"p_landuse": {0: 0, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2, 6: 0.2, 7: 0.2, 8: 0.1, 9: 0.1, 10: 0.5, 11: 0,
-# 12: 1, 13: 0, 14: 1, 15: 0, 16: 0},
-# "cap_lo": 0,
-# "cap_up": np.inf,
-# "drop_params": ['Site', 'inst-cap', 'cap_lo', 'cap-up', 'year']
-# }
+    # dist_ren = {"p_landuse": {0: 0, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2, 6: 0.2, 7: 0.2, 8: 0.1, 9: 0.1, 10: 0.5, 11: 0,
+    # 12: 1, 13: 0, 14: 1, 15: 0, 16: 0},
+    # "cap_lo": 0,
+    # "cap_up": np.inf,
+    # "drop_params": ['Site', 'inst-cap', 'cap_lo', 'cap-up', 'year']
+    # }
 
     param["dist_ren"] = {
-        "units": {
-            "Solar": 5,
-            "WindOn": 10,
-            "WindOff": 20,
-            "Bioenergy": 10,
-            "Hydro": 50,
-        },
+        "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
         "randomness": 0.99,
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
     }
-    param["process"] = {
-        "cohorts": 5, # 5-year steps
-        }
+    param["process"] = {"cohorts": 5}  # 5-year steps
     return param
 
 
@@ -364,19 +339,19 @@ def grid_input_paths(paths):
     paths["transmission_lines"] = PathTemp + "gridkit_europe" + fs + "gridkit_europe-highvoltage-links.csv"
 
     return paths
-    
-    
+
+
 def processes_input_paths(paths, param):
     """
     """
     global root
     global fs
-    
+
     year = str(param["year"])
-    
+
     PathTemp = root + "01 Raw inputs" + fs + "Renewable energy" + fs
     paths["IRENA"] = PathTemp + "IRENA" + fs + "IRENA_RE_electricity_statistics_allcountries_alltech_" + year + ".csv"
-    
+
     PathTemp = root + "03 Intermediate files" + fs + "Files Europe" + fs + "Renewable energy" + fs + "Potential" + fs
     paths["dist_ren"] = {
         "rasters": {
@@ -385,12 +360,12 @@ def processes_input_paths(paths, param):
             "WindOff": PathTemp + "Europe_WindOff_80_FLH_mask_2015.tif",
             "Bioenergy": PathTemp + "Europe_Bioenergy_potential_distribution.tif",
             "Hydro": PathTemp + "Europe_Hydro_potential_distribution.tif",
-        },
+        }
     }
-    
-    PathTemp = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs
-    paths["FRESNA"] = PathTemp + 'EU_Powerplants' + fs + 'FRESNA2' + fs + 'Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv'
-    
+
+    PathTemp = root + "01 Raw inputs" + fs + "Power plants and storage" + fs
+    paths["FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
+
     return paths
 
 
@@ -449,7 +424,7 @@ def output_folders(paths, param):
     paths["regional_analysis"] = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs
     if not os.path.isdir(paths["regional_analysis"]):
         os.makedirs(paths["regional_analysis"])
-        
+
     # Output folder for processes and storage
     paths["proc_sub"] = paths["region"] + "Power plants and storage" + fs + subregions + fs
     if not os.path.isdir(paths["proc_sub"]):
@@ -499,7 +474,7 @@ def output_paths(paths, param):
     paths["grid_cleaned"] = paths["grid"] + "grid_cleaned.csv"
     paths["grid_shp"] = paths["grid"] + "grid_cleaned.shp"
     paths["grid_completed"] = paths["grid_sub"] + "transmission.csv"
-    
+
     # Renewable processes
     paths["IRENA_summary"] = paths["region"] + "Renewable energy" + fs + "IRENA_summary_" + year + ".csv"
     paths["locations_ren"] = {
@@ -512,7 +487,7 @@ def output_paths(paths, param):
     paths["potential_ren"] = paths["proc"] + "Renewables_potential.csv"
 
     # Other processes and storage
-    paths["process_raw"] = paths["proc"] + "agg_processes_bef_cleaning.csv"
+    paths["process_raw"] = paths["proc"] + "processes_and_storage_agg_bef_cleaning.csv"
     paths["process_filtered"] = paths["proc"] + "processes_and_storage_filtered.csv"
     paths["process_joined"] = paths["proc"] + "processes_and_storage_including_ren.csv"
     paths["process_completed"] = paths["proc"] + "processes_and_storage_completed.csv"
