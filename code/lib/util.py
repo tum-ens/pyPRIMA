@@ -6,7 +6,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely import geometry
-from shapely.geometry import Polygon, Point#, mapping
+from shapely.geometry import Polygon, Point  # , mapping
 import shapefile as shp
 import pysal as ps
 from geopy import distance
@@ -27,8 +27,9 @@ import json
 
 import warnings
 from warnings import warn
+
 # gdal.PushErrorHandler('CPLQuietErrorHandler')
-warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 def timecheck(*args):

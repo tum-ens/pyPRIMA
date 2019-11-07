@@ -345,14 +345,14 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
       its corresponding metadata in a JSON file.
     :rtype: None
     """
-        
+
     Crd_all = param["Crd_all"]
     res_desired = param["res_desired"]
     GeoRef = param["GeoRef"]
     nRegions = len(inst_cap["Country/area"].unique())
     raster_path = paths["dist_ren"]["rasters"][tech]
     units = param["dist_ren"]["units"]
-    
+
     # Read rasters
     try:
         with rasterio.open(raster_path) as src:
@@ -362,7 +362,7 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         if not os.path.exists(paths["PA"]):
             generate_protected_areas(paths, param)
         with rasterio.open(paths["PA"]) as src:
-            A_protect = np.flipud(src.read(1)).astype(int) 
+            A_protect = np.flipud(src.read(1)).astype(int)
         raster = changem(A_protect, param["dist_ren"]["default_pa_availability"], param["dist_ren"]["default_pa_type"]).astype(float)
 
     status = 0
@@ -374,18 +374,18 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         sys.stdout.write("\r")
         sys.stdout.write("Distribution for " + tech + ": " + "[%-50s] %d%%" % ("=" * ((status * 50) // nRegions), (status * 100) // nRegions))
         sys.stdout.flush()
-        
+
         if not inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values[0]:
             continue
 
         # Calculate A_region_extended
         if tech == "WindOff":
             regions_shp = param["regions_sea"]
-            mask = regions_shp.loc[regions_shp["ISO_Ter1"]==reg].dissolve(by="ISO_Ter1").squeeze()
+            mask = regions_shp.loc[regions_shp["ISO_Ter1"] == reg].dissolve(by="ISO_Ter1").squeeze()
             A_region_extended = calc_region(mask, Crd_all, res_desired, GeoRef)
         else:
             regions_shp = param["regions_land"]
-            mask = regions_shp.loc[regions_shp["GID_0"]==reg].squeeze()
+            mask = regions_shp.loc[regions_shp["GID_0"] == reg].squeeze()
             A_region_extended = calc_region(mask, Crd_all, res_desired, GeoRef)
         A_region_extended[A_region_extended == 0] = np.nan
 
@@ -395,53 +395,62 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
 
         # Calculate the part of the probability that is based on the potential
         potential_nan = np.isnan(potential) | (potential == 0)
-        if (np.nanmax(potential) - np.nanmin(potential)):
+        if np.nanmax(potential) - np.nanmin(potential):
             potential = (potential - np.nanmin(potential)) / (np.nanmax(potential) - np.nanmin(potential))
         else:
             potential = np.zeros(potential.shape)
         potential[potential_nan] = 0
-    
+
         # Calculate the random part of the probability
         potential_random = np.random.random_sample(potential.shape)
         potential_random[potential_nan] = 0
-    
+
         # Combine the two parts
         potential_new = (1 - param["dist_ren"]["randomness"]) * potential + param["dist_ren"]["randomness"] * potential_random
-    
+
         # Sort elements based on their probability and keep the indices
         ind_sort = np.argsort(potential_new, axis=None)  # Ascending
-        ind_needed = ind_sort[-int(inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values):]
-        
+        ind_needed = ind_sort[-int(inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values) :]
+
         # Get the coordinates of the power plants and their respective capacities
         power_plants = [units[tech]] * len(ind_needed)
         if inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "inst-cap (MW)"].values % units[tech] > 0:
-            power_plants[-1] = (inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "inst-cap (MW)"].values % units[tech])[0]
+            power_plants[-1] = (
+                inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "inst-cap (MW)"].values % units[tech]
+            )[0]
         y_pp, x_pp = np.unravel_index(ind_needed, distribution.shape)
-        
+
         Crd_y_pp, Crd_x_pp = crd_exact_points((y_pp, x_pp), Crd_all, res_desired)
 
         x = x + Crd_x_pp.tolist()
         y = y + Crd_y_pp.tolist()
         p = p + power_plants
         c = c + potential_new[ind_needed].tolist()  # Power_plants
-    
+
     # Format point locations
     points = [(x[i], y[i]) for i in range(0, len(y))]
-    
+
     # Create shapefile
     locations_ren = pd.DataFrame()
     locations_ren["geometry"] = [Point(points[i]) for i in range(0, len(points))]
     locations_ren["Technology"] = tech
     locations_ren["Capacity"] = p
     locations_ren["Prob"] = c
-    locations_ren = gpd.GeoDataFrame(locations_ren, geometry = "geometry", crs = {'init' :'epsg:4326'})
-    locations_ren.to_file(driver='ESRI Shapefile', filename=paths["locations_ren"][tech])
+    locations_ren = gpd.GeoDataFrame(locations_ren, geometry="geometry", crs={"init": "epsg:4326"})
+    locations_ren.to_file(driver="ESRI Shapefile", filename=paths["locations_ren"][tech])
     print("\n")
-    create_json(paths["locations_ren"][tech], param, ["region_name", "year", "dist_ren", "Crd_all", "res_desired", "GeoRef"], paths, ["dist_ren", "PA", "IRENA_summary", "dict_technologies"])
+    create_json(
+        paths["locations_ren"][tech],
+        param,
+        ["region_name", "year", "dist_ren", "Crd_all", "res_desired", "GeoRef"],
+        paths,
+        ["dist_ren", "PA", "IRENA_summary", "dict_technologies"],
+    )
     print("File saved: " + paths["locations_ren"][tech])
     print("\n")
     timecheck("End")
-    
+
+
 # # ## Functions:
 
 # # https://pcjericks.github.io/py-gdalogr-cookbook/raster_layers.html#clip-a-geotiff-with-shapefile
@@ -528,9 +537,6 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
 # # Clip the image using the mask
 # clip = np.multiply(clip, mask).astype(gdalnumeric.float64)
 # return poly.GetField('NAME_SHORT'), xoffset, yoffset, clip
-
-
-
 
 
 # def map_grid_plants(x, y, paths):
