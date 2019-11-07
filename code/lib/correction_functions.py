@@ -350,14 +350,13 @@ def clean_processes_and_storage_FRESNA(paths, param):
     Process = pd.read_csv(paths["FRESNA"], header=0, skipinitialspace=True, usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     Process.rename(columns={'Capacity': 'inst-cap', 'lat': 'Latitude', 'lon': 'Longitude'}, inplace=True)
     
-    
     # Obtain preliminary information before cleaning
-    
     Process['Technology'].fillna('NaN', inplace=True)
     Process['inst-cap'].fillna(0, inplace=True)
     Process[['Fueltype', 'Technology', 'Set', 'inst-cap']].groupby(['Fueltype', 'Technology', 'Set']) \
                                                           .sum() \
                                                           .to_csv(paths["process_raw"], sep=';', decimal=',', index=True)
+    create_json(paths["process_raw"], param, [], paths, ["FRESNA"])
     print('Number of power plants in FRESNA: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
     
     # TYPE
@@ -368,6 +367,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
     # Remove useless rows (Type not needed)
     Process.dropna(subset=['Type'], inplace=True)
     Process.to_csv(paths["process_filtered"], sep=';', decimal=',', index=True)
+    create_json(paths["process_filtered"], param, [], paths, ["FRESNA", "dict_technologies"])
     print('Number of power plants after filtering FRESNA: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
     
     # INCLUDE RENEWABLE POWER PLANTS (IRENA)
@@ -382,6 +382,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
         pp_df.drop(['geometry'], axis=1, inplace=True)
         Process = Process.append(pp_df, ignore_index=True, sort=True)
     Process.to_csv(paths["process_joined"], sep=';', decimal=',', index=True)
+    create_json(paths["process_joined"], param, [], paths, ["FRESNA", "process_filtered", "dict_technologies", "locations_ren"])
     print('Number of power plants after adding distributed renewable capacity: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
     
     # NAME
@@ -414,6 +415,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
         P_missing.loc[P_missing['Country'] == country, ['Latitude', "Longitude"]] = P_located[P_located['Country'] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
     Process = P_located.append(P_missing)
     Process.to_csv(paths["process_completed"], sep=';', decimal=',', index=True)
+    create_json(paths["process_completed"], param, ["year", "process"], paths, ["FRESNA", "process_joined", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"])
     
     # GEOMETRY
     # Create point geometries (shapely)
@@ -423,6 +425,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
     # Transform into GeoDataFrame
     Process = gpd.GeoDataFrame(Process, geometry='geometry', crs={'init': 'epsg:4326'})
     Process.to_file(driver='ESRI Shapefile', filename=paths["process_cleaned"])
+    create_json(paths["process_cleaned"], param, ["year", "process"], paths, ["FRESNA", "process_completed", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"])
     print("File saved: " + paths["process_cleaned"])
 
     timecheck("End")

@@ -468,7 +468,7 @@ def output_paths(paths, param):
     }
     
     # Other processes and storage
-    paths["process_raw"] = paths["proc"] + "agg_processes_bef_cleaning.csv"
+    paths["process_raw"] = paths["proc"] + "processes_and_storage_agg_bef_cleaning.csv"
     paths["process_filtered"] = paths["proc"] + "processes_and_storage_filtered.csv"
     paths["process_joined"] = paths["proc"] + "processes_and_storage_including_ren.csv"
     paths["process_completed"] = paths["proc"] + "processes_and_storage_completed.csv"
