@@ -161,18 +161,18 @@ def generate_intermittent_supply_timeseries(paths, param):
 
         # Check 3: All desired regions available in TS file
         sub_regions = list(param["regions_sub"]["NAME_SHORT"])
-        missing = [item for item in sub_regions if item not in avail_subregions]
-        if not missing:
+        missing = list([item for item in sub_regions if item not in avail_subregions])
+        if missing:
             warn("For technology " + tech + ", the following subregions are missing from the time series file: \n" + str(missing) + ". The potential time series will be set to zero.", UserWarning)
 
         # Prepare tech dataframe
 
-        TS_tech = pd.DataFrame(None, range(1, 8761), columns=list([sub + '.' + tech for sub in sub_regions]))
+        TS_tech = pd.DataFrame(None, range(1, 8760), columns=list([sub + '.' + tech for sub in sub_regions]))
 
         # Loop over regions
         for reg in sub_regions:
             if reg in avail_subregions:
-                entry = [reg, tech, combo_name, mode]
+                entry = list(map(str, [reg, tech, combo_name, mode]))
                 TS_tech[reg + "." + tech] = TS["_".join(entry)]
 
         # Replace nan values with zeros

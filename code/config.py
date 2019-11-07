@@ -154,7 +154,7 @@ def renewable_potential_parameters(param):
     :rtype: dict
     """
 
-    param["ren_potential"] = {"WindOn": ([], "all"),  # "Technology":([list of settings], "TS tier")
+    param["ren_potential"] = {"WindOn": ([120, 100, 140], "all"),  # "Technology":([list of settings], "TS tier")
                               "WindOff": ([], "all"),
                               "PV": ([], "all"),
                               "CSP": ([], "all")}
@@ -342,11 +342,12 @@ def renewable_potential_input_paths(paths, param):
     subregions = param["subregions_name"]
     year = str(param["year"])
 
+    paths["region"] = root + "03 Intermediate files" + fs + "Files " + region + fs
+
     paths["TS_ren"] = {}
-    pathtemp = paths[
-                   "region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
+    pathtemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
     for tech in param["technology"]:
-        quantiles = "_".join(sorted(param["ren_potential"][tech][0]))
+        quantiles = "_".join(sorted(map(str, param["ren_potential"][tech][0])))
         paths["TS_ren"][
             tech] = pathtemp + subregions + "_" + tech + "_reg_TimeSeries_" + quantiles + "_" + year + ".csv"
 

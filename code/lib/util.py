@@ -14,13 +14,11 @@ import sys
 import datetime
 import inspect
 import os
-
 # import glob
 # import shutil
 import math
 import rasterio
 from rasterio import MemoryFile, mask, windows
-
 # from scipy.ndimage import convolve
 # import osr
 import json
