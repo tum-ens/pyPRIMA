@@ -289,6 +289,7 @@ def clean_sector_shares_Eurostat(paths, param):
 
     timecheck("End")
 
+
 # # Drop recently built plants (after the reference year)
 # Process = Process[(Process['year'] <= param["year"])]
 
@@ -331,11 +332,11 @@ def clean_processes_and_storage_FRESNA(paths, param):
     timecheck("Start")
 
     year = param["year"]
-    
+
     # Read assumptions regarding processes
     assumptions_pro = pd.read_csv(paths["assumptions_processes"], sep=";", decimal=",")
     assumptions_pro = assumptions_pro.loc[assumptions_pro["year"] == year]
-    
+
     # Read assumptions regarding storage
     assumptions_sto = pd.read_csv(paths["assumptions_storage"], sep=";", decimal=",")
     assumptions_sto = assumptions_sto.loc[assumptions_sto["year"] == year]
@@ -348,84 +349,102 @@ def clean_processes_and_storage_FRESNA(paths, param):
 
     # Get data from FRESNA database
     Process = pd.read_csv(paths["FRESNA"], header=0, skipinitialspace=True, usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    Process.rename(columns={'Capacity': 'inst-cap', 'lat': 'Latitude', 'lon': 'Longitude'}, inplace=True)
-    
+    Process.rename(columns={"Capacity": "inst-cap", "lat": "Latitude", "lon": "Longitude"}, inplace=True)
+
     # Obtain preliminary information before cleaning
-    Process['Technology'].fillna('NaN', inplace=True)
-    Process['inst-cap'].fillna(0, inplace=True)
-    Process[['Fueltype', 'Technology', 'Set', 'inst-cap']].groupby(['Fueltype', 'Technology', 'Set']) \
-                                                          .sum() \
-                                                          .to_csv(paths["process_raw"], sep=';', decimal=',', index=True)
+    Process["Technology"].fillna("NaN", inplace=True)
+    Process["inst-cap"].fillna(0, inplace=True)
+    Process[["Fueltype", "Technology", "Set", "inst-cap"]].groupby(["Fueltype", "Technology", "Set"]).sum().to_csv(
+        paths["process_raw"], sep=";", decimal=",", index=True
+    )
     create_json(paths["process_raw"], param, [], paths, ["FRESNA"])
-    print('Number of power plants in FRESNA: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
-    
+    print("Number of power plants in FRESNA: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
+
     # TYPE
     # Define type of process/storage
-    Process['Type'] = "(" + Process["Fueltype"] + "," + Process["Technology"] + "," + Process["Set"] + ")"
+    Process["Type"] = "(" + Process["Fueltype"] + "," + Process["Technology"] + "," + Process["Set"] + ")"
     for key in dict_technologies.keys():
-        Process.loc[Process['Type'] == key, "Type"] = dict_technologies[key]
+        Process.loc[Process["Type"] == key, "Type"] = dict_technologies[key]
     # Remove useless rows (Type not needed)
-    Process.dropna(subset=['Type'], inplace=True)
-    Process.to_csv(paths["process_filtered"], sep=';', decimal=',', index=True)
+    Process.dropna(subset=["Type"], inplace=True)
+    Process.to_csv(paths["process_filtered"], sep=";", decimal=",", index=True)
     create_json(paths["process_filtered"], param, [], paths, ["FRESNA", "dict_technologies"])
-    print('Number of power plants after filtering FRESNA: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
-    
+    print("Number of power plants after filtering FRESNA: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
+
     # INCLUDE RENEWABLE POWER PLANTS (IRENA)
     for pp in paths["locations_ren"].keys():
-    # Shapefile with power plants
+        # Shapefile with power plants
         pp_shapefile = gpd.read_file(paths["locations_ren"][pp])
-        pp_df = pd.DataFrame(pp_shapefile.rename(columns={'Capacity': 'inst-cap'}))
-        pp_df['Longitude'] = [pp_df.loc[i, 'geometry'].x for i in pp_df.index]
-        pp_df['Latitude'] = [pp_df.loc[i, 'geometry'].y for i in pp_df.index]
-        pp_df['Type'] = pp
-        pp_df['Name'] = [pp + '_' + str(i) for i in pp_df.index]
-        pp_df.drop(['geometry'], axis=1, inplace=True)
+        pp_df = pd.DataFrame(pp_shapefile.rename(columns={"Capacity": "inst-cap"}))
+        pp_df["Longitude"] = [pp_df.loc[i, "geometry"].x for i in pp_df.index]
+        pp_df["Latitude"] = [pp_df.loc[i, "geometry"].y for i in pp_df.index]
+        pp_df["Type"] = pp
+        pp_df["Name"] = [pp + "_" + str(i) for i in pp_df.index]
+        pp_df.drop(["geometry"], axis=1, inplace=True)
         Process = Process.append(pp_df, ignore_index=True, sort=True)
-    Process.to_csv(paths["process_joined"], sep=';', decimal=',', index=True)
+    Process.to_csv(paths["process_joined"], sep=";", decimal=",", index=True)
     create_json(paths["process_joined"], param, [], paths, ["FRESNA", "process_filtered", "dict_technologies", "locations_ren"])
-    print('Number of power plants after adding distributed renewable capacity: ', len(Process), '- installed capacity: ', Process["inst-cap"].sum())
-    
+    print("Number of power plants after adding distributed renewable capacity: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
+
     # NAME
-    Process['Name'].fillna('unnamed', inplace=True)
+    Process["Name"].fillna("unnamed", inplace=True)
     # Add suffix to deduplicate names
-    Process['Name'] = Process['Name'] + Process.groupby(['Name']).cumcount().astype(str).replace('0', '')
+    Process["Name"] = Process["Name"] + Process.groupby(["Name"]).cumcount().astype(str).replace("0", "")
     # Remove spaces from the name and replace them with underscores
-    Process['Name'] = [Process.loc[i, 'Name'].replace(' ', '_') for i in Process.index]
-    
+    Process["Name"] = [Process.loc[i, "Name"].replace(" ", "_") for i in Process.index]
+
     # YEAR
     Process["Year"] = [max(Process.loc[i, "YearCommissioned"], Process.loc[i, "Retrofit"]) for i in Process.index]
     # Assign a dummy year for entries with missing information
-    year_mu = dict(zip(assumptions_pro['Process'], assumptions_pro['year_mu'].astype(float)))
-    year_mu.update(dict(zip(assumptions_sto['Storage'], assumptions_sto['year_mu'].astype(float))))
-    year_stdev = dict(zip(assumptions_pro['Process'], assumptions_pro['year_stdev'].astype(float)))
-    year_stdev.update(dict(zip(assumptions_sto['Storage'], assumptions_sto['year_stdev'].astype(float))))
+    year_mu = dict(zip(assumptions_pro["Process"], assumptions_pro["year_mu"].astype(float)))
+    year_mu.update(dict(zip(assumptions_sto["Storage"], assumptions_sto["year_mu"].astype(float))))
+    year_stdev = dict(zip(assumptions_pro["Process"], assumptions_pro["year_stdev"].astype(float)))
+    year_stdev.update(dict(zip(assumptions_sto["Storage"], assumptions_sto["year_stdev"].astype(float))))
     filter = Process["Year"].isnull()
     for p in Process["Type"].unique():
-        Process.loc[(Process["Type"]==p) & filter, "year_mu"] = year_mu[p]
-        Process.loc[(Process["Type"]==p) & filter, "year_stdev"] = year_stdev[p]
+        Process.loc[(Process["Type"] == p) & filter, "year_mu"] = year_mu[p]
+        Process.loc[(Process["Type"] == p) & filter, "year_stdev"] = year_stdev[p]
     Process.loc[filter, "Year"] = np.floor(np.random.normal(Process.loc[filter, "year_mu"], Process.loc[filter, "year_stdev"]))
-    Process["Cohort"] = [max((Process.loc[i, 'Year'] // param["process"]["cohorts"]) * param["process"]["cohorts"], 1960) for i in Process.index]
-    
+    Process["Cohort"] = [max((Process.loc[i, "Year"] // param["process"]["cohorts"]) * param["process"]["cohorts"], 1960) for i in Process.index]
+
     # COORDINATES
-    P_missing = Process[Process['Longitude'].isnull()].copy()
-    P_located = Process[~Process['Longitude'].isnull()].copy()
+    P_missing = Process[Process["Longitude"].isnull()].copy()
+    P_located = Process[~Process["Longitude"].isnull()].copy()
     # Assign dummy coordinates within the same country
-    for country in P_missing['Country'].unique():
-        sample_size = len(P_missing.loc[P_missing['Country'] == country])
-        P_missing.loc[P_missing['Country'] == country, ['Latitude', "Longitude"]] = P_located[P_located['Country'] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
+    for country in P_missing["Country"].unique():
+        sample_size = len(P_missing.loc[P_missing["Country"] == country])
+        P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
+            P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
+        )
     Process = P_located.append(P_missing)
-    Process.to_csv(paths["process_completed"], sep=';', decimal=',', index=True)
-    create_json(paths["process_completed"], param, ["year", "process"], paths, ["FRESNA", "process_joined", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"])
-    
+    Process.to_csv(paths["process_completed"], sep=";", decimal=",", index=True)
+    create_json(
+        paths["process_completed"],
+        param,
+        ["year", "process"],
+        paths,
+        ["FRESNA", "process_joined", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"],
+    )
+
     # GEOMETRY
     # Create point geometries (shapely)
-    Process['geometry'] = list(zip(Process.Longitude, Process.Latitude))
-    Process['geometry'] = Process['geometry'].apply(Point)
+    Process["geometry"] = list(zip(Process.Longitude, Process.Latitude))
+    Process["geometry"] = Process["geometry"].apply(Point)
     Process = Process[["Name", "Type", "inst-cap", "Year", "Cohort", "geometry"]]
     # Transform into GeoDataFrame
-    Process = gpd.GeoDataFrame(Process, geometry='geometry', crs={'init': 'epsg:4326'})
-    Process.to_file(driver='ESRI Shapefile', filename=paths["process_cleaned"])
-    create_json(paths["process_cleaned"], param, ["year", "process"], paths, ["FRESNA", "process_completed", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"])
+    Process = gpd.GeoDataFrame(Process, geometry="geometry", crs={"init": "epsg:4326"})
+    try: 
+        os.remove(paths["process_cleaned"])
+    except OSError:
+        pass
+    Process.to_file(driver="ESRI Shapefile", filename=paths["process_cleaned"])
+    create_json(
+        paths["process_cleaned"],
+        param,
+        ["year", "process"],
+        paths,
+        ["FRESNA", "process_completed", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"],
+    )
     print("File saved: " + paths["process_cleaned"])
 
     timecheck("End")
@@ -598,7 +617,7 @@ def clean_IRENA_summary(paths, param):
     IRENA.to_csv(paths["IRENA_summary"], sep=";", decimal=",", index=True)
     create_json(paths["IRENA_summary"], param, ["author", "comment", "region_name", "year"], paths, ["regions_land", "IRENA", "IRENA_dict"])
     print("files saved: " + paths["IRENA_summary"])
-    
+
 
 def distribute_renewable_capacities_IRENA(paths, param):
     """
@@ -618,43 +637,45 @@ def distribute_renewable_capacities_IRENA(paths, param):
     :return: The submodules :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`, which are called by this module, have outputs of their own.
     :rtype: None
     """
-    
+
     timecheck("Start")
     units = param["dist_ren"]["units"]
-    
+
     # Clean IRENA data and filter them for desired scope
     if not os.path.isfile(paths["IRENA_summary"]):
         clean_IRENA_summary(param, paths)
-        
+
     # Get the installed capacities
     inst_cap = pd.read_csv(paths["IRENA_summary"], sep=";", decimal=",", index_col=0, usecols=[0, 1, 2])
-    
+
     # Read the dictionary of technology names
     tech_dict = pd.read_csv(paths["dict_technologies"], sep=";").set_index(["IRENA"])
     tech_dict = tech_dict["Model names"].dropna().to_dict()
-    
+
     # Rename technologies
     for key in tech_dict.keys():
         inst_cap.loc[inst_cap["Technology"] == key, "Technology"] = tech_dict[key]
-    
+
     # Reindex, group
-    inst_cap.reset_index(drop = False, inplace = True)
+    inst_cap.reset_index(drop=False, inplace=True)
     inst_cap = inst_cap.groupby(["Country/area", "Technology"]).sum()
-    inst_cap.reset_index(drop = False, inplace = True)
-    
+    inst_cap.reset_index(drop=False, inplace=True)
+
     # Only distribute technologies in units.keys()
     filter_tech = list(units.keys())
-    inst_cap.set_index(["Technology"], inplace = True)
+    inst_cap.set_index(["Technology"], inplace=True)
     inst_cap = inst_cap.loc[inst_cap.index.isin(filter_tech)]
-    inst_cap.reset_index(drop = False, inplace = True)
-    
+    inst_cap.reset_index(drop=False, inplace=True)
+
     # Estimate number of units
     for key in units.keys():
-        inst_cap.loc[(inst_cap["Technology"] == key), "Units"] = inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] // units[key] + (inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] % units[key] > 0)
-    
+        inst_cap.loc[(inst_cap["Technology"] == key), "Units"] = inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] // units[key] + (
+            inst_cap.loc[(inst_cap["Technology"] == key), "inst-cap (MW)"] % units[key] > 0
+        )
+
     for tech in filter_tech:
         create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech)
-    
+
     timecheck("End")
 
 
