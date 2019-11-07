@@ -367,7 +367,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
         Process.loc[Process["Type"] == key, "Type"] = dict_technologies[key]
     # Remove useless rows (Type not needed)
     Process.dropna(subset=["Type"], inplace=True)
-    Process.to_csv(paths["process_filtered"], sep=";", decimal=",", index=True)
+    Process.to_csv(paths["process_filtered"], sep=";", decimal=",", index=False)
     create_json(paths["process_filtered"], param, [], paths, ["FRESNA", "dict_technologies"])
     print("Number of power plants after filtering FRESNA: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
 
@@ -382,7 +382,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
         pp_df["Name"] = [pp + "_" + str(i) for i in pp_df.index]
         pp_df.drop(["geometry"], axis=1, inplace=True)
         Process = Process.append(pp_df, ignore_index=True, sort=True)
-    Process.to_csv(paths["process_joined"], sep=";", decimal=",", index=True)
+    Process.to_csv(paths["process_joined"], sep=";", decimal=",", index=False)
     create_json(paths["process_joined"], param, [], paths, ["FRESNA", "process_filtered", "dict_technologies", "locations_ren"])
     print("Number of power plants after adding distributed renewable capacity: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
 
@@ -417,7 +417,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
             P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
         )
     Process = P_located.append(P_missing)
-    Process.to_csv(paths["process_completed"], sep=";", decimal=",", index=True)
+    Process.to_csv(paths["process_completed"], sep=";", decimal=",", index=False)
     create_json(
         paths["process_completed"],
         param,

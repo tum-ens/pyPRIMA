@@ -75,8 +75,6 @@ def scope_paths_and_parameters(paths, param):
     
     *year* defines the year of the weather data, and *technology* the list of technologies that you are interested in.
     Currently, four technologies are defined: onshore wind ``'WindOn'``, offshore wind ``'WindOff'``, photovoltaics ``'PV'``, concentrated solar power ``'CSP'``.
-    
-    *frameworks* is a list of model frameworks, for which models will be generated. Currently only ``'urbs'`` and ``'evrys'`` are supported.
 
     :param paths: Dictionary including the paths.
     :type paths: dict
@@ -99,10 +97,7 @@ def scope_paths_and_parameters(paths, param):
     param["year"] = 2015
 
     # Technologies
-    param["technology"] = ["WindOn", "PV", "WindOff", "CSP"]  # ['PV', 'CSP', 'WindOn', 'WindOff']
-
-    # Frameworks
-    # param["frameworks"] = ['urbs', 'evrys'] # ['urbs', 'evrys']
+    param["technology"] = ["Battery", "Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "PumSt", "Solar", "WindOff", "WindOn"]
 
     return paths, param
 
