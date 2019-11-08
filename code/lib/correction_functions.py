@@ -555,6 +555,11 @@ def clean_GridKit_Europe(paths, param):
     # Eventually overwrite the values in 'wires' using 'cables'
     if param["grid"]["quality"]["cables"] > param["grid"]["quality"]["wires"]:
         grid_corrected.loc[:, "wires"] = np.minimum(grid_corrected.loc[:, "cables"] // 3, 1)
+
+    # Make sure no wires are equal to 0
+    grid_corrected.replace({"wires": 0}, 1, inplace=True)
+
+    # Save corrected grid
     grid_corrected.to_csv(paths["grid_corrected"], index=False, sep=";", decimal=",")
     create_json(paths["grid_corrected"], param, ["grid"], paths,
                 ["transmission_lines", "grid_expanded", "grid_filtered"])
@@ -598,11 +603,11 @@ def clean_GridKit_Europe(paths, param):
         count = len(grid_grouped.index)
         status = 0
         for i in grid_grouped.index:
-            status += 1
             display_progress("Writing grid to shapefile: ", (count, status))
             w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float),
                      grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
             w.record(grid_grouped.loc[i, "l_id"], grid_grouped.loc[i, "Capacity_MVA"], grid_grouped.loc[i, "tr_type"])
+            status += 1
     create_json(paths["grid_shp"], param, ["grid"], paths,
                 ["transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"])
     print("File saved: " + paths["grid_shp"])
