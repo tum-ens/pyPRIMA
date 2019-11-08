@@ -130,58 +130,60 @@ def generate_intermittent_supply_timeseries(paths, param):
 
     # Prepare empty dataframe
     # Loop over the technologies understudy
-    for tech in param["technology"]:
+    for tech in param["ren_potential"].keys():
+        for mode in param["ren_potential"][tech]:
+            # Check 1: TS file exist
+            if os.path.isfile(paths["TS_ren"][tech]):
+                TS = pd.read_csv(paths["TS_ren"][tech], sep=';', decimal=',', index_col=[0])
+            else:
+                warn("No time series found for " + tech + " under path: " + paths["TS_ren"][tech], UserWarning)
+                continue
 
-        # Check 1: TS file exist
-        if os.path.isfile(paths["TS_ren"][tech]):
-            TS = pd.read_csv(paths["TS_ren"][tech], sep=';', decimal=',', index_col=[0])
-        else:
-            warn("No time series found for " + tech + " with the specified settings: " + ",".join(sorted(param["ren_potential"][tech][0])), UserWarning)
-            continue
+            # Retrieve available modes and sub-regions from TS file
+            avail_modes = []
+            avail_subregions = []
+            for col in list(TS.columns):
+                # Split string
+                split = re.split("_", col)
+                avail_modes = avail_modes + [split[-1]]
+                avail_subregions = avail_subregions + [split[0]]
+                combo_name = split[2]
 
-        # Retrieve available modes and sub-regions from TS file
-        avail_modes = []
-        avail_subregions = []
-        for col in list(TS.columns):
-            # Split string
-            split = re.split("_", col)
-            avail_modes = avail_modes + [split[-1]]
-            avail_subregions = avail_subregions + [split[0]]
-            combo_name = split[2]
+            # Remove duplicates
+            avail_modes = list(set(avail_modes))
+            avail_subregions = list(set(avail_subregions))
 
-        # Remove duplicates
-        avail_modes = list(set(avail_modes))
-        avail_subregions = list(set(avail_subregions))
+            # Check 2: Mode available in TS file
+            if mode not in avail_modes:
+                warn("Desired mode " + mode + " for technology " + tech + " not found in time series file", UserWarning)
+                continue
 
-        # Check 2: Mode available in TS file
-        mode = param["ren_potential"][tech][1]
-        if mode not in avail_modes:
-            warn("Desired mode " + mode + " for technology " + tech + " not found in time series file", UserWarning)
-            continue
+            # Check 3: All desired regions available in TS file
+            sub_regions = list(param["regions_sub"]["NAME_SHORT"])
+            missing = list([item for item in sub_regions if item not in avail_subregions])
+            if missing:
+                warn("For technology " + tech + ", the following subregions are missing from the time series file: \n" + str(missing) + ". The potential time series will be set to zero.", UserWarning)
 
-        # Check 3: All desired regions available in TS file
-        sub_regions = list(param["regions_sub"]["NAME_SHORT"])
-        missing = list([item for item in sub_regions if item not in avail_subregions])
-        if missing:
-            warn("For technology " + tech + ", the following subregions are missing from the time series file: \n" + str(missing) + ". The potential time series will be set to zero.", UserWarning)
+            # Prepare tech dataframe
+            if mode in ["all", "ALL", "All"]:
+                suffix = ""
+            else:
+                suffix =  "_" + mode
+            TS_tech = pd.DataFrame(None, range(1, 8760), columns=list([sub + '.' + tech + suffix for sub in sub_regions]))
 
-        # Prepare tech dataframe
+            # Loop over regions
+            for reg in sub_regions:
+                if reg in avail_subregions:
+                    entry = list(map(str, [reg, tech, combo_name, mode]))
+                    TS_tech[reg + "." + tech + suffix] = TS["_".join(entry)]
 
-        TS_tech = pd.DataFrame(None, range(1, 8760), columns=list([sub + '.' + tech for sub in sub_regions]))
+            # Replace nan values with zeros
+            TS_tech.fillna(value=0, inplace=True)
 
-        # Loop over regions
-        for reg in sub_regions:
-            if reg in avail_subregions:
-                entry = list(map(str, [reg, tech, combo_name, mode]))
-                TS_tech[reg + "." + tech] = TS["_".join(entry)]
-
-        # Replace nan values with zeros
-        TS_tech.fillna(value=0, inplace=True)
-
-        if Timeseries is None:
-            Timeseries = TS_tech.copy()
-        else:
-            Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
+            if Timeseries is None:
+                Timeseries = TS_tech.copy()
+            else:
+                Timeseries = pd.concat([Timeseries, TS_tech], axis=1)
 
     Timeseries.to_csv(paths["potential_ren"], sep=';', decimal=',')
     print("File Saved: " + paths["potential_ren"])
