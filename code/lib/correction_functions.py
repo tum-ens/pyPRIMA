@@ -446,7 +446,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
                 # Save input
                 row['Latitude'] = loc[0]
                 row['Longitude'] = loc[1]
-                print("Input registered")
+                print("Input registered: (" + str(loc[0]) + "," + str(loc[1]) + ")")
             else:
                 P_missing.loc[index, ['Latitude', "Longitude"]] = \
                 P_located[P_located['Country'] == row["Country"]].sample(1, axis=0)[["Latitude", "Longitude"]].values[0]
@@ -455,10 +455,10 @@ def clean_processes_and_storage_FRESNA(paths, param):
         print("Random values will be assigned to all " + str(len(P_missing)) + " power plants")
         # Assign dummy coordinates within the same country
         for country in P_missing["Country"].unique():
-        sample_size = len(P_missing.loc[P_missing["Country"] == country])
-        P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
-            P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
-        )
+            sample_size = len(P_missing.loc[P_missing["Country"] == country])
+            P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
+                P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
+            )
     Process = P_located.append(P_missing)
     Process.to_csv(paths["process_completed"], sep=';', decimal=',', index=True)
     print("File Saved: " + paths["process_completed"])
