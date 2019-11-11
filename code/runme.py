@@ -16,7 +16,6 @@ if __name__ == "__main__":
     # generate_sites_from_shapefile(paths, param)
     # generate_load_timeseries(paths, param)
     # generate_transmission(paths, param)
-
     # generate_intermittent_supply_timeseries(paths, param)
     # generate_commodity(paths, param)
     # generate_processes_and_storage_california(paths, param)
