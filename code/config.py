@@ -324,16 +324,12 @@ def renewable_potential_input_paths(paths, param):
     paths["TS_ren"] = {}
     pathtemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
 
-    combo = {
-        "WindOn": [120, 100, 140],
-        "WindOff": [],
-        "PV": [],
-        "CSP": []
+    paths["TS_ren"] = {
+        "WindOn": pathtemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
+        "WindOff": pathtemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
+        "PV": pathtemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
+        "CSP": pathtemp + ""
     }
-    for tech in param["ren_potential"].keys():
-        quantiles = "_".join(sorted(map(str, combo[tech])))
-        paths["TS_ren"][
-            tech] = pathtemp + subregions + "_" + tech + "_reg_TimeSeries_" + quantiles + "_" + year + ".csv"
 
     return paths
 
