@@ -51,10 +51,12 @@ def general_settings():
     paths = {}
     fs = os.path.sep
     current_folder = os.path.dirname(os.path.abspath(__file__))
-    # For personal Computer:
-    # root = str(Path(current_folder).parent.parent.parent) + fs + "Database_KS" + fs
-    # For Server Computer:
-    root = str(Path(current_folder).parent.parent.parent) + "Database_KS" + fs
+    root = str(Path(current_folder).parent.parent.parent)
+    # For use at TUM ENS
+    if root[-1] != fs:
+        root = root + fs + "Database_KS" + fs
+    else:
+        root = root + "Database_KS" + fs
 
     return paths, param
 
@@ -149,10 +151,10 @@ def renewable_potential_parameters(param):
     :rtype: dict
     """
 
-    param["ren_potential"] = {"WindOn": ([120, 100, 140], "all"),  # "Technology":([list of settings], "TS tier")
-                              "WindOff": ([], "all"),
-                              "PV": ([], "all"),
-                              "CSP": ([], "all")}
+    param["ren_potential"] = {"WindOn": ["all", "mid"],  # "Technology":[list of modes]
+                              "WindOff": ["all"],
+                              "PV": ["all"],
+                              "CSP": ["all"]}
 
     return param
 
@@ -316,10 +318,13 @@ def renewable_potential_input_paths(paths, param):
 
     paths["TS_ren"] = {}
     pathtemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
-    for tech in param["technology"]:
-        quantiles = "_".join(sorted(map(str, param["ren_potential"][tech][0])))
-        paths["TS_ren"][
-            tech] = pathtemp + subregions + "_" + tech + "_reg_TimeSeries_" + quantiles + "_" + year + ".csv"
+
+    paths["TS_ren"] = {
+        "WindOn": pathtemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
+        "WindOff": pathtemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
+        "PV": pathtemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
+        "CSP": pathtemp + ""
+    }
 
     return paths
 
