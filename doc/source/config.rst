@@ -1,5 +1,5 @@
-config module
-=============
+config.py
+=========
 
 .. automodule:: config
    :members:
