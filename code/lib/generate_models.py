@@ -27,6 +27,15 @@ def generate_urbs_model(paths, param):
         demand.sort_index(inplace=True)
         urbs_model["Demand"] = demand
 
+    # Read intermittent supply time series
+    if os.path.exists(paths["potential_ren"]):
+        suplm = pd.read_csv(paths["potential_ren"], sep=";", decimal=",", index_col=0)
+        suplm.index.name = "t"
+        suplm.index = range(1, 8761)
+        urbs_model["Suplm"] = suplm
+
+
+
     # # List all files present in urbs folder
     # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
     # # create empty dictionary
@@ -67,13 +76,13 @@ def generate_urbs_model(paths, param):
     # urbs_model["Buy-Sell-Price"] = pd.DataFrame(np.arange(0, 8761), columns=['t'])
 
     # Create ExcelWriter
-    with ExcelWriter(paths["urbs_model"], mode="w") as writer:
+    with pd.ExcelWriter(paths["urbs_model"], mode="w") as writer:
         # populate excel file with available sheets
         status = 0
         for sheet in urbs_model.keys():
+            display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
             urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
             status += 1
-            display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
 
     print("File saved: " + paths["urbs_model"])
 

@@ -57,6 +57,7 @@ def initialization():
     eez_shp = eez_shp.to_crs({"init": "epsg:4326"})
 
     # Crop all polygons and take the part inside the bounding box
+    eez_shp["geometry"] = eez_shp["geometry"].buffer(0)
     eez_shp["geometry"] = eez_shp["geometry"].intersection(bounds_box)
     eez_shp = eez_shp[eez_shp.geometry.area > 0]
     param["regions_sea"] = eez_shp
