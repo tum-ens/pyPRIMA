@@ -7,17 +7,17 @@ Load time series
 Purpose
 -------
 
-Time series for load, demand, and supply are widely available, however the published datasets are usually restricted to predefined spatial regions such as 
-countries, and their usual subdivisions. The generate_load_timeseries() function takes the more general datasets available for these spatial resolutions 
-and disaggregate them according to a set of parameters, before aggregating them at a different spatial level. The obtained time series is then fitted to 
-any region, and over a wider range of temporal resolutions.
+Load time series are widely available, but the published datasets are usually restricted to predefined spatial regions such as 
+countries and their administrative subdivisions. The generate_load_timeseries() function takes the datasets which are available for these regions 
+and disaggregate them according to a set of parameters, before aggregating them at a different spatial level. It is then possible to obtain time series for 
+any region.
 
 .. figure:: img/generate_load_ts.png
    :width: 100%
    :align: center
-   :alt: Generate_load_timeseries description
+   :alt: generate_load_timeseries() description
    
-   Generate_load_timeseries - Process description
+   generate_load_timeseries() - Process description
 
 Inputs
 ------

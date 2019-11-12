@@ -7,7 +7,7 @@ def configuration():
     """
     This function is the main configuration function that calls all the other modules in the code.
 
-    :return: The dictionary param containing all the user preferences, and the dictionary path containing all the paths to inputs and outputs.
+    :return (paths, param): The dictionary param containing all the user preferences, and the dictionary path containing all the paths to inputs and outputs.
     :rtype: tuple of dict
     """
     paths, param = general_settings()
@@ -37,7 +37,7 @@ def general_settings():
     This function creates and initializes the dictionaries param and paths. It also creates global variables for the root folder ``root``
     and the system-dependent file separator ``fs``.
 
-    :return: The empty dictionary paths, and the dictionary param including some general information.
+    :return (paths, param): The empty dictionary paths, and the dictionary param including some general information.
     :rtype: tuple of dict
     """
     # These variables will be initialized here, then read in other modules without modifying them.
@@ -77,14 +77,17 @@ def scope_paths_and_parameters(paths, param):
     In case it is larger, features that lie completely outside the scope will be ignored, whereas those that lie partly inside it will be cropped using the bounding box
     of *spatial_scope*. In case it is smaller, all features are used with no modification.
     
-    *year* defines the year of the weather data, and *technology* the list of technologies that you are interested in.
-    Currently, four technologies are defined: onshore wind ``'WindOn'``, offshore wind ``'WindOff'``, photovoltaics ``'PV'``, concentrated solar power ``'CSP'``.
-
+    *year* defines the year of the weather/input data, and *model_year* refers to the year to be modeled (could be the same as *year*, or in the future).
+	
+	*technology* is a dictionary of the technologies (*Storage*, *Prcess*) to be used in the model. The names of the technologies should match the names
+	which are used in assumptions_flows.csv, assumptions_processes.csv and assumptions_storage.csv.
+    
     :param paths: Dictionary including the paths.
     :type paths: dict
     :param param: Dictionary including the user preferences.
     :type param: dict
-    :return: The updated dictionaries paths and param.
+	
+    :return (paths, param): The updated dictionaries paths and param.
     :rtype: tuple of dict
     """
 
@@ -117,7 +120,8 @@ def resolution_parameters(param):
 
     :param param: Dictionary including the user preferences.
     :type param: dict
-    :return: The updated dictionary param.
+	
+    :return param: The updated dictionary param.
     :rtype: dict
     """
 
@@ -128,6 +132,17 @@ def resolution_parameters(param):
 
 def load_parameters(param):
     """
+	This function defines the user preferences which are related to the load/demand.
+	
+	  * *sectors* are the sectors to be considered.
+	  * *sectors_eurostat* is a dictionary for identifying the sectors to be considered, which have different names.
+	  * *default_sec_shares* is the code name of the country to be used as a default, if the sector shares are missing for another region.
+	  
+	:param param: Dictionary including the user preferences.
+    :type param: dict
+	
+    :return param: The updated dictionary param.
+    :rtype: dict
     """
 
     param["load"] = {
@@ -146,7 +161,9 @@ def load_parameters(param):
 
 def renewable_time_series_parameters(param):
     """
-    This function defines parameters relating to the renewable time series to be used in the models.
+    This function defines parameters relating to the renewable time series to be used in the models. In particular, the user can decide which
+	`modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
+	
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -170,7 +187,7 @@ def grid_parameters(param):
         "quality": {"voltage": 1, "wires": 0, "cables": 0.5, "frequency": 0},
         "default": {"voltage": 220000, "wires": 1, "cables": 3, "frequency": 50},  # in Volt
         # from literature (see CITAVI files: "References for Reactances and SILVersion6")
-        "specific_reactance": {
+        "specific_impedance": {
             110: 0.39,  # in Ohm/km
             220: 0.3,
             345: 0.3058,
