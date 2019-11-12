@@ -83,7 +83,7 @@ def generate_urbs_model(paths, param):
             display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
             urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
             status += 1
-
+        display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
     print("File saved: " + paths["urbs_model"])
 
     timecheck("End")
