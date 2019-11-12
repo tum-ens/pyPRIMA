@@ -1,6 +1,7 @@
 from lib.initialization import initialization
 from lib.generate_intermediate_files import *
 from lib.correction_functions import *
+from lib.generate_models import *
 
 if __name__ == "__main__":
     paths, param = initialization()
@@ -16,12 +17,11 @@ if __name__ == "__main__":
     # generate_sites_from_shapefile(paths, param)
     # generate_load_timeseries(paths, param)
     # generate_transmission(paths, param)
-
-    # generate_intermittent_supply_timeseries(paths, param)
+    generate_intermittent_supply_timeseries(paths, param)
     # generate_commodity(paths, param)
     generate_processes(paths, param)
     # generate_storage(paths, param)
 
     ## Generate model files
-    # generate_urbs_model(paths, param)
+    generate_urbs_model(paths, param)
     # generate_evrys_model(paths, param)

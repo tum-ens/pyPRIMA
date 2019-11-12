@@ -51,6 +51,16 @@ These documents give a general overview and help you getting started from the in
    :maxdepth: 3
    
    user_manual
+  
+Theoretical description 
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Continue here if you want to understand the theoretical conception behind the generate load time series function.
+
+.. toctree::
+   :maxdepth: 2
+
+   theory
 
 Technical documentation
 ^^^^^^^^^^^^^^^^^^^^^^^

@@ -169,7 +169,7 @@ def generate_intermittent_supply_timeseries(paths, param):
                 suffix = ""
             else:
                 suffix =  "_" + mode
-            TS_tech = pd.DataFrame(None, range(1, 8760), columns=list([sub + '.' + tech + suffix for sub in sub_regions]))
+            TS_tech = pd.DataFrame(None, range(0, 8760), columns=list([sub + '.' + tech + suffix for sub in sub_regions]))
 
             # Loop over regions
             for reg in sub_regions:
@@ -179,7 +179,7 @@ def generate_intermittent_supply_timeseries(paths, param):
 
             # Replace nan values with zeros
             TS_tech.fillna(value=0, inplace=True)
-
+            TS_tech.index = range(1, 8761)
             if Timeseries is None:
                 Timeseries = TS_tech.copy()
             else:
