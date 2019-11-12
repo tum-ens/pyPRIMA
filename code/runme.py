@@ -10,7 +10,7 @@ if __name__ == "__main__":
     # clean_sector_shares_Eurostat(paths, param)
     # clean_load_data_ENTSOE(paths, param)
     # distribute_renewable_capacities_IRENA(paths, param)
-    clean_processes_and_storage_FRESNA(paths, param)
+    # clean_processes_and_storage_FRESNA(paths, param)
 
     ## Generate intermediate files
     # generate_sites_from_shapefile(paths, param)
@@ -19,8 +19,7 @@ if __name__ == "__main__":
 
     # generate_intermittent_supply_timeseries(paths, param)
     # generate_commodity(paths, param)
-    # generate_processes_and_storage_california(paths, param)
-    # generate_processes(paths, param)
+    generate_processes(paths, param)
     # generate_storage(paths, param)
 
     ## Generate model files

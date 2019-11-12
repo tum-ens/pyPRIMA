@@ -2,42 +2,6 @@ from lib.spatial_functions import create_shapefiles_of_ren_power_plants
 from lib.util import *
 
 
-# def filter_life_time(param, raw, depreciation):
-# if param["year"] > param["pro_sto"]["year_ref"]:
-# # Set depreciation period
-# for c in raw["CoIn"].unique():
-# raw.loc[raw["CoIn"] == c, "lifetime"] = depreciation[c]
-# lifetimeleft = raw["lifetime"] + raw["year"]
-# current = raw.drop(raw.loc[lifetimeleft < param["year"]].index)
-# print('Already depreciated units:\n')
-# print(str(len(raw) - len(current)) + '# Units have been removed')
-# else:
-# current = raw.copy()
-# print('Number of current units: ' + str(len(current)))
-# return current
-
-
-# def get_sites(current, paths):
-# # Get regions from shapefile
-# regions = gpd.read_file(paths["SHP"])
-# regions["geometry"] = regions.buffer(0)
-
-# # Spacial join
-# current.crs = regions[["NAME_SHORT", "geometry"]].crs
-# located = gpd.sjoin(current, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
-# located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
-
-# # Remove duplicates that lie in the border between land and sea
-# located.drop_duplicates(subset=["CoIn", "Pro", "inst-cap", "year", "Site"], inplace=True)
-
-# # Remove duplicates that lie in two different zones
-# located = located.loc[~located.index.duplicated(keep='last')]
-
-# located.dropna(axis=0, subset=["Site"], inplace=True)
-
-# return located, regions
-
-
 def get_sectoral_profiles(paths, param):
     """
     This function reads the raw standard load profiles, repeats them to obtain a full year, normalizes them so that the
@@ -333,7 +297,8 @@ def clean_processes_and_storage_FRESNA(paths, param):
       * Year: If provided, the year for retrofitting is used instead of the commissioning year. If both are missing, a year is chosen randomly based on a normal distribution for
         each power plant type. The average and the standard deviation of that distribution is provided by the user in *assumptions_processes* and *assumptions_storage*.
         
-      * Coordinates: Only a few power plants are lacking coordinates. Currently, coordinates of a random power plant within the same country are chosen to fill in the missing information.
+      * Coordinates: Only a few power plants are lacking coordinates. The user has the possibility to allocate coordinates for these power plants, otherwise
+        coordinates of a random power plant within the same country are chosen to fill in the missing information.
       
     :param paths: Dictionary containing the paths to the database *FRESNA*, to user preferences in *dict_technologies*, *assumptions_processes*, *assumptions_storage*, to *locations_ren*
       for the shapefiles of distributed renewable capacities, and to all the intermediate and final outputs of the module.
@@ -421,23 +386,22 @@ def clean_processes_and_storage_FRESNA(paths, param):
         Process.loc[(Process["Type"] == p) & filter, "year_mu"] = year_mu[p]
         Process.loc[(Process["Type"] == p) & filter, "year_stdev"] = year_stdev[p]
     Process.loc[filter, "Year"] = np.floor(np.random.normal(Process.loc[filter, "year_mu"], Process.loc[filter, "year_stdev"]))
-    Process["Cohort"] = [max((Process.loc[i, "Year"] // param["process"]["cohorts"]) * param["process"]["cohorts"], 1960) for i in Process.index]
 
     # COORDINATES
     P_missing = Process[Process["Longitude"].isnull()].copy()
     P_located = Process[~Process["Longitude"].isnull()].copy()
 
     # Prompt user for manual location input
-    ans = input("\nThere are " + str(len(P_missing)) + " power plants missing location data,\n"
-                                                       "Locations can be inputed manually, otherwise a random "
+    ans = input("\nThere are " + str(len(P_missing)) + " power plants missing location data.\n"
+                                                       "Locations can be input manually, otherwise a random "
                                                        "location within the country will be assigned.\n"
-                                                       "Would you like to input the locations manually? [y]/n")
+                                                       "Would you like to input the locations manually? [y]/n ")
     if ans in ["", "y", "[y]", "Y", "[Y]"]:
         print("Please fill in the missing location data for the following power plants. \nskip: [s], location: "
               "(Latitude, Longitude) with '.' as decimal delimiter")
         for index, row in P_missing.sort_values(by=['Country', 'Name'], ascending=False).iterrows():
             ans = input("\nCountry: " + row["Country"] + ", Name: " + row["Name"] + ", Fuel type:" +
-                        row["Fueltype"] + ", Missing Locations:")
+                        row["Fueltype"] + ", Missing coordinates:")
             # Extract all number, decimal delimiter comma or point, negative or positive.
             loc = re.findall(r"[-+]?\d*\.\d+|[-+]?\d+", ans)
             if len(loc) == 2:
@@ -455,13 +419,13 @@ def clean_processes_and_storage_FRESNA(paths, param):
         print("Random values will be assigned to all " + str(len(P_missing)) + " power plants")
         # Assign dummy coordinates within the same country
         for country in P_missing["Country"].unique():
-        sample_size = len(P_missing.loc[P_missing["Country"] == country])
-        P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
-            P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
-        )
+            sample_size = len(P_missing.loc[P_missing["Country"] == country])
+            P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
+                P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
+            )
     Process = P_located.append(P_missing)
     Process.to_csv(paths["process_completed"], sep=";", decimal=",", index=False)
-    print("File Saved: " + paths["process_completed"])
+    print("File saved: " + paths["process_completed"])
     create_json(
         paths["process_completed"],
         param,
@@ -474,7 +438,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
     # Create point geometries (shapely)
     Process["geometry"] = list(zip(Process.Longitude, Process.Latitude))
     Process["geometry"] = Process["geometry"].apply(Point)
-    Process = Process[["Name", "Type", "inst-cap", "Year", "Cohort", "geometry"]]
+    Process = Process[["Name", "Type", "inst-cap", "Year", "geometry"]]
     # Transform into GeoDataFrame
     Process = gpd.GeoDataFrame(Process, geometry="geometry", crs={"init": "epsg:4326"})
     try: 
@@ -482,6 +446,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
     except OSError:
         pass
     Process.to_file(driver="ESRI Shapefile", filename=paths["process_cleaned"])
+    print("File saved: " + paths["process_cleaned"])
     create_json(
         paths["process_cleaned"],
         param,
@@ -489,7 +454,6 @@ def clean_processes_and_storage_FRESNA(paths, param):
         paths,
         ["FRESNA", "process_completed", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"],
     )
-    print("File saved: " + paths["process_cleaned"])
 
     timecheck("End")
 

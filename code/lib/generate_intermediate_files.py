@@ -601,29 +601,76 @@ def generate_commodity(paths, param):
 def generate_processes(paths, param):
     """ documentation """
     timecheck("Start")
-
-    assumptions = pd.read_excel(paths["assumptions"], sheet_name="Process")
+    
+    # Read assumptions related to the processes and flows
+    assumptions_pro = pd.read_csv(paths["assumptions_processes"], sep=";", decimal=",")
+    assumptions_flows = pd.read_csv(paths["assumptions_flows"], sep=";", decimal=",")
+    
     # Only use the assumptions of that particular year
-    assumptions = assumptions[assumptions["year"] == param["year"]]
+    assumptions_pro = assumptions_pro.loc[assumptions_pro["year"] == param["model_year"]]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["year"] == param["model_year"]]
+    assumptions_pro.drop(columns=["year", "Site"], inplace=True)
+    assumptions_flows.drop(columns=["year"], inplace=True)
+    
+    # Only use processes and flows that are needed by the user
+    assumptions_pro = assumptions_pro.loc[assumptions_pro["Process"].isin(param["technology"]["Process"])]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["Process/Storage"].isin(param["technology"]["Process"])]
+    
+    # Read shapefile of processes and storage
+    process_shp = gpd.read_file(paths["process_cleaned"])
+    
+    # Filter out process types not needed by the user
+    process_shp = process_shp.loc[process_shp["Type"].isin(param["technology"]["Process"])]
+    print("Number of power plants which belong to the modeled technologies: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    # Join shapefile with process assumptions
+    assumptions_pro.set_index(["Process"], inplace=True)
+    process_shp = process_shp.join(assumptions_pro, on=["Type"], how="left")
+    
+    # Filter out processes that have exceeded their lifetime
+    if param["model_year"] > param["year"]:
+        process_shp = process_shp.loc[(process_shp["lifetime"] + process_shp["Year"]) >= param["model_year"]]
+        print("Number of power plants that have not reached their end of life: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
 
-    param["assumptions"] = read_assumptions_process(assumptions)
+    # Associate each power plant to a subregion
+    process_shp = get_sites(process_shp, param)
+    print("Number of power plants that lie in the modeled subregions: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    # Associate each power plant to a cohort
+    process_shp["Cohort"] = (process_shp["Year"] // param["process"]["cohorts"]) * param["process"]["cohorts"]
+    
+    # Group must-run power plants with similar characteristics
+    filter = process_shp.loc[process_shp["on-off"] == 0].index
+    must_run = process_shp.loc[filter][["Type", "inst-cap", "Cohort", "Site"]]
+    must_run = must_run.groupby(["Type", "Cohort", "Site"]) \
+                       .sum() \
+                       .reset_index() \
+                       .join(assumptions_pro, on=["Type"], how="left")
+    must_run["Name"] = must_run["Type"] + "_" + must_run["Cohort"].astype(int).astype(str)
+    process_shp = process_shp.loc[process_shp["on-off"] == 1] \
+                             .append(must_run, ignore_index=True)
+    print("Number of power plants after grouping must-run power plants: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    import pdb; pdb.set_trace()
+    
+    # param["assumptions"] = read_assumptions_process(assumptions)
 
-    depreciation = param["assumptions"]["depreciation"]
-    on_off = param["assumptions"]["on_off"]
+    # depreciation = param["assumptions"]["depreciation"]
+    # on_off = param["assumptions"]["on_off"]
 
-    # Get data from the shapefile
-    pro_and_sto = gpd.read_file(paths["pro_sto"])
+    # # Get data from the shapefile
+    # pro_and_sto = gpd.read_file(paths["pro_sto"])
 
-    # Split the storage from the processes
-    process_raw = pro_and_sto[~pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
-    print("Number of processes read: " + str(len(process_raw)))
+    # # Split the storage from the processes
+    # process_raw = pro_and_sto[~pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
+    # print("Number of processes read: " + str(len(process_raw)))
 
-    # Consider the lifetime of power plants
-    process_current = filter_life_time(param, process_raw, depreciation)
+    # # Consider the lifetime of power plants
+    # process_current = filter_life_time(param, process_raw, depreciation)
 
-    # Get Sites
-    process_located, _ = get_sites(process_current, paths)
-    print("Number of processes after duplicate removal: " + str(len(process_located)))
+    # # Get Sites
+    # process_located, _ = get_sites(process_current, paths)
+    # print("Number of processes after duplicate removal: " + str(len(process_located)))
 
     # Reduce the number of processes by aggregating the small and must-run power plants
     process_compact = process_located.copy()

@@ -17,13 +17,13 @@ def configuration():
     param = load_parameters(param)
     param = grid_parameters(param)
     param = processes_parameters(param)
-    param = renewable_potential_parameters(param)
+    param = renewable_time_series_parameters(param)
 
     paths = global_maps_input_paths(paths)
     paths = assumption_paths(paths)
     paths = load_input_paths(paths)
     paths = grid_input_paths(paths)
-    paths = renewable_potential_input_paths(paths, param)
+    paths = renewable_time_series_paths(paths, param)
     paths = processes_input_paths(paths, param)
     paths = output_folders(paths, param)
     paths = output_paths(paths, param)
@@ -96,10 +96,13 @@ def scope_paths_and_parameters(paths, param):
     param["subregions_name"] = "Geothermal_WGC"  # Name tag of the subregions
 
     # Year
-    param["year"] = 2015
+    param["year"] = 2015 # Data
+    param["model_year"] = 2015 # Model
 
     # Technologies
-    param["technology"] = ["Battery", "Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "PumSt", "Solar", "WindOff", "WindOn"]
+    param["technology"] = {"Storage": ["Battery", "PumSt"],
+                           "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOff", "WindOn"],
+                           }
 
     return paths, param
 
@@ -139,9 +142,9 @@ def load_parameters(param):
     return param
 
 
-def renewable_potential_parameters(param):
+def renewable_time_series_parameters(param):
     """
-    This function defined parameters relating to the potential time-series to be used in the models.
+    This function defines parameters relating to the renewable time series to be used in the models.
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -149,7 +152,7 @@ def renewable_potential_parameters(param):
     :rtype: dict
     """
 
-    param["ren_potential"] = {"WindOn": ([120, 100, 140], "all"),  # "Technology":([list of settings], "TS tier")
+    param["ren_potential"] = {"WindOn": ([120, 100, 140], "all"),  # "Technology":([list of settings], "TS mode")
                               "WindOff": ([], "all"),
                               "PV": ([], "all"),
                               "CSP": ([], "all")}
@@ -218,7 +221,7 @@ def processes_parameters(param):
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
     }
-    param["process"] = {"cohorts": 5}  # 5-year steps
+    param["process"] = {"cohorts": 5}  # 5 means 5-year steps, if no cohorts needed type 1
     return param
 
 
@@ -264,6 +267,7 @@ def assumption_paths(paths):
     global fs
 
     paths["assumptions_landuse"] = root + "00 Assumptions" + fs + "assumptions_landuse.csv"
+    paths["assumptions_flows"] = root + "00 Assumptions" + fs + "assumptions_flows.csv"
     paths["assumptions_processes"] = root + "00 Assumptions" + fs + "assumptions_processes.csv"
     paths["assumptions_storage"] = root + "00 Assumptions" + fs + "assumptions_storage.csv"
     paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
@@ -298,7 +302,7 @@ def load_input_paths(paths):
     return paths
 
 
-def renewable_potential_input_paths(paths, param):
+def renewable_time_series_paths(paths, param):
     """
 
     :param paths:
@@ -316,7 +320,7 @@ def renewable_potential_input_paths(paths, param):
 
     paths["TS_ren"] = {}
     pathtemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
-    for tech in param["technology"]:
+    for tech in param["ren_potential"].keys():
         quantiles = "_".join(sorted(map(str, param["ren_potential"][tech][0])))
         paths["TS_ren"][
             tech] = pathtemp + subregions + "_" + tech + "_reg_TimeSeries_" + quantiles + "_" + year + ".csv"
