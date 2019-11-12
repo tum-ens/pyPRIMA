@@ -1,5 +1,5 @@
-generate\_models module
-=======================
+generate\_models module.py
+==========================
 
 .. automodule:: lib.generate_models
    :members:
