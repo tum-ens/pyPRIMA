@@ -168,7 +168,7 @@ def grid_parameters(param):
 
     param["grid"] = {
         "quality": {"voltage": 1, "wires": 0, "cables": 0.5, "frequency": 0},
-        "default": {"voltage": 220000, "wires": 1, "cables": 3, "frequency": 50},  # in Volt
+        "default": {"voltage": 220000, "wires": 1, "cables": 3, "frequency": 50},
         # from literature (see CITAVI files: "References for Reactances and SILVersion6")
         "specific_reactance": {
             110: 0.39,  # in Ohm/km
@@ -210,12 +210,6 @@ def grid_parameters(param):
 def processes_parameters(param):
     """
     """
-    # dist_ren = {"p_landuse": {0: 0, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2, 6: 0.2, 7: 0.2, 8: 0.1, 9: 0.1, 10: 0.5, 11: 0,
-    # 12: 1, 13: 0, 14: 1, 15: 0, 16: 0},
-    # "cap_lo": 0,
-    # "cap_up": np.inf,
-    # "drop_params": ['Site', 'inst-cap', 'cap_lo', 'cap-up', 'year']
-    # }
 
     param["dist_ren"] = {
         "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
@@ -232,11 +226,8 @@ def global_maps_input_paths(paths):
     This function defines the paths where the global maps are saved:
     
       * *LU_global* for the land use raster
-      * *Topo_tiles* for the topography tiles (rasters)
       * *Pop_tiles* for the population tiles (rasters)
-      * *Bathym_global* for the bathymetry raster
       * *Protected* for the shapefile of protected areas
-      * *GWA* for the country data retrieved from the Global Wind Atlas (missing the country code, which will be filled in a for-loop in :mod:data_functions.calc_gwa_correction)
       * *Countries* for the shapefiles of countries
       * *EEZ_global* for the shapefile of exclusive economic zones of countries
     
@@ -251,11 +242,8 @@ def global_maps_input_paths(paths):
     # Global maps
     PathTemp = root + "01 Raw inputs" + fs + "Maps" + fs
     paths["LU_global"] = PathTemp + "Landuse" + fs + "LCType.tif"
-    # paths["Topo_tiles"] = PathTemp + "Topography" + fs
-    paths["Pop_tiles"] = PathTemp + "Population" + fs
-    # paths["Bathym_global"] = PathTemp + "Bathymetry" + fs + "ETOPO1_Ice_c_geotiff.tif"
+    paths["Pop_global"] = PathTemp + "Population" + fs + "gpw_v4_population_count_rev10_2015_30_sec.tif"
     paths["Protected"] = PathTemp + "Protected Areas" + fs + "WDPA_Nov2018-shapefile-polygons.shp"
-    # paths["GWA"] = PathTemp + "Global Wind Atlas" + fs + fs + "windSpeed.csv"
     paths["Countries"] = PathTemp + "Countries" + fs + "gadm36_0.shp"
     paths["EEZ_global"] = PathTemp + "EEZ" + fs + "eez_v10.shp"
 
@@ -272,6 +260,7 @@ def assumption_paths(paths):
     paths["assumptions_flows"] = root + "00 Assumptions" + fs + "assumptions_flows.csv"
     paths["assumptions_processes"] = root + "00 Assumptions" + fs + "assumptions_processes.csv"
     paths["assumptions_storage"] = root + "00 Assumptions" + fs + "assumptions_storage.csv"
+    paths["assumptions_commodities"] = root + "00 Assumptions" + fs + "assumptions_commodities.csv"
     paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
     paths["dict_daytype"] = root + "00 Assumptions" + fs + "dict_day_type.csv"
     paths["dict_countries"] = root + "00 Assumptions" + fs + "dict_countries.csv"
@@ -321,13 +310,13 @@ def renewable_time_series_paths(paths, param):
     paths["region"] = root + "03 Intermediate files" + fs + "Files " + region + fs
 
     paths["TS_ren"] = {}
-    pathtemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
+    PathTemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
 
     paths["TS_ren"] = {
-        "WindOn": pathtemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
-        "WindOff": pathtemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
-        "PV": pathtemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
-        "CSP": pathtemp + ""
+        "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
+        "WindOff": PathTemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
+        "PV": PathTemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
+        "CSP": PathTemp + ""
     }
 
     return paths
@@ -496,6 +485,9 @@ def output_paths(paths, param):
     paths["process_joined"] = paths["proc"] + "processes_and_storage_including_ren.csv"
     paths["process_completed"] = paths["proc"] + "processes_and_storage_completed.csv"
     paths["process_cleaned"] = paths["proc"] + "processes_and_storage_cleaned.shp"
+    paths["process_regions"] = paths["proc_sub"] + "processes.csv"
+    paths["storage_regions"] = paths["proc_sub"] + "storage.csv"
+    paths["commodities_regions"] = paths["proc_sub"] + "commodities.csv"
 
     # Framework models
     paths["urbs_model"] = paths["urbs"] + region + "_" + subregions + "_" + year + ".xlsx"

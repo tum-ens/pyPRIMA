@@ -189,8 +189,8 @@ def clean_load_data_ENTSOE(paths, param):
                                df_filled.iloc[i - 24, j].sum()
 
     df_filled.to_csv(paths["load_ts_clean"], index=False, sep=";", decimal=",")
-    create_json(paths["load_ts_clean"], param, ["region_name", "year"], paths, ["dict_countries", "load_ts"])
     print("File saved: " + paths["load_ts_clean"])
+    create_json(paths["load_ts_clean"], param, ["region_name", "year"], paths, ["dict_countries", "load_ts"])
 
     timecheck("End")
 
@@ -703,6 +703,16 @@ def distribute_renewable_capacities_IRENA(paths, param):
 
     timecheck("End")
 
+
+def clean_names(text):
+    """
+    """
+    # Remove non-ASCII
+    text_clean = ''.join(i for i in text if ord(i) < 128)
+    text_short = text_clean[:63]
+    return text_short
+    
+    
 # def format_process_model(process_compact, param):
 # assump = param["assumptions"]
 
@@ -778,13 +788,8 @@ def distribute_renewable_capacities_IRENA(paths, param):
 # 'hotstart', 'pot', 'prepow', 'pretemp', 'preheat', 'prestate', 'precaponline', 'year']]
 # output_pro_evrys.iloc[:, 4:] = output_pro_evrys.iloc[:, 4:].astype(float)
 
-# # function to remove non-ASCII
-# def remove_non_ascii(text):
-# return ''.join(i for i in text if ord(i) < 128)
+# function to 
 
-# # function to shorten names
-# def shorten_labels(text):
-# return text[:63]
 
 # output_pro_evrys.loc[:, 'Pro'] = output_pro_evrys.loc[:, 'Pro'].apply(remove_non_ascii)
 # output_pro_evrys.loc[:, 'Pro'] = output_pro_evrys.loc[:, 'Pro'].apply(shorten_labels)
