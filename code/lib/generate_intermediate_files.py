@@ -523,7 +523,7 @@ def generate_transmission(paths, param):
     timecheck("End")
 
 
-def generate_commodity(paths, param):
+def generate_commodities(paths, param):
     """ documentation """
     timecheck("Start")
     

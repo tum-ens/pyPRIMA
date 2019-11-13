@@ -502,24 +502,16 @@ def local_maps_paths(paths, param):
     
       * *LAND* for the raster of land areas within the scope
       * *EEZ* for the raster of sea areas within the scope
-      * *SUB* for the raster of areas covered by subregions (both land and sea) within the scope
       * *LU* for the land use raster within the scope
-      * *BATH* for the bathymetry raster within the scope
-      * *TOPO* for the topography raster within the scope
-      * *SLOPE* for the slope raster within the scope
       * *PA* for the raster of protected areas within the scope
       * *POP* for the population raster within the scope
-      * *BUFFER* for the raster of population buffer areas within the scope
-      * *CORR_GWA* for correction factors based on the Global Wind Atlas (mat file)
-      * *CORR_ON* for the onshore wind correction factors (raster)
-      * *CORR_OFF* for the offshore wind correction factors (raster)
-      * *AREA* for the area per pixel in m² (mat file)
     
     :param paths: Dictionary including the paths.
     :type paths: dict
     :param param: Dictionary including the user preferences.
     :type param: dict
-    :return: The updated dictionary paths.
+    
+    :return paths: The updated dictionary paths.
     :rtype: dict
     """
 
@@ -527,21 +519,9 @@ def local_maps_paths(paths, param):
     PathTemp = paths["local_maps"] + param["region_name"]
     paths["LAND"] = PathTemp + "_Land.tif"  # Land pixels
     paths["EEZ"] = PathTemp + "_EEZ.tif"  # Sea pixels
-    # paths["SUB"] = PathTemp + "_Subregions.tif"  # Subregions pixels
     paths["LU"] = PathTemp + "_Landuse.tif"  # Land use types
-    # paths["TOPO"] = PathTemp + "_Topography.tif"  # Topography
     paths["PA"] = PathTemp + "_Protected_areas.tif"  # Protected areas
-    # paths["SLOPE"] = PathTemp + "_Slope.tif"  # Slope
-    # paths["BATH"] = PathTemp + "_Bathymetry.tif"  # Bathymetry
     paths["POP"] = PathTemp + "_Population.tif"  # Population
-    # paths["BUFFER"] = PathTemp + "_Population_Buffered.tif"  # Buffered population
-    # paths["AREA"] = PathTemp + "_Area.mat"  # Area per pixel in m²
-
-    # # Correction factors for wind speeds
-    # turbine_height_on = str(param["WindOn"]["technical"]["hub_height"])
-    # turbine_height_off = str(param["WindOff"]["technical"]["hub_height"])
-    # paths["CORR_ON"] = PathTemp + "_WindOn_Correction_" + turbine_height_on + '.tif'
-    # paths["CORR_OFF"] = PathTemp + "_WindOff_Correction_" + turbine_height_off + '.tif'
 
     return paths
 
@@ -659,107 +639,10 @@ def local_maps_paths(paths, param):
 # param["pro_sto"] = pro_sto
 
 
-# ###########################
-# ##### Define Paths ########
-# ###########################
-
-# region = param["region_name"]
-# model_regions = param["subregions_name"]
-# year = str(param["year"])
-
-
 # ##################################
 # #           Input files          #
 # ##################################
 
-# # Assumptions
-# paths["assumptions"] = root + "00 Assumptions" + fs + "assumptions_const.xlsx"
-# # paths["assumptions"] = root + "00 Assumptions" + fs + "assumptions_const_v04_4NEMO.xlsx"
-
-
 # # Process and storage data
 # PathTemp = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs
-# paths["database"] = PathTemp + 'EU_Powerplants' + fs + 'Matched_CARMA_ENTSOE_GEO_OPSD_WRI_reduced.csv'
-# paths["database_FRESNA"] = PathTemp + 'EU_Powerplants' + fs + 'FRESNA2' + fs + \
-# 'Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv'
 # paths["database_Cal"] = PathTemp + 'CA_Powerplants' + fs + 'april_generator2017 (original data).xlsx'
-
-
-# # ## Renewable Capacities
-# # Rasters for wind and solar
-
-# timestamp = '4NEMO'
-# pathtemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Renewable energy" + fs + timestamp + fs
-
-# paths["Renewable energy"] = pathtemp
-# rasters = {'WindOn': pathtemp + 'Europe_WindOn_FLH_mask_2015.tif',
-# 'WindOff': pathtemp + 'Europe_WindOff_FLH_mask_2015.tif',
-# 'Solar': pathtemp + 'Europe_PV_FLH_mask_2015.tif',
-# 'Biomass': pathtemp + 'Europe_Biomass.tif',
-# 'Liquid biofuels': pathtemp + 'Europe_Biomass.tif',
-# 'Biogas': pathtemp + 'Europe_Biomass.tif'}
-
-# paths["rasters"] = rasters
-
-# # IRENA Data
-# paths["IRENA"] = root + '01 Raw inputs' + fs + 'Renewable energy' + fs + 'Renewables.xlsx'
-
-# # Intermittent Supply Timeseries
-# paths["raw_TS"] = {}
-# paths["reg_coef"] = {}
-# paths["regression_out"] = pathtemp + "Regression_Outputs" + fs
-# for tech in param["technology"]:
-# st = ''
-# settings = np.sort(np.array(param["settings"][tech]))
-# for set in settings:
-# st += '_' + str(set)
-# paths["reg_coef"][tech] = \
-# paths["regression_out"] + region + '_' + tech[:-1] + '_reg_coefficients' + st + '.csv'
-
-
-# ##################################
-# #     General Ouputs Folders     #
-# ##################################
-
-
-# # Intermediate files
-# pathtemp = root + '03 Intermediate files' + fs + 'Files ' + region + fs
-# paths["pro_sto"] = pathtemp + 'Power plants and storage' + fs + 'Processes_and_Storage_' + year + '.shp'
-# paths["process_raw"] = pathtemp + 'Power plants and storage' + fs + 'Processes_raw.csv'
-# paths["map_power_plants"] = pathtemp + fs + 'Renewable energy' + fs
-
-# # Model files
-# pathtemp = root + '04 Model files' + fs + 'Files ' + region + fs + model_regions + fs
-# paths["model_regions"] = pathtemp
-# paths["annual_load"] = pathtemp + 'Load_' + region + '_' + year + '.csv'
-# paths["suplm_TS"] = pathtemp + 'intermittent_supply_timeseries_' + year + '.csv'
-# paths["strat_TS"] = paths["model_regions"] + 'Stratified_intermittent_TS' + str(year) + '_'
-# paths["Process_agg"] = pathtemp + 'Processes_agg_2.csv'
-# paths["Process_agg_bis"] = pathtemp + 'Processes_agg_3.csv'
-
-
-# # urbs
-# paths["urbs"] = pathtemp + 'urbs' + fs
-# if not os.path.isdir(paths["urbs"]):
-# os.makedirs(paths["urbs"])
-# paths["urbs_suplm"] = paths["urbs"] + 'Suplm_urbs_' + year + '.csv'
-# paths["urbs_commodity"] = paths["urbs"] + 'Commodity_urbs_' + year + '.csv'
-# paths["urbs_process"] = paths["urbs"] + 'Process_urbs_' + year + '.csv'
-# paths["urbs_storage"] = paths["urbs"] + 'Storage_urbs_' + year + '.csv'
-# paths["urbs_transmission"] = paths["urbs"] + 'Transmission_urbs_' + year + '.csv'
-# paths["urbs_model"] = paths["urbs"] + 'urbs_' + \
-# param["region_name"] + '_' + param["subregions_name"] + '_' + year + '.xlsx'
-
-# # evrys
-# paths["evrys"] = pathtemp + 'evrys' + fs
-# if not os.path.isdir(paths["evrys"]):
-# os.makedirs(paths["evrys"])
-# paths["evrys_demand"] = paths["evrys"] + 'Demand_evrys_' + year + '.csv'
-# paths["evrys_commodity"] = paths["evrys"] + 'Commodity_evrys_' + year + '.csv'
-# paths["evrys_process"] = paths["evrys"] + 'Process_evrys_' + year + '.csv'
-# paths["evrys_storage"] = paths["evrys"] + 'Storage_evrys_' + year + '.csv'
-# paths["evrys_transmission"] = paths["evrys"] + 'Transmission_evrys_' + year + '.csv'
-# paths["evrys_model"] = paths["evrys"] + 'evrys_' + \
-# param["region_name"] + '_' + param["subregions_name"] + '_' + year + '.xlsx'
-
-# del root, PathTemp, fs
