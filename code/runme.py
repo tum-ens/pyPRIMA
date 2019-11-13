@@ -7,6 +7,7 @@ if __name__ == "__main__":
     paths, param = initialization()
 
     ## Clean raw data
+    clean_residence_load_profile(paths, param)
     # clean_GridKit_Europe(paths, param)
     # clean_sector_shares_Eurostat(paths, param)
     # clean_load_data_ENTSOE(paths, param)
@@ -17,7 +18,7 @@ if __name__ == "__main__":
     # generate_sites_from_shapefile(paths, param)
     # generate_load_timeseries(paths, param)
     # generate_transmission(paths, param)
-    generate_intermittent_supply_timeseries(paths, param)
+    # generate_intermittent_supply_timeseries(paths, param)
     # generate_commodity(paths, param)
     # generate_processes_and_storage_california(paths, param)
     # generate_processes(paths, param)
@@ -25,4 +26,4 @@ if __name__ == "__main__":
 
     ## Generate model files
     generate_urbs_model(paths, param)
-    # generate_evrys_model(paths, param)
+    generate_evrys_model(paths, param)

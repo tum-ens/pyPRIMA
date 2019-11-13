@@ -23,6 +23,7 @@ def configuration():
     paths = assumption_paths(paths)
     paths = load_input_paths(paths)
     paths = grid_input_paths(paths)
+    paths = cleaned_load_profiles_paths(paths, param)
     paths = renewable_potential_input_paths(paths, param)
     paths = processes_input_paths(paths, param)
     paths = output_folders(paths, param)
@@ -300,6 +301,30 @@ def load_input_paths(paths):
         + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",  # CA: "Small Commercial_Load Profile_2017 SCE.xlsx"
         "AGR": PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",  # CA: "VDEW-Lastprofile-Landwirtschaft_L0.csv"
         "STR": PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",  # CA: "Lastprofil_Strassenbeleuchtung_S0.xlsx"
+    }
+
+    return paths
+
+
+def cleaned_load_profiles_paths(paths, param):
+    """
+
+    :param paths:
+    :return:
+    """
+    global root
+    global fs
+
+    region = param["region_name"]
+
+    PathTemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
+
+    paths["cleaned_profiles"] = {
+        "RES": PathTemp + "Residence_Load_profiles.csv",
+        "IND": PathTemp + "Industry_Load_profiles.csv",
+        "COM": PathTemp + "Commercial_Load_profiles.csv",
+        "AGR": PathTemp + "Agriculture_Load_profiles.csv",
+        "STR": PathTemp + "Streetlight_Load_profiles.csv",
     }
 
     return paths
