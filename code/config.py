@@ -21,9 +21,8 @@ def configuration():
 
     paths = global_maps_input_paths(paths)
     paths = assumption_paths(paths)
-    paths = load_input_paths(paths)
     paths = grid_input_paths(paths)
-    paths = cleaned_load_profiles_paths(paths, param)
+    paths = load_input_paths(paths, param)
     paths = renewable_potential_input_paths(paths, param)
     paths = processes_input_paths(paths, param)
     paths = output_folders(paths, param)
@@ -283,12 +282,15 @@ def assumption_paths(paths):
     return paths
 
 
-def load_input_paths(paths):
+def load_input_paths(paths, param):
     """
     """
     global root
     global fs
 
+    region = param["region_name"]
+
+    # Raw Inputs
     PathTemp = root + "01 Raw inputs" + fs + "Load" + fs
     paths["sector_shares"] = PathTemp + "Eurostat" + fs + "nrg_105a_1_Data.csv"
     paths["load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"  # CA: "CA_Load Profiles_11 Regions_correct names.csv"
@@ -303,22 +305,8 @@ def load_input_paths(paths):
         "STR": PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",  # CA: "Lastprofil_Strassenbeleuchtung_S0.xlsx"
     }
 
-    return paths
-
-
-def cleaned_load_profiles_paths(paths, param):
-    """
-
-    :param paths:
-    :return:
-    """
-    global root
-    global fs
-
-    region = param["region_name"]
-
+    # Cleaned load profiles
     PathTemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
-
     paths["cleaned_profiles"] = {
         "RES": PathTemp + "Residence_Load_profiles.csv",
         "IND": PathTemp + "Industry_Load_profiles.csv",

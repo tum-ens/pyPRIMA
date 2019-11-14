@@ -37,7 +37,7 @@ from lib.util import *
 
 # return located, regions
 
-def clean_residence_load_profile(paths, param):
+def clean_residential_load_profile(paths, param):
     """
 
     :param paths:
