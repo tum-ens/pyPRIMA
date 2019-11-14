@@ -1,4 +1,4 @@
-from lib.correction_functions import get_sectoral_profiles
+from lib.correction_functions import get_sectoral_profiles, clean_names
 from lib.spatial_functions import *
 from lib.input_maps import *
 
@@ -517,85 +517,50 @@ def generate_transmission(paths, param):
 
     # Ouput
     df_completed.to_csv(paths["grid_completed"], sep=";", decimal=",", index=False)
+    print("File saved: " + paths["grid_completed"])
     create_json(paths["grid_completed"], param, ["grid"], paths, ["transmission_lines", "grid_cleaned", "subregions", "dict_lines_costs"])
-    print("File Saved: " + paths["grid_completed"])
 
     timecheck("End")
 
 
-def generate_commodity(paths, param):
+def generate_commodities(paths, param):
     """ documentation """
     timecheck("Start")
+    
+    # Read assumptions related to the flows and commodities
+    assumptions_flows = pd.read_csv(paths["assumptions_flows"], sep=";", decimal=",")
+    assumptions_com = pd.read_csv(paths["assumptions_commodities"], sep=";", decimal=",")
+    
+    # Only use the assumptions of that particular year
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["year"] == param["model_year"]]
+    assumptions_com = assumptions_com.loc[assumptions_com["year"] == param["model_year"]]
+    assumptions_com.drop(columns=["year"], inplace=True)
+    
+    # Only use flows and commodities that are needed by the user
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["Process/Storage"].isin(param["technology"]["Process"])]
+    assumptions_com = assumptions_com.loc[assumptions_com["Commodity"].isin(assumptions_flows["Commodity"].unique())]
+    
+    # Clean assumptions about commodities
+    assumptions_com.set_index(["Commodity"], inplace=True)
+    assumptions_com.replace(to_replace="inf", value=np.inf, inplace=True)
+    
+    # Obtain combinations of sites and commodities
+    com_list = list(assumptions_com.index.unique())
+    site_list = list(pd.read_csv(paths["sites_sub"], sep=";", decimal=",", index_col=0).index.unique())
+    df_com = pd.DataFrame(index = pd.MultiIndex.from_product([site_list, com_list], names=["Site", "Commodity"])) \
+               .reset_index() \
+               .join(assumptions_com, on=["Commodity"], how="left") \
+               .set_index(["Site"])
+               
+    # Read the CSV containing the load time series
+    load = pd.read_csv(paths["load_regions"], sep=";", decimal=",", index_col=0)
+    
+    # Correct the annual load
+    df_com.loc[df_com["Commodity"]=="Elec", "annual"] = load.sum(axis=0)
 
-    assumptions = pd.read_excel(paths["assumptions"], sheet_name="Commodity")
-    commodity = list(assumptions["Commodity"].unique())
-
-    dict_price_instate = dict(zip(assumptions["Commodity"], assumptions["price mid"]))
-    dict_price_outofstate = dict(zip(assumptions["Commodity"], assumptions["price out-of-state"]))
-    dict_type_evrys = dict(zip(assumptions["Commodity"], assumptions["Type_evrys"]))
-    dict_type_urbs = dict(zip(assumptions["Commodity"], assumptions["Type_urbs"]))
-    dict_annual = dict(zip(assumptions["Commodity"], assumptions["annual"]))
-    dict_co_max = dict(zip(assumptions["Commodity"], assumptions["max"]))
-    dict_maxperstep = dict(zip(assumptions["Commodity"], assumptions["maxperstep"]))
-
-    # Read the CSV containing the list of sites
-    sites = pd.read_csv(paths["sites"], sep=";", decimal=",")
-
-    # Read the CSV containing the annual load
-    load = pd.read_csv(paths["annual_load"], index_col=["sit"])
-
-    # Prepare output tables for evrys and urbs
-
-    output_evrys = pd.DataFrame(columns=["Site", "Co", "price", "annual", "losses", "type"], dtype=np.float64)
-    output_urbs = pd.DataFrame(columns=["Site", "Commodity", "Type", "price", "max", "maxperhour"])
-
-    # Fill tables
-    for s in sites["Site"]:
-        for c in commodity:
-            if c == "Elec":
-                if s in load.index:
-                    annual = load.loc[s][0]
-                else:
-                    annual = 0
-            else:
-                annual = dict_annual[c]
-            if len(s) >= 2:
-                output_evrys = output_evrys.append(
-                    {"Site": s, "Co": c, "price": dict_price_instate[c], "annual": annual, "losses": 0, "type": dict_type_evrys[c]}, ignore_index=True
-                )
-                output_urbs = output_urbs.append(
-                    {
-                        "Site": s,
-                        "Commodity": c,
-                        "Type": dict_type_urbs[c],
-                        "price": dict_price_instate[c],
-                        "max": dict_co_max[c],
-                        "maxperhour": dict_maxperstep[c],
-                    },
-                    ignore_index=True,
-                )
-            else:
-                output_evrys = output_evrys.append(
-                    {"Site": s, "Co": c, "price": dict_price_outofstate[c], "annual": annual, "losses": 0, "type": dict_type_evrys[c]},
-                    ignore_index=True,
-                )
-                output_urbs = output_urbs.append(
-                    {
-                        "Site": s,
-                        "Commodity": c,
-                        "Type": dict_type_urbs[c],
-                        "price": dict_price_outofstate[c],
-                        "max": dict_co_max[c],
-                        "maxperhour": dict_maxperstep[c],
-                    },
-                    ignore_index=True,
-                )
-
-    output_urbs.to_csv(paths["urbs_commodity"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["urbs_commodity"])
-
-    output_evrys.to_csv(paths["evrys_commodity"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["evrys_commodity"])
+    df_com.to_csv(paths["commodities_regions"], index=True, sep=";", decimal=",")
+    print("File saved: " + paths["commodities_regions"])
+    create_json(paths["commodities_regions"], param, ["model_year", "technology"], paths, ["assumptions_flows", "assumptions_commodities", "sites_sub", "load_regions"])
 
     timecheck("End")
 
@@ -603,229 +568,278 @@ def generate_commodity(paths, param):
 def generate_processes(paths, param):
     """ documentation """
     timecheck("Start")
-
-    assumptions = pd.read_excel(paths["assumptions"], sheet_name="Process")
+    
+    # Read assumptions related to the processes and flows
+    assumptions_pro = pd.read_csv(paths["assumptions_processes"], sep=";", decimal=",")
+    assumptions_flows = pd.read_csv(paths["assumptions_flows"], sep=";", decimal=",")
+    
     # Only use the assumptions of that particular year
-    assumptions = assumptions[assumptions["year"] == param["year"]]
+    assumptions_pro = assumptions_pro.loc[assumptions_pro["year"] == param["model_year"]]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["year"] == param["model_year"]]
+    assumptions_pro.drop(columns=["year"], inplace=True)
+    assumptions_flows.drop(columns=["year"], inplace=True)
+    
+    # Only use processes and flows that are needed by the user
+    assumptions_pro = assumptions_pro.loc[assumptions_pro["Process"].isin(param["technology"]["Process"])]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["Process/Storage"].isin(param["technology"]["Process"])]
+    
+    # Read shapefile of processes and storage
+    process_shp = gpd.read_file(paths["process_cleaned"])
+    
+    # Filter out process types not needed by the user
+    process_shp = process_shp.loc[process_shp["Type"].isin(param["technology"]["Process"])]
+    print("Number of power plants which belong to the modeled technologies: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    # Join shapefile with process assumptions
+    assumptions_pro.set_index(["Process"], inplace=True)
+    assumptions_pro.replace(to_replace="inf", value=np.inf, inplace=True)
+    process_shp = process_shp.join(assumptions_pro, on=["Type"], how="left")
+    
+    # Filter out processes that have exceeded their lifetime
+    if param["model_year"] > param["year"]:
+        process_shp = process_shp.loc[(process_shp["lifetime"] + process_shp["Year"]) >= param["model_year"]]
+        print("Number of power plants that have not reached their end of life: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
 
-    param["assumptions"] = read_assumptions_process(assumptions)
+    # Associate each power plant to a subregion
+    process_shp = get_sites(process_shp, param)
+    print("Number of power plants that lie in the modeled subregions: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    # Associate each power plant to a cohort
+    process_shp["Cohort"] = (process_shp["Year"] // param["process"]["cohorts"]) * param["process"]["cohorts"]
+    
+    # Group must-run power plants with similar characteristics
+    filter = process_shp.loc[process_shp["on-off"] == 0].index
+    must_run = process_shp.loc[filter, ["Type", "inst-cap", "Cohort", "Site"]]
+    must_run = must_run.groupby(["Type", "Cohort", "Site"]) \
+                       .sum() \
+                       .reset_index() \
+                       .join(assumptions_pro, on=["Type"], how="left")
+    must_run["Name"] = must_run["Type"] + "_" + must_run["Cohort"].astype(int).astype(str)
+    process_shp = process_shp.loc[process_shp["on-off"] == 1] \
+                             .append(must_run, ignore_index=True)
+    print("Number of power plants after grouping must-run power plants: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
 
-    depreciation = param["assumptions"]["depreciation"]
-    on_off = param["assumptions"]["on_off"]
-
-    # Get data from the shapefile
-    pro_and_sto = gpd.read_file(paths["pro_sto"])
-
-    # Split the storage from the processes
-    process_raw = pro_and_sto[~pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
-    print("Number of processes read: " + str(len(process_raw)))
-
-    # Consider the lifetime of power plants
-    process_current = filter_life_time(param, process_raw, depreciation)
-
-    # Get Sites
-    process_located, _ = get_sites(process_current, paths)
-    print("Number of processes after duplicate removal: " + str(len(process_located)))
-
-    # Reduce the number of processes by aggregating the small and must-run power plants
-    process_compact = process_located.copy()
-    for c in process_compact["CoIn"].unique():
-        process_compact.loc[process_compact["CoIn"] == c, "on-off"] = on_off[c]
-
-    # Select small processes and group them
-    process_group = process_compact[(process_compact["inst-cap"] < param["pro_sto"]["agg_thres"]) | (process_compact["on-off"] == 0)]
-    process_group = process_group.groupby(["Site", "CoIn"])
-
-    # Define the attributes of the aggregates
-    small_cap = pd.DataFrame(process_group["inst-cap"].sum())
-    small_pro = pd.DataFrame(process_group["Pro"].first() + "_agg")
-    small_coout = pd.DataFrame(process_group["CoOut"].first())
-    small_year = pd.DataFrame(process_group["year"].min())
-
-    # Aggregate the small processes
-    process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
-
-    # Recombine big processes with the aggregated small ones
-    process_compact = process_compact[(process_compact["inst-cap"] >= param["pro_sto"]["agg_thres"]) & (process_compact["on-off"] == 1)]
-    process_compact = process_compact.append(process_small, ignore_index=True, sort=True)
-    print("Number of compacted processes: " + str(len(process_compact)))
-
-    # Process evrys, urbs
-    evrys_process, urbs_process = format_process_model(process_compact, param)
-
+    # Correct cap-up
+    process_shp["cap-up"] = process_shp["inst-cap"].astype(float)
+    
+    # Clean and shorten names
+    process_shp["Name"] = process_shp["Name"].apply(clean_names)
+    
+    # Obtain combinations for possible expansion
+    pro_expansion = list(assumptions_pro.loc[assumptions_pro["cap-up"]!=0].index.unique())
+    site_expansion = list(pd.read_csv(paths["sites_sub"], sep=";", decimal=",", index_col=0).index.unique())
+    site_offshore = [site for site in site_expansion if site.endswith("_offshore")]
+    if len(site_offshore) and ("WindOff" in pro_expansion):
+        pro_expansion.remove("WindOff")
+        site_expansion = [site for site in site_expansion if site not in site_offshore]
+        ind_expansion_off = pd.MultiIndex.from_product([site_offshore, ["WindOff"]], names=["Site", "Type"])
+    else:
+        pro_expansion.remove("WindOff")
+        ind_expansion_off = pd.MultiIndex(levels=[[],[]], codes=[[],[]], names=["Site", "Type"])
+    df_expansion = pd.DataFrame(index = pd.MultiIndex.from_product([site_expansion, pro_expansion], names=["Site", "Type"]).append(ind_expansion_off)) \
+                     .reset_index() \
+                     .join(assumptions_pro, on=["Type"], how="left")
+    df_expansion["Cohort"] = param["model_year"]
+    df_expansion["Name"] = df_expansion["Type"] + "_" + str(param["model_year"])
+    df_expansion["inst-cap"] = 0
+    process_shp = process_shp.append(df_expansion, ignore_index=True)
+    print("Number of power plants after including potential expansion: ", len(process_shp), "- installed capacity: ", process_shp["inst-cap"].sum())
+    
+    # Derive efficiency and specific CO2 emissions from assumptions_flows
+    assumptions_flows.set_index(["Process/Storage"], inplace=True)
+    df_eff = assumptions_flows.loc[(assumptions_flows["Direction"]=="Out") & (assumptions_flows["Commodity"]=="Elec"), "ratio"] / assumptions_flows.loc[assumptions_flows["Direction"]=="In", "ratio"]
+    df_effmin = assumptions_flows.loc[(assumptions_flows["Direction"]=="Out") & (assumptions_flows["Commodity"]=="Elec"), "ratio-min"] / assumptions_flows.loc[assumptions_flows["Direction"]=="In", "ratio-min"]
+    df_co2 = assumptions_flows.loc[(assumptions_flows["Direction"]=="Out") & (assumptions_flows["Commodity"]=="CO2"), "ratio"] / assumptions_flows.loc[assumptions_flows["Direction"]=="In", "ratio"]
+    df_co2.fillna(0, inplace=True)
+    process_shp["eff"] = process_shp[["Type"]].join(df_eff, on=["Type"], how="left")["ratio"]
+    process_shp["effmin"] = process_shp[["Type"]].join(df_effmin, on=["Type"], how="left")["ratio-min"]
+    process_shp["cotwo"] = process_shp[["Type"]].join(df_co2, on=["Type"], how="left")["ratio"]      
+    
     # Output
-    urbs_process.to_csv(paths["urbs_process"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["urbs_process"])
-    evrys_process.to_csv(paths["evrys_process"], index=False, sep=";", decimal=",", encoding="ascii")
-    print("File Saved: " + paths["evrys_process"])
-
+    process_shp.to_csv(paths["process_regions"], index=False, sep=";", decimal=",")
+    print("File saved: " + paths["process_regions"])
+    create_json(paths["process_regions"], param, ["region_name", "subregions_name", "year", "model_year", "technology", "process"], paths, ["assumptions_processes", "assumptions_flows", "process_cleaned"])
+    
     timecheck("End")
 
 
 def generate_storage(paths, param):
     """ documentation """
     timecheck("Start")
-
-    # Read required assumptions
-    assumptions = pd.read_excel(paths["assumptions"], sheet_name="Storage")
-
+    
+    # Read assumptions related to the storage and flows
+    assumptions_sto = pd.read_csv(paths["assumptions_storage"], sep=";", decimal=",")
+    assumptions_flows = pd.read_csv(paths["assumptions_flows"], sep=";", decimal=",")
+    
     # Only use the assumptions of that particular year
-    assumptions = assumptions[assumptions["year"] == param["year"]]
+    assumptions_sto = assumptions_sto.loc[assumptions_sto["year"] == param["model_year"]]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["year"] == param["model_year"]]
+    assumptions_sto.drop(columns=["year"], inplace=True)
+    assumptions_flows.drop(columns=["year"], inplace=True)
+    
+    # Only use storage units and flows that are needed by the user
+    assumptions_sto = assumptions_sto.loc[assumptions_sto["Storage"].isin(param["technology"]["Storage"])]
+    assumptions_flows = assumptions_flows.loc[assumptions_flows["Process/Storage"].isin(param["technology"]["Storage"])]
+    
+    # Read shapefile of processes and storage
+    storage_shp = gpd.read_file(paths["process_cleaned"])
+    
+    # Filter out storage types not needed by the user
+    storage_shp = storage_shp.loc[storage_shp["Type"].isin(param["technology"]["Storage"])]
+    print("Number of storage units which belong to the modeled technologies: ", len(storage_shp), "- installed capacity: ", storage_shp["inst-cap"].sum())
+    
+    # Join shapefile with storage assumptions
+    assumptions_sto.set_index(["Storage"], inplace=True)
+    assumptions_sto.replace(to_replace="inf", value=np.inf, inplace=True)
+    storage_shp = storage_shp.join(assumptions_sto, on=["Type"], how="left")
+    
+    # Filter out storage units that have exceeded their lifetime
+    if param["model_year"] > param["year"]:
+        storage_shp = storage_shp.loc[(storage_shp["lifetime"] + storage_shp["Year"]) >= param["model_year"]]
+        print("Number of storage units that have not reached their end of life: ", len(storage_shp), "- installed capacity: ", storage_shp["inst-cap"].sum())
 
-    param["assumptions"] = read_assumptions_storage(assumptions)
+    # Associate each storage unit to a subregion
+    storage_shp = get_sites(storage_shp, param)
+    print("Number of storage units that lie in the modeled subregions: ", len(storage_shp), "- installed capacity: ", storage_shp["inst-cap"].sum())
+    
+    # Associate each storage unit to a cohort
+    storage_shp["Cohort"] = (storage_shp["Year"] // param["process"]["cohorts"]) * param["process"]["cohorts"]
 
-    depreciation = param["assumptions"]["depreciation"]
+    # Group storage units with similar characteristics
+    storage_agg = storage_shp[["Type", "inst-cap", "Cohort", "Site"]]
+    storage_agg = storage_agg.groupby(["Type", "Cohort", "Site"]) \
+                             .sum() \
+                             .reset_index() \
+                             .join(assumptions_sto, on=["Type"], how="left")
+    storage_agg["Name"] = storage_agg["Type"] + "_" + storage_agg["Cohort"].astype(int).astype(str)
+    print("Number of storage units after grouping: ", len(storage_agg), "- installed capacity: ", storage_agg["inst-cap"].sum())
 
-    # Get data from the shapefile
-    pro_and_sto = gpd.read_file(paths["pro_sto"])
-
-    # Split the storages from the processes
-    storage_raw = pro_and_sto[pro_and_sto["CoIn"].isin(param["pro_sto"]["storage"])]
-    print("Number of storage units read: " + str(len(storage_raw)))
-
-    # Consider lifetime of storage units
-    storage_current = filter_life_time(param, storage_raw, depreciation)
-
-    # Get sites
-    storage_located, regions = get_sites(storage_current, paths)
-    param["regions"] = regions
-    print("Number of storage units after duplicate removal: " + str(len(storage_located)))
-
-    # Reduce number of storage units by aggregating the small storage units
-    storage_compact = storage_located.copy()
-
-    # Select small processes and group them
-    storage_group = storage_compact[storage_compact["inst-cap"] < param["pro_sto"]["agg_thres"]].groupby(["Site", "CoIn"])
-
-    # Define the attributes of the aggregates
-    small_cap = pd.DataFrame(storage_group["inst-cap"].sum())
-    small_pro = pd.DataFrame(storage_group["Pro"].first() + "_agg")
-    small_coout = pd.DataFrame(storage_group["CoOut"].first())
-    small_year = pd.DataFrame(storage_group["year"].min())
-
-    # Aggregate the small storage units
-    storage_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
-
-    # Recombine big storage units with the aggregated small ones
-    storage_compact = storage_compact[storage_compact["inst-cap"] >= param["pro_sto"]["agg_thres"]]
-    storage_compact = storage_compact.append(storage_small, ignore_index=True, sort=True)
-    print("Number of compacted storage units: " + str(len(storage_compact)))
-
-    # Take the raw storage table and group by tuple of sites and storage type
-    storage_compact = storage_compact[["Site", "CoIn", "CoOut", "inst-cap"]].copy()
-    storage_compact.rename(columns={"CoIn": "Sto", "CoOut": "Co"}, inplace=True)
-    storage_group = storage_compact.groupby(["Site", "Sto"])
-
-    # Define the attributes of the aggregates
-    inst_cap0 = storage_group["inst-cap"].sum().rename("inst-cap-pi")
-
-    co0 = storage_group["Co"].first()
-
-    # Combine the list of series into a dataframe
-    storage_compact = pd.DataFrame([inst_cap0, co0]).transpose().reset_index()
-
-    # Storage evrys, urbs
-    evrys_storage, urbs_storage = format_storage_model(storage_compact, param)
-
+    # Correct cap-up
+    storage_agg["cap-up-p"] = storage_agg["inst-cap"].astype(float)
+    
+    # Clean and shorten names
+    storage_agg["Name"] = storage_agg["Name"].apply(clean_names)
+    
+    # Obtain combinations for possible expansion
+    sto_expansion = list(assumptions_sto.loc[assumptions_sto["cap-up-c"]!=0].index.unique())
+    site_expansion = list(pd.read_csv(paths["sites_sub"], sep=";", decimal=",", index_col=0).index.unique())
+    site_expansion = [site for site in site_expansion if not site.endswith("_offshore")]
+    df_expansion = pd.DataFrame(index = pd.MultiIndex.from_product([site_expansion, sto_expansion], names=["Site", "Type"])) \
+                     .reset_index() \
+                     .join(assumptions_sto, on=["Type"], how="left")
+    df_expansion["Cohort"] = param["model_year"]
+    df_expansion["Name"] = df_expansion["Type"] + "_" + str(param["model_year"])
+    df_expansion["inst-cap"] = 0
+    storage_agg = storage_agg.append(df_expansion, ignore_index=True)
+    print("Number of storage units after including potential expansion: ", len(storage_agg), "- installed capacity: ", storage_agg["inst-cap"].sum())
+    
+    # Derive efficiency and commodity from assumptions_flows
+    assumptions_flows.set_index(["Process/Storage"], inplace=True)
+    df_effin = assumptions_flows.loc[(assumptions_flows["Direction"]=="In") & (assumptions_flows["Commodity"]=="Elec"), "ratio"]
+    df_effout = assumptions_flows.loc[(assumptions_flows["Direction"]=="Out") & (assumptions_flows["Commodity"]=="Elec"), "ratio"]
+    df_com = assumptions_flows.loc[(assumptions_flows["Direction"]=="In"), "Commodity"]
+    storage_agg["eff-in"] = storage_agg[["Type"]].join(df_effin, on=["Type"], how="left")["ratio"]
+    storage_agg["eff-out"] = storage_agg[["Type"]].join(df_effout, on=["Type"], how="left")["ratio"]
+    storage_agg["Commodity"] = storage_agg[["Type"]].join(df_com, on=["Type"], how="left")["Commodity"]   
+    
     # Output
-    urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["urbs_storage"])
-    evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=";", decimal=",", encoding="ascii")
-    print("File Saved: " + paths["evrys_storage"])
-
+    storage_agg.to_csv(paths["storage_regions"], index=False, sep=";", decimal=",")
+    print("File saved: " + paths["storage_regions"])
+    create_json(paths["storage_regions"], param, ["region_name", "subregions_name", "year", "model_year", "technology", "process"], paths, ["assumptions_storage", "assumptions_flows", "process_cleaned"])
+    
     timecheck("End")
 
 
-def generate_processes_and_storage_california(paths, param):
-    timecheck("Start")
-    Process = pd.read_excel(
-        paths["database_Cal"],
-        sheet_name="Operating",
-        header=1,
-        skipinitialspace=True,
-        usecols=[0, 2, 5, 6, 7, 10, 11, 14, 17, 25, 26],
-        dtype={"Entity ID": np.unicode_, "Plant ID": np.unicode_},
-    )
-    Process.rename(columns={"\nNameplate Capacity (MW)": "inst-cap", "Operating Year": "year"}, inplace=True)
-    regions = gpd.read_file(paths["regions_SHP"])
+# def generate_processes_and_storage_california(paths, param):
+    # timecheck("Start")
+    # Process = pd.read_excel(
+        # paths["database_Cal"],
+        # sheet_name="Operating",
+        # header=1,
+        # skipinitialspace=True,
+        # usecols=[0, 2, 5, 6, 7, 10, 11, 14, 17, 25, 26],
+        # dtype={"Entity ID": np.unicode_, "Plant ID": np.unicode_},
+    # )
+    # Process.rename(columns={"\nNameplate Capacity (MW)": "inst-cap", "Operating Year": "year"}, inplace=True)
+    # regions = gpd.read_file(paths["regions_SHP"])
 
-    # Drop recently built plants (after the reference year),
-    # non-operating plants, and plants outside the geographic scope
-    Process = Process[
-        (Process["year"] <= param["year"])
-        & (Process["Status"].isin(param["pro_sto_Cal"]["status"]))
-        & (Process["Plant State"].isin(param["pro_sto_Cal"]["states"]))
-    ]
+    # # Drop recently built plants (after the reference year),
+    # # non-operating plants, and plants outside the geographic scope
+    # Process = Process[
+        # (Process["year"] <= param["year"])
+        # & (Process["Status"].isin(param["pro_sto_Cal"]["status"]))
+        # & (Process["Plant State"].isin(param["pro_sto_Cal"]["states"]))
+    # ]
 
-    for i in Process.index:
-        # Define a unique ID for the processes
-        Process.loc[i, "Pro"] = (
-            Process.loc[i, "Plant State"]
-            + "_"
-            + Process.loc[i, "Entity ID"]
-            + "_"
-            + Process.loc[i, "Plant ID"]
-            + "_"
-            + Process.loc[i, "Generator ID"]
-        )
+    # for i in Process.index:
+        # # Define a unique ID for the processes
+        # Process.loc[i, "Pro"] = (
+            # Process.loc[i, "Plant State"]
+            # + "_"
+            # + Process.loc[i, "Entity ID"]
+            # + "_"
+            # + Process.loc[i, "Plant ID"]
+            # + "_"
+            # + Process.loc[i, "Generator ID"]
+        # )
 
-        # Define the input commodity
-        Process.loc[i, "CoIn"] = param["pro_sto_Cal"]["proc_dict"][Process.loc[i, "Energy Source Code"]]
-        if Process.loc[i, "Technology"] == "Hydroelectric Pumped Storage":
-            Process.loc[i, "CoIn"] = "PumSt"
-        if (Process.loc[i, "CoIn"] == "Hydro_Small") and (Process.loc[i, "inst-cap"] > 30):
-            Process.loc[i, "CoIn"] = "Hydro_Large"
+        # # Define the input commodity
+        # Process.loc[i, "CoIn"] = param["pro_sto_Cal"]["proc_dict"][Process.loc[i, "Energy Source Code"]]
+        # if Process.loc[i, "Technology"] == "Hydroelectric Pumped Storage":
+            # Process.loc[i, "CoIn"] = "PumSt"
+        # if (Process.loc[i, "CoIn"] == "Hydro_Small") and (Process.loc[i, "inst-cap"] > 30):
+            # Process.loc[i, "CoIn"] = "Hydro_Large"
 
-        # Define the location of the process
-        if Process.loc[i, "Pro"] == "CA_50045_56284_EPG":  # Manual correction
-            Process.loc[i, "Site"] = "LAX"
-        else:
-            Process.loc[i, "Site"] = containing_polygon(Point(Process.loc[i, "Longitude"], Process.loc[i, "Latitude"]), regions)["NAME_SHORT"]
+        # # Define the location of the process
+        # if Process.loc[i, "Pro"] == "CA_50045_56284_EPG":  # Manual correction
+            # Process.loc[i, "Site"] = "LAX"
+        # else:
+            # Process.loc[i, "Site"] = containing_polygon(Point(Process.loc[i, "Longitude"], Process.loc[i, "Latitude"]), regions)["NAME_SHORT"]
 
-    # Define the output commodity
-    Process["CoOut"] = "Elec"
+    # # Define the output commodity
+    # Process["CoOut"] = "Elec"
 
-    # Select columns to be used
-    Process = Process[["Site", "Pro", "CoIn", "CoOut", "inst-cap", "year"]]
-    print("Number of Entries: " + str(len(Process)))
+    # # Select columns to be used
+    # Process = Process[["Site", "Pro", "CoIn", "CoOut", "inst-cap", "year"]]
+    # print("Number of Entries: " + str(len(Process)))
 
-    # Split the storages from the processes
-    process_raw = Process[~Process["CoIn"].isin(param["pro_sto_Cal"]["storage"])]
-    storage_raw = Process[Process["CoIn"].isin(param["pro_sto_Cal"]["storage"])]
-    print("Number of Processes: " + str(len(process_raw)))
-    print("Number of Storage systems: " + str(len(storage_raw)))
+    # # Split the storages from the processes
+    # process_raw = Process[~Process["CoIn"].isin(param["pro_sto_Cal"]["storage"])]
+    # storage_raw = Process[Process["CoIn"].isin(param["pro_sto_Cal"]["storage"])]
+    # print("Number of Processes: " + str(len(process_raw)))
+    # print("Number of Storage systems: " + str(len(storage_raw)))
 
-    # Processes
-    # Reduce the number of processes by aggregating the small ones
-    # Select small processes and group them
-    process_group = process_raw[process_raw["inst-cap"] < 10].groupby(["Site", "CoIn"])
-    # Define the attributes of the aggregates
-    small_cap = pd.DataFrame(process_group["inst-cap"].sum())
-    small_pro = pd.DataFrame(process_group["Pro"].first() + "_agg")
-    small_coout = pd.DataFrame(process_group["CoOut"].first())
-    small_year = pd.DataFrame(process_group["year"].min())
-    # Aggregate the small processes
-    process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
+    # # Processes
+    # # Reduce the number of processes by aggregating the small ones
+    # # Select small processes and group them
+    # process_group = process_raw[process_raw["inst-cap"] < 10].groupby(["Site", "CoIn"])
+    # # Define the attributes of the aggregates
+    # small_cap = pd.DataFrame(process_group["inst-cap"].sum())
+    # small_pro = pd.DataFrame(process_group["Pro"].first() + "_agg")
+    # small_coout = pd.DataFrame(process_group["CoOut"].first())
+    # small_year = pd.DataFrame(process_group["year"].min())
+    # # Aggregate the small processes
+    # process_small = small_cap.join([small_pro, small_coout, small_year]).reset_index()
 
-    # Recombine big processes with the aggregated small ones
-    process_compact = process_raw[process_raw["inst-cap"] >= 10].append(process_small, ignore_index=True)
-    print("Number of Processes after agregation: " + str(len(process_compact)))
-    evrys_process, urbs_process = format_process_model_California(process_compact, process_small, param)
+    # # Recombine big processes with the aggregated small ones
+    # process_compact = process_raw[process_raw["inst-cap"] >= 10].append(process_small, ignore_index=True)
+    # print("Number of Processes after agregation: " + str(len(process_compact)))
+    # evrys_process, urbs_process = format_process_model_California(process_compact, process_small, param)
 
-    # Output
-    urbs_process.to_csv(paths["urbs_process"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["urbs_process"])
-    evrys_process.to_csv(paths["evrys_process"], index=False, sep=";", decimal=",", encoding="ascii")
-    print("File Saved: " + paths["evrys_process"])
+    # # Output
+    # urbs_process.to_csv(paths["urbs_process"], index=False, sep=";", decimal=",")
+    # print("File Saved: " + paths["urbs_process"])
+    # evrys_process.to_csv(paths["evrys_process"], index=False, sep=";", decimal=",", encoding="ascii")
+    # print("File Saved: " + paths["evrys_process"])
 
-    # Storage Systems
-    param["sites_evrys_unique"] = evrys_process.Sites.unique()
-    evrys_storage, urbs_storage = format_storage_model_California(storage_raw, param)
+    # # Storage Systems
+    # param["sites_evrys_unique"] = evrys_process.Sites.unique()
+    # evrys_storage, urbs_storage = format_storage_model_California(storage_raw, param)
 
-    # Output
-    urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=";", decimal=",")
-    print("File Saved: " + paths["urbs_storage"])
-    evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=";", decimal=",", encoding="ascii")
-    print("File Saved: " + paths["evrys_storage"])
+    # # Output
+    # urbs_storage.to_csv(paths["urbs_storage"], index=False, sep=";", decimal=",")
+    # print("File Saved: " + paths["urbs_storage"])
+    # evrys_storage.to_csv(paths["evrys_storage"], index=False, sep=";", decimal=",", encoding="ascii")
+    # print("File Saved: " + paths["evrys_storage"])
 
-    timecheck("End")
+    # timecheck("End")

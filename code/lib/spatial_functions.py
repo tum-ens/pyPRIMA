@@ -449,6 +449,25 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
     timecheck("End")
 
 
+def get_sites(points_shp, param):
+    """
+    """
+    regions = param["regions_sub"]
+    
+    # Spatial join
+    points_shp = points_shp.to_crs(regions.crs)
+    located = gpd.sjoin(points_shp, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
+    located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
+    located.drop(columns=["index_right"], inplace=True)
+    
+    # Remove duplicates that lie in the border between two regions
+    located = located.drop_duplicates(subset=["Name"], inplace=False)
+    
+    # Remove features that do not lie in any subregion
+    located.dropna(axis=0, subset=["Site"], inplace=True)
+    
+    return located
+
 # # ## Functions:
 
 # # https://pcjericks.github.io/py-gdalogr-cookbook/raster_layers.html#clip-a-geotiff-with-shapefile
