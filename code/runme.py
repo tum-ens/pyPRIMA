@@ -7,7 +7,11 @@ if __name__ == "__main__":
     paths, param = initialization()
 
     ## Clean raw data
-    clean_residence_load_profile(paths, param)
+    # clean_residence_load_profile(paths, param)
+    # clean_commercial_load_profile(paths, param)
+    # clean_industry_load_profile(paths, param)
+    # clean_agriculture_load_profile(paths, param)
+    # clean_streetlight_load_profile(paths, param)
     # clean_GridKit_Europe(paths, param)
     # clean_sector_shares_Eurostat(paths, param)
     # clean_load_data_ENTSOE(paths, param)
@@ -25,5 +29,5 @@ if __name__ == "__main__":
     # generate_storage(paths, param)
 
     ## Generate model files
-    generate_urbs_model(paths, param)
-    generate_evrys_model(paths, param)
+    # generate_urbs_model(paths, param)
+    # generate_evrys_model(paths, param)

@@ -45,6 +45,7 @@ def clean_residence_load_profile(paths, param):
     :return:
     """
     timecheck("Start")
+    profile = pd.DataFrame(columns=["RES"])
     dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
     dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
 
@@ -78,10 +79,14 @@ def clean_residence_load_profile(paths, param):
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order="C")
-    res_profile = residential_profile / residential_profile.sum()
+    profile["RES"] = residential_profile / residential_profile.sum()
 
     # Save Profile
-    res_profile.save_csv(paths["cleaned_profiles"]["RES"])
+    profile.to_csv(paths["cleaned_profiles"]["RES"], sep=";", decimal=",")
+    print("File Saved: " + paths["cleaned_profiles"]["RES"])
+    create_json(paths["cleaned_profiles"]["RES"], param,
+                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
 
@@ -93,15 +98,20 @@ def clean_industry_load_profile(paths, param):
     :return:
     """
     timecheck("Start")
+    profile = pd.DataFrame(columns=["IND"])
     industrial_profile_raw = pd.read_excel(paths["profiles"]["IND"], header=0)
     industrial_profile_raw.rename(columns={"Stunde": "Hour", "Last": "Load"}, inplace=True)
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     industrial_profile = np.tile(industrial_profile_raw["Load"].values, 365)
-    ind_profile = industrial_profile / industrial_profile.sum()
+    profile["IND"] = industrial_profile / industrial_profile.sum()
 
     # Save Profile
-
+    profile.to_csv(paths["cleaned_profiles"]["IND"], sep=";", decimal=",")
+    print("File Saved: " + paths["cleaned_profiles"]["IND"])
+    create_json(paths["cleaned_profiles"]["RES"], param,
+                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
 
@@ -113,6 +123,7 @@ def clean_commercial_load_profile(paths, param):
     :return:
     """
     timecheck("Start")
+    profile = pd.DataFrame(columns=["COM"])
     dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
     dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
 
@@ -148,11 +159,16 @@ def clean_commercial_load_profile(paths, param):
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order="C")
-    com_profile = commercial_profile / commercial_profile.sum()
+    profile["COM"] = commercial_profile / commercial_profile.sum()
 
     # Save Profile
-
+    profile.to_csv(paths["cleaned_profiles"]["COM"], sep=";", decimal=",")
+    print("File Saved: " + paths["cleaned_profiles"]["COM"])
+    create_json(paths["cleaned_profiles"]["RES"], param,
+                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
+
 
 def clean_agriculture_load_profile(paths, param):
     """
@@ -162,6 +178,7 @@ def clean_agriculture_load_profile(paths, param):
     :return:
     """
     timecheck("Start")
+    profile = pd.DataFrame(columns=["AGR"])
     dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
     dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
 
@@ -197,11 +214,16 @@ def clean_agriculture_load_profile(paths, param):
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     agricultural_profile = np.reshape(agricultural_profile.loc[:, hours].values, -1, order="C")
-    agr_profile = agricultural_profile / agricultural_profile.sum()
+    profile["AGR"] = agricultural_profile / agricultural_profile.sum()
 
     # Save Profile
-
+    profile.to_csv(paths["cleaned_profiles"]["AGR"], sep=";", decimal=",")
+    print("File Saved: " + paths["cleaned_profiles"]["AGR"])
+    create_json(paths["cleaned_profiles"]["RES"], param,
+                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
+
 
 def clean_streetlight_load_profile(paths, param):
     """
@@ -211,6 +233,7 @@ def clean_streetlight_load_profile(paths, param):
     :return:
     """
     timecheck("Start")
+    profile = pd.DataFrame(columns=["STR"])
     streets_profile_raw = pd.read_excel(paths["profiles"]["STR"], header=[4], skipinitialspace=True, usecols=[0, 1, 2])
 
     # Aggregate from 15 min --> hourly load
@@ -224,136 +247,15 @@ def clean_streetlight_load_profile(paths, param):
     streets_profile = streets_profile_raw.values
 
     # Normalize the load over the year, ei. integral over the year of all loads for each individual sector is 1
-    str_profile = streets_profile / streets_profile.sum()
+    profile["STR"] = streets_profile / streets_profile.sum()
 
     # Save Profile
-
+    profile.to_csv(paths["cleaned_profiles"]["STR"], sep=";", decimal=",")
+    print("File Saved: " + paths["cleaned_profiles"]["STR"])
+    create_json(paths["cleaned_profiles"]["RES"], param,
+                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
-
-def get_sectoral_profiles(paths, param):
-    """
-    This function reads the raw standard load profiles, repeats them to obtain a full year, normalizes them so that the
-    sum is equal to 1, and stores the obtained load profile for each sector in the dataframe *profiles*.
-    
-    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
-    :type paths: dict
-    :param param: Dictionary containing the *year* and load-related assumptions.
-    :type param: dict
-    
-    :return profiles: The normalized load profiles for the sectors.
-    :rtype: pandas dataframe
-    """
-    timecheck("Start")
-    dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
-    dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
-    profiles_paths = paths["profiles"]
-
-    # Prepare the dataframe for the daily load
-    start = datetime.datetime(param["year"], 1, 1)
-    end = datetime.datetime(param["year"], 12, 31)
-    hours = [str(x) for x in list(range(0, 24))]
-    time_series = pd.DataFrame(data=np.zeros((365, 27)), index=None, columns=["Date", "Day", "Season"] + hours)
-    time_series["Date"] = pd.date_range(start, end)
-    time_series["Day"] = [dict_daytype[time_series.loc[i, "Date"].day_name()] for i in time_series.index]
-    time_series["Season"] = [dict_season[time_series.loc[i, "Date"].month] for i in time_series.index]
-
-    # Prepare the dataframe for the yearly load per sector
-    profiles = pd.DataFrame(columns=param["load"]["sectors"])
-
-    # Residential load
-    if "RES" in param["load"]["sectors"]:
-        residential_profile_raw = pd.read_excel(profiles_paths["RES"], header=[3, 4], skipinitialspace=True)
-        residential_profile_raw.rename(
-            columns={
-                "Übergangszeit": "Spring/Fall",
-                "Sommer": "Summer",
-                "Werktag": "Working day",
-                "Sonntag/Feiertag": "Sunday",
-                "Samstag": "Saturday",
-            },
-            inplace=True,
-        )
-        residential_profile = time_series.copy()
-        for i in residential_profile.index:
-            residential_profile.loc[i, hours] = list(
-                residential_profile_raw[(residential_profile.loc[i, "Season"], residential_profile.loc[i, "Day"])]
-            )
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order="C")
-        profiles["RES"] = residential_profile / residential_profile.sum()
-
-    # Industrial load
-    if "IND" in param["load"]["sectors"]:
-        industrial_profile_raw = pd.read_excel(profiles_paths["IND"], header=0)
-        industrial_profile_raw.rename(columns={"Stunde": "Hour", "Last": "Load"}, inplace=True)
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        industrial_profile = np.tile(industrial_profile_raw["Load"].values, 365)
-        profiles["IND"] = industrial_profile / industrial_profile.sum()
-
-    # Commercial load
-    if "COM" in param["load"]["sectors"]:
-        commercial_profile_raw = pd.read_csv(
-            profiles_paths["COM"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1],
-            skipinitialspace=True
-        )
-        commercial_profile_raw.rename(
-            columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday",
-                     "Samstag": "Saturday"},
-            inplace=True,
-        )
-        # Aggregate from 15 min --> hourly load
-        commercial_profile_raw[("Hour", "All")] = [int(str(commercial_profile_raw.loc[i, ("G0", "[W]")])[:2]) for i in
-                                                   commercial_profile_raw.index]
-        commercial_profile_raw = commercial_profile_raw.groupby([("Hour", "All")]).sum()
-        commercial_profile_raw.reset_index(inplace=True)
-        commercial_profile = time_series.copy()
-        for i in commercial_profile.index:
-            commercial_profile.loc[i, hours] = list(
-                commercial_profile_raw[(commercial_profile.loc[i, "Season"], commercial_profile.loc[i, "Day"])])
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order="C")
-        profiles["COM"] = commercial_profile / commercial_profile.sum()
-
-    # Agricultural load
-    if "AGR" in param["load"]["sectors"]:
-        agricultural_profile_raw = pd.read_csv(
-            profiles_paths["AGR"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1],
-            skipinitialspace=True
-        )
-        agricultural_profile_raw.rename(
-            columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday",
-                     "Samstag": "Saturday"},
-            inplace=True,
-        )
-        # Aggregate from 15 min --> hourly load
-        agricultural_profile_raw["Hour"] = [int(str(agricultural_profile_raw.loc[i, ("L0", "[W]")])[:2]) for i in
-                                            agricultural_profile_raw.index]
-        agricultural_profile_raw = agricultural_profile_raw.groupby(["Hour"]).sum()
-        agricultural_profile = time_series.copy()
-        for i in agricultural_profile.index:
-            agricultural_profile.loc[i, hours] = list(
-                agricultural_profile_raw[(agricultural_profile.loc[i, "Season"], agricultural_profile.loc[i, "Day"])]
-            )
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        agricultural_profile = np.reshape(agricultural_profile.loc[:, hours].values, -1, order="C")
-        profiles["AGR"] = agricultural_profile / agricultural_profile.sum()
-
-    # Street lights
-    if "STR" in param["load"]["sectors"]:
-        streets_profile_raw = pd.read_excel(profiles_paths["STR"], header=[4], skipinitialspace=True, usecols=[0, 1, 2])
-        # Aggregate from 15 min --> hourly load
-        streets_profile_raw["Hour"] = [int(str(streets_profile_raw.loc[i, "Uhrzeit"])[:2]) for i in
-                                       streets_profile_raw.index]
-        streets_profile_raw = streets_profile_raw.groupby(["Datum", "Hour"]).sum()
-        streets_profile_raw.iloc[0] = streets_profile_raw.iloc[0] + streets_profile_raw.iloc[-1]
-        streets_profile_raw = streets_profile_raw.iloc[:-1]
-        # Reshape the hourly load in one vector, where the rows are the hours of the year
-        streets_profile = streets_profile_raw.values
-        # Normalize the load over the year, ei. integral over the year of all loads for each individual sector is 1
-        profiles["STR"] = streets_profile / streets_profile.sum()
-
-    timecheck("End")
-    return profiles
 
 
 def clean_load_data_ENTSOE(paths, param):
