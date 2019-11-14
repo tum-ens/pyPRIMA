@@ -20,8 +20,8 @@ import rasterio
 from rasterio import MemoryFile, mask, windows
 # from scipy.ndimage import convolve
 # import osr
+import re
 import json
-
 import warnings
 from warnings import warn
 
