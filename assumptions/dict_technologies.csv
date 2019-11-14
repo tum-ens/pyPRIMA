@@ -1,0 +1,70 @@
+IRENA;FRESNA;Model names
+Bagasse;;Bioenergy
+Biogas;;Bioenergy
+Concentrated solar power;;Solar
+Geothermal;;Geothermal
+Liquid biofuels;;Bioenergy
+Marine;;
+Offshore wind energy;;WindOff
+Onshore wind energy;;WindOn
+Other solid biofuels;;Bioenergy
+Pumped storage;;PumSt
+Renewable hydropower;;Hydro
+Renewable municipal waste;;Bioenergy
+Solar photovoltaic;;Solar
+;(Bioenergy,NaN,CHP);
+;(Bioenergy,NaN,PP);
+;(Bioenergy,Pv,PP);
+;(Bioenergy,Steam Turbine,CHP);
+;(Bioenergy,Steam Turbine,PP);
+;(Geothermal,NaN,PP);Geothermal
+;(Hard Coal,CCGT,CHP);Coal
+;(Hard Coal,CCGT,PP);Coal
+;(Hard Coal,NaN,CHP);Coal
+;(Hard Coal,NaN,PP);Coal
+;(Hard Coal,Steam Turbine,CHP);Coal
+;(Hard Coal,Steam Turbine,PP);Coal
+;(Hydro,NaN,PP);
+;(Hydro,Pumped Storage,PP);PumSt
+;(Hydro,Pumped Storage,Store);PumSt
+;(Hydro,Pumped Storage With Natural Inflow,Store);PumSt
+;(Hydro,Pv,PP);
+;(Hydro,Reservoir,PP);
+;(Hydro,Run-Of-River,PP);
+;(Lignite,NaN,CHP);Lignite
+;(Lignite,NaN,PP);Lignite
+;(Lignite,Steam Turbine,CHP);Lignite
+;(Lignite,Steam Turbine,PP);Lignite
+;(Natural Gas,CCGT,CHP);Gas
+;(Natural Gas,CCGT,PP);Gas
+;(Natural Gas,CCGT, Thermal,PP);Gas
+;(Natural Gas,Caes,PP);
+;(Natural Gas,Gas Engines,CHP);Gas
+;(Natural Gas,NaN,CHP);Gas
+;(Natural Gas,NaN,PP);Gas
+;(Natural Gas,OCGT,CHP);Gas
+;(Natural Gas,OCGT,PP);Gas
+;(Natural Gas,Pv,PP);Gas
+;(Natural Gas,Steam Turbine,CHP);Gas
+;(Natural Gas,Steam Turbine,PP);Gas
+;(Natural Gas,Storage Technologies,Store);
+;(Nuclear,NaN,PP);Nuclear
+;(Nuclear,Steam Turbine,PP);Nuclear
+;(Oil,CCGT,PP);OilOther
+;(Oil,Gas Turbine,PP);OilOther
+;(Oil,NaN,PP);OilOther
+;(Oil,OCGT,CHP);OilOther
+;(Oil,OCGT,PP);OilOther
+;(Oil,Steam Turbine,CHP);OilOther
+;(Oil,Steam Turbine,PP);OilOther
+;(Other,NaN,PP);OilOther
+;(Other,Steam Turbine,CHP);OilOther
+;(Other,Steam Turbine,PP);OilOther
+;(Solar,NaN,PP);
+;(Waste,NaN,CHP);
+;(Waste,NaN,PP);
+;(Waste,Steam Turbine,CHP);
+;(Waste,Steam Turbine,PP);
+;(Wind,NaN,PP);
+;(Wind,Offshore,PP);
+;(Wind,Reservoir,PP);

@@ -157,39 +157,6 @@ def grid_parameters(param):
     param["grid"] = {
         "quality": {"voltage": 1, "wires": 0, "cables": 0.5, "frequency": 0},
         "default": {"voltage": 220000, "wires": 1, "cables": 3, "frequency": 50},
-        # # from literature (see CITAVI files: "References for Reactances and SILVersion6")
-        # "specific_reactance": {
-        # 110: 0.39,  # in Ohm/km
-        # 220: 0.3,
-        # 345: 0.3058,
-        # # 380: 0.25, inconsistent
-        # 500: 0.2708,
-        # # 765: 0.2741, inconsistent
-        # 1000: 0.2433,  # upper bound
-        # },
-        # # probably same sources? Or a St. Clair's curve found somewhere...
-        # "loadability": {
-        # 80: 3,  # dimensionless
-        # 100: 2.75,
-        # 150: 2.5,
-        # 200: 2,
-        # 250: 1.75,
-        # 300: 1.5,
-        # 350: 1.37,
-        # 400: 1.25,
-        # 450: 1.12,
-        # 500: 1,
-        # 550: 0.9,
-        # 600: 0.85,
-        # 650: 0.8,
-        # 700: 0.77,
-        # 1000: 0.6,  # upper bound
-        # },
-        # # dummy values??
-        # "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736, 1000: 6312},  # in MW
-        # "efficiency": {"AC_OHL": 0.92, "AC_CAB": 0.90, "DC_OHL": 0.95, "DC_CAB": 0.95},  # efficiency / 1000 km
-        # "wacc": 0.07,
-        # "depreciation": 50,
     }
 
     return param
@@ -241,22 +208,27 @@ def global_maps_input_paths(paths):
 def assumption_paths(paths):
     """
     """
-    global root
     global fs
 
-    paths["assumptions_landuse"] = root + "00 Assumptions" + fs + "assumptions_landuse.csv"
-    paths["assumptions_flows"] = root + "00 Assumptions" + fs + "assumptions_flows.csv"
-    paths["assumptions_processes"] = root + "00 Assumptions" + fs + "assumptions_processes.csv"
-    paths["assumptions_storage"] = root + "00 Assumptions" + fs + "assumptions_storage.csv"
-    paths["assumptions_commodities"] = root + "00 Assumptions" + fs + "assumptions_commodities.csv"
-    paths["assumptions_transmission"] = root + "00 Assumptions" + fs + "assumptions_transmission.csv"
-    paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
-    paths["dict_daytype"] = root + "00 Assumptions" + fs + "dict_day_type.csv"
-    paths["dict_sectors"] = root + "00 Assumptions" + fs + "dict_sectors.csv"
-    paths["dict_countries"] = root + "00 Assumptions" + fs + "dict_countries.csv"
-    paths["dict_line_voltage"] = root + "00 Assumptions" + fs + "dict_line_voltage.csv"
-    paths["dict_lines_costs"] = root + "00 Assumptions" + fs + "dict_lines_costs.csv"
-    paths["dict_technologies"] = root + "00 Assumptions" + fs + "dict_technologies.csv"
+    current_folder = os.path.dirname(os.path.abspath(__file__))
+    PathTemp = str(Path(current_folder).parent)
+    if PathTemp[-1] != fs:
+        PathTemp = PathTemp + fs
+    PathTemp = PathTemp + "assumptions"
+    
+    paths["assumptions_landuse"] = PathTemp + fs + "assumptions_landuse.csv"
+    paths["assumptions_flows"] = PathTemp + fs + "assumptions_flows.csv"
+    paths["assumptions_processes"] = PathTemp + fs + "assumptions_processes.csv"
+    paths["assumptions_storage"] = PathTemp + fs + "assumptions_storage.csv"
+    paths["assumptions_commodities"] = PathTemp + fs + "assumptions_commodities.csv"
+    paths["assumptions_transmission"] = PathTemp + fs + "assumptions_transmission.csv"
+    paths["dict_season"] = PathTemp + fs + "dict_season_north.csv"
+    paths["dict_daytype"] = PathTemp + fs + "dict_day_type.csv"
+    paths["dict_sectors"] = PathTemp + fs + "dict_sectors.csv"
+    paths["dict_countries"] = PathTemp + fs + "dict_countries.csv"
+    paths["dict_line_voltage"] = PathTemp + fs + "dict_line_voltage.csv"
+    paths["dict_lines_costs"] = PathTemp + fs + "dict_lines_costs.csv"
+    paths["dict_technologies"] = PathTemp + fs + "dict_technologies.csv"
 
     return paths
 
