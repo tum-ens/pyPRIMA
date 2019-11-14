@@ -160,28 +160,6 @@ def calc_region(region, Crd_reg, res_desired, GeoRef):
     return A_region
 
 
-# def ind_global(Crd, res_desired):
-# """
-# This function converts longitude and latitude coordinates into indices on a global data scope, where the origin is at (-90, -180).
-
-# :param Crd: Coordinates to be converted into indices.
-# :type Crd: numpy array
-# :param res_desired: Desired resolution in the vertical and horizontal dimensions.
-# :type res_desired: list
-
-# :return Ind: Indices on a global data scope.
-# :rtype: numpy array
-# """
-# if len(Crd.shape) == 1:
-# Crd = Crd[np.newaxis]
-# Ind = np.array([np.round((90 - Crd[:, 0]) / res_desired[0]) + 1,
-# np.round((180 + Crd[:, 1]) / res_desired[1]),
-# np.round((90 - Crd[:, 2]) / res_desired[0]),
-# np.round((180 + Crd[:, 3]) / res_desired[1]) + 1])
-# Ind = np.transpose(Ind.astype(int))
-# return Ind
-
-
 def intersection_subregions_countries(paths, param):
     """
     This function reads two geodataframes, and creates a third one that is made of their intersection. The features
@@ -234,23 +212,6 @@ def intersection_subregions_countries(paths, param):
         ["spatial_scope", "Countries", "subregions"],
     )
     return intersection
-
-
-# def bbox_to_pixel_offsets(gt, bbox):
-# originX = gt[0]
-# originY = gt[3]
-# pixel_width = gt[1]
-# pixel_height = gt[5]
-# x1 = int((bbox[0] - originX) / pixel_width)
-# x2 = int((bbox[1] - originX) / pixel_width) + 1
-
-# y1 = int((bbox[3] - originY) / pixel_height)
-# y2 = int((bbox[2] - originY) / pixel_height) + 1
-
-# xsize = x2 - x1
-# ysize = y2 - y1
-
-# return x1, y1, xsize, ysize
 
 
 def zonal_stats(regions_shp, raster_dict, param):
@@ -453,205 +414,17 @@ def get_sites(points_shp, param):
     """
     """
     regions = param["regions_sub"]
-    
+
     # Spatial join
     points_shp = points_shp.to_crs(regions.crs)
-    located = gpd.sjoin(points_shp, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
-    located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
+    located = gpd.sjoin(points_shp, regions[["NAME_SHORT", "geometry"]], how="left", op="intersects")
+    located.rename(columns={"NAME_SHORT": "Site"}, inplace=True)
     located.drop(columns=["index_right"], inplace=True)
-    
+
     # Remove duplicates that lie in the border between two regions
     located = located.drop_duplicates(subset=["Name"], inplace=False)
-    
+
     # Remove features that do not lie in any subregion
     located.dropna(axis=0, subset=["Site"], inplace=True)
-    
+
     return located
-
-# # ## Functions:
-
-# # https://pcjericks.github.io/py-gdalogr-cookbook/raster_layers.html#clip-a-geotiff-with-shapefile
-
-# def world2Pixel(geoMatrix, x, y):
-# """
-# Uses a gdal geomatrix (gdal.GetGeoTransform()) to calculate
-# the pixel location of a geospatial coordinate
-# """
-# ulX = geoMatrix[0]
-# ulY = geoMatrix[3]
-# xDist = geoMatrix[1]
-# yDist = geoMatrix[5]
-# rtnX = geoMatrix[2]
-# rtnY = geoMatrix[4]
-# pixel = int((x - ulX) / xDist)
-# line = int((ulY - y) / xDist)
-# return (pixel, line)
-
-
-# def rasclip(raster_path, shapefile_path, counter):
-# # Load the source data as a gdalnumeric array
-# srcArray = gdalnumeric.LoadFile(raster_path)
-
-# # Also load as a gdal image to get geotransform
-# # (world file) info
-# srcImage = gdal.Open(raster_path)
-# geoTrans = srcImage.GetGeoTransform()
-
-# # Create an OGR layer from a boundary shapefile
-# shapef = ogr.Open(shapefile_path)
-# lyr = shapef.GetLayer(os.path.split(os.path.splitext(shapefile_path)[0])[1])
-
-# # Filter based on FID
-# lyr.SetAttributeFilter("FID = {}".format(counter))
-# poly = lyr.GetNextFeature()
-
-# # Convert the polygon extent to image pixel coordinates
-# minX, maxX, minY, maxY = poly.GetGeometryRef().GetEnvelope()
-# ulX, ulY = world2Pixel(geoTrans, minX, maxY)
-# lrX, lrY = world2Pixel(geoTrans, maxX, minY)
-
-# # Calculate the pixel size of the new image
-# pxWidth = int(lrX - ulX)
-# pxHeight = int(lrY - ulY)
-
-# clip = srcArray[ulY:lrY, ulX:lrX]
-
-# # Create pixel offset to pass to new image Projection info
-# xoffset = ulX
-# yoffset = ulY
-# # print("Xoffset, Yoffset = ( %f, %f )" % ( xoffset, yoffset ))
-
-# # Create a second (modified) layer
-# outdriver = ogr.GetDriverByName('MEMORY')
-# source = outdriver.CreateDataSource('memData')
-# # outdriver = ogr.GetDriverByName('ESRI Shapefile')
-# # source = outdriver.CreateDataSource(mypath+'00 Inputs/maps/dummy.shp')
-# lyr2 = source.CopyLayer(lyr, 'dummy', ['OVERWRITE=YES'])
-# featureDefn = lyr2.GetLayerDefn()
-# # create a new ogr geometry
-# geom = poly.GetGeometryRef().Buffer(-1 / 240)
-# # write the new feature
-# newFeature = ogr.Feature(featureDefn)
-# newFeature.SetGeometryDirectly(geom)
-# lyr2.CreateFeature(newFeature)
-# # here you can place layer.SyncToDisk() if you want
-# newFeature.Destroy()
-# # lyr2 = source.CopyLayer(lyr,'dummy',['OVERWRITE=YES'])
-# lyr2.ResetReading()
-# poly_old = lyr2.GetNextFeature()
-# lyr2.DeleteFeature(poly_old.GetFID())
-
-# # Create memory target raster
-# target_ds = gdal.GetDriverByName('MEM').Create('', srcImage.RasterXSize, srcImage.RasterYSize, 1, gdal.GDT_Byte)
-# target_ds.SetGeoTransform(geoTrans)
-# target_ds.SetProjection(srcImage.GetProjection())
-
-# # Rasterize zone polygon to raster
-# gdal.RasterizeLayer(target_ds, [1], lyr2, None, None, [1], ['ALL_TOUCHED=FALSE'])
-# mask = target_ds.ReadAsArray()
-# mask = mask[ulY:lrY, ulX:lrX]
-
-# # Clip the image using the mask
-# clip = np.multiply(clip, mask).astype(gdalnumeric.float64)
-# return poly.GetField('NAME_SHORT'), xoffset, yoffset, clip
-
-
-# def map_grid_plants(x, y, paths):
-# outSHPfn = paths["map_grid_plants"]
-
-# # Create the output shapefile
-# shpDriver = ogr.GetDriverByName("ESRI Shapefile")
-# if os.path.exists(outSHPfn):
-# shpDriver.DeleteDataSource(outSHPfn)
-# outDataSource = shpDriver.CreateDataSource(outSHPfn)
-# outLayer = outDataSource.CreateLayer(outSHPfn, geom_type=ogr.wkbPoint)
-
-# # create point geometry
-# point = ogr.Geometry(ogr.wkbPoint)
-# # Create the feature
-# featureDefn = outLayer.GetLayerDefn()
-
-# # Set values
-# for i in range(0, len(x)):
-# point.AddPoint(x[i], y[i])
-# outFeature = ogr.Feature(featureDefn)
-# outFeature.SetGeometry(point)
-# outLayer.CreateFeature(outFeature)
-# outFeature = None
-
-
-# def closest_polygon(geom, polygons):
-# """Returns polygon from polygons that is closest to geom.
-
-# Args:
-# geom: shapely geometry (used here: a point)
-# polygons: GeoDataFrame of non-overlapping (!) polygons
-
-# Returns:
-# The polygon from 'polygons' which is closest to 'geom'.
-# """
-# dist = np.inf
-# for poly in polygons.index:
-# if polygons.loc[poly].geometry.convex_hull.exterior.distance(geom) < dist:
-# dist = polygons.loc[poly].geometry.convex_hull.exterior.distance(geom)
-# closest = polygons.loc[poly]
-# return closest
-
-
-# def containing_polygon(geom, polygons):
-# """Returns polygon from polygons that contains geom.
-
-# Args:
-# geom: shapely geometry (used here: a point)
-# polygons: GeoDataFrame of non-overlapping (!) polygons
-
-# Returns:
-# The polygon from 'polygons' which contains (in
-# the way shapely implements it) 'geom'. Throws
-# an error if more than one polygon contain 'geom'.
-# Returns 'None' if no polygon contains it.
-# """
-# try:
-# containing_polygons = polygons[polygons.contains(geom)]
-# except:
-# containing_polygons = []
-# if len(containing_polygons) == 0:
-# return closest_polygon(geom, polygons)
-# if len(containing_polygons) > 1:
-# print(containing_polygons)
-# # raise ValueError('geom lies in more than one polygon!')
-# return containing_polygons.iloc[0]
-
-
-# def array2raster(newRasterfn, rasterOrigin, pixelWidth, pixelHeight, array):
-# """
-# Saves array to geotiff raster format based on EPSG 4326.
-
-# :param newRasterfn: Output path of the raster.
-# :type newRasterfn: string
-# :param rasterOrigin: Latitude and longitude of the Northwestern corner of the raster.
-# :type rasterOrigin: list of two floats
-# :param pixelWidth:  Pixel width (might be negative).
-# :type pixelWidth: integer
-# :param pixelHeight: Pixel height (might be negative).
-# :type pixelHeight: integer
-# :param array: Array to be converted into a raster.
-# :type array: numpy array
-# :return: The raster file will be saved in the desired path *newRasterfn*.
-# :rtype: None
-# """
-# cols = array.shape[1]
-# rows = array.shape[0]
-# originX = rasterOrigin[0]
-# originY = rasterOrigin[1]
-
-# driver = gdal.GetDriverByName('GTiff')
-# outRaster = driver.Create(newRasterfn, cols, rows, 1, gdal.GDT_Float64, ['COMPRESS=PACKBITS'])
-# outRaster.SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
-# outRasterSRS = osr.SpatialReference()
-# outRasterSRS.ImportFromEPSG(4326)
-# outRaster.SetProjection(outRasterSRS.ExportToWkt())
-# outband = outRaster.GetRasterBand(1)
-# outband.WriteArray(np.flipud(array))
-# outband.FlushCache()
-# outband = None

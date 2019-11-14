@@ -98,13 +98,14 @@ def scope_paths_and_parameters(paths, param):
     param["subregions_name"] = "Geothermal_WGC"  # Name tag of the subregions
 
     # Year
-    param["year"] = 2015 # Data
-    param["model_year"] = 2015 # Model
+    param["year"] = 2015  # Data
+    param["model_year"] = 2015  # Model
 
     # Technologies
-    param["technology"] = {"Storage": ["Battery", "PumSt"],
-                           "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOff", "WindOn"],
-                           }
+    param["technology"] = {
+        "Storage": ["Battery", "PumSt"],
+        "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOff", "WindOn"],
+    }
 
     return paths, param
 
@@ -130,17 +131,7 @@ def load_parameters(param):
     """
     """
 
-    param["load"] = {
-        "sectors": ["RES", "COM", "IND", "AGR"],
-        "sectors_eurostat": {
-            "Residential": "RES",
-            "Agriculture/Forestry": "AGR",
-            "Services": "COM",
-            "Non-specified (Other)": "COM",
-            "Final Energy Consumption - Industry": "IND",
-        },
-        "default_sec_shares": "DEU",
-    }
+    param["load"] = {"default_sec_shares": "DEU"}
     return param
 
 
@@ -154,10 +145,7 @@ def renewable_time_series_parameters(param):
     :rtype: dict
     """
 
-    param["ren_potential"] = {"WindOn": ["all", "mid"],  # "Technology":[list of modes]
-                              "WindOff": ["all"],
-                              "PV": ["all"],
-                              "CSP": ["all"]}
+    param["ren_potential"] = {"WindOn": ["all", "mid"], "WindOff": ["all"], "PV": ["all"], "CSP": ["all"]}  # "Technology":[list of modes]
 
     return param
 
@@ -169,39 +157,39 @@ def grid_parameters(param):
     param["grid"] = {
         "quality": {"voltage": 1, "wires": 0, "cables": 0.5, "frequency": 0},
         "default": {"voltage": 220000, "wires": 1, "cables": 3, "frequency": 50},
-        # from literature (see CITAVI files: "References for Reactances and SILVersion6")
-        "specific_reactance": {
-            110: 0.39,  # in Ohm/km
-            220: 0.3,
-            345: 0.3058,
-            # 380: 0.25, inconsistent
-            500: 0.2708,
-            # 765: 0.2741, inconsistent
-            1000: 0.2433,  # upper bound
-        },
-        # probably same sources? Or a St. Clair's curve found somewhere...
-        "loadability": {
-            80: 3,  # dimensionless
-            100: 2.75,
-            150: 2.5,
-            200: 2,
-            250: 1.75,
-            300: 1.5,
-            350: 1.37,
-            400: 1.25,
-            450: 1.12,
-            500: 1,
-            550: 0.9,
-            600: 0.85,
-            650: 0.8,
-            700: 0.77,
-            1000: 0.6,  # upper bound
-        },
-        # dummy values??
-        "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736, 1000: 6312},  # in MW
-        "efficiency": {"AC_OHL": 0.92, "AC_CAB": 0.90, "DC_OHL": 0.95, "DC_CAB": 0.95},  # efficiency / 1000 km
-        "wacc": 0.07,
-        "depreciation": 50,
+        # # from literature (see CITAVI files: "References for Reactances and SILVersion6")
+        # "specific_reactance": {
+        # 110: 0.39,  # in Ohm/km
+        # 220: 0.3,
+        # 345: 0.3058,
+        # # 380: 0.25, inconsistent
+        # 500: 0.2708,
+        # # 765: 0.2741, inconsistent
+        # 1000: 0.2433,  # upper bound
+        # },
+        # # probably same sources? Or a St. Clair's curve found somewhere...
+        # "loadability": {
+        # 80: 3,  # dimensionless
+        # 100: 2.75,
+        # 150: 2.5,
+        # 200: 2,
+        # 250: 1.75,
+        # 300: 1.5,
+        # 350: 1.37,
+        # 400: 1.25,
+        # 450: 1.12,
+        # 500: 1,
+        # 550: 0.9,
+        # 600: 0.85,
+        # 650: 0.8,
+        # 700: 0.77,
+        # 1000: 0.6,  # upper bound
+        # },
+        # # dummy values??
+        # "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736, 1000: 6312},  # in MW
+        # "efficiency": {"AC_OHL": 0.92, "AC_CAB": 0.90, "DC_OHL": 0.95, "DC_CAB": 0.95},  # efficiency / 1000 km
+        # "wacc": 0.07,
+        # "depreciation": 50,
     }
 
     return param
@@ -261,9 +249,12 @@ def assumption_paths(paths):
     paths["assumptions_processes"] = root + "00 Assumptions" + fs + "assumptions_processes.csv"
     paths["assumptions_storage"] = root + "00 Assumptions" + fs + "assumptions_storage.csv"
     paths["assumptions_commodities"] = root + "00 Assumptions" + fs + "assumptions_commodities.csv"
+    paths["assumptions_transmission"] = root + "00 Assumptions" + fs + "assumptions_transmission.csv"
     paths["dict_season"] = root + "00 Assumptions" + fs + "dict_season_north.csv"
     paths["dict_daytype"] = root + "00 Assumptions" + fs + "dict_day_type.csv"
+    paths["dict_sectors"] = root + "00 Assumptions" + fs + "dict_sectors.csv"
     paths["dict_countries"] = root + "00 Assumptions" + fs + "dict_countries.csv"
+    paths["dict_line_voltage"] = root + "00 Assumptions" + fs + "dict_line_voltage.csv"
     paths["dict_lines_costs"] = root + "00 Assumptions" + fs + "dict_lines_costs.csv"
     paths["dict_technologies"] = root + "00 Assumptions" + fs + "dict_technologies.csv"
 
@@ -316,7 +307,7 @@ def renewable_time_series_paths(paths, param):
         "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
         "WindOff": PathTemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
         "PV": PathTemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
-        "CSP": PathTemp + ""
+        "CSP": PathTemp + "",
     }
 
     return paths
@@ -598,45 +589,6 @@ def local_maps_paths(paths, param):
 # "CO2 budget": 'inf'
 # }
 # param["urbs_global"] = urbs_global
-
-# # Distribution_renewables
-
-
-# dist_ren = {"p_landuse": {0: 0, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2, 6: 0.2, 7: 0.2, 8: 0.1, 9: 0.1, 10: 0.5, 11: 0,
-# 12: 1, 13: 0, 14: 1, 15: 0, 16: 0},
-# "units": {'Solar': 1, 'WindOn': 2.5, 'WindOff': 2.5, 'Biomass': 5, 'Biogas': 5, 'Liquid biofuels': 5,
-# 'Hydro_Small': 0.2, 'Hydro_Large': 200},  # MW
-# "randomness": 0.4,
-# "cap_lo": 0,
-# "cap_up": np.inf,
-# "drop_params": ['Site', 'inst-cap', 'cap_lo', 'cap-up', 'year']
-# }
-
-# param["dist_ren"] = dist_ren
-
-# # Clean Process and Storage data, Process, and Storage
-# pro_sto = {"year_ref": 2015,
-# "proc_dict": {'Hard Coal': 'Coal',
-# 'Hydro': 'Hydro_Small',
-# # Later, we will define Hydro_Large as power plants with capacity > 30MW
-# 'Nuclear': 'Nuclear',
-# 'Natural Gas': 'Gas',
-# 'Lignite': 'Lignite',
-# 'Oil': 'Oil',
-# 'Bioenergy': 'Biomass',
-# 'Other': 'Waste',
-# 'Waste': 'Waste',
-# 'Wind': 'WindOn',
-# 'Geothermal': 'Geothermal',
-# 'Solar': 'Solar'},
-# "storage": ['PumSt', 'Battery'],
-# "renewable_powerplants": ['Hydro_Large', 'Hydro_Small', 'WindOn', 'WindOff',
-# 'Solar', 'Biomass', 'Biogas', 'Liquid biofuels'],
-# "agg_thres": 20,
-# "wacc": 0.07
-# }
-
-# param["pro_sto"] = pro_sto
 
 
 # ##################################
