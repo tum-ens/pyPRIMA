@@ -55,11 +55,8 @@ def generate_sites_from_shapefile(paths, param):
         A_sea = np.flipud(A_sea).astype(int)
 
     status = 0
+    display_progress("Generating sites ", (nRegions, status))
     for reg in range(0, nRegions):
-        # Display Progress
-        status += 1
-        display_progress("Generating sites ", (nRegions, status))
-
         # Compute region_mask
         A_region_extended = calc_region(regions_shp.loc[reg], Crd_all, res_desired, GeoRef)
 
@@ -72,6 +69,10 @@ def generate_sites_from_shapefile(paths, param):
         # Calculate longitude and latitude of centroids
         regions.loc[reg, "Longitude"] = regions_shp.geometry.centroid.loc[reg].x
         regions.loc[reg, "Latitude"] = regions_shp.geometry.centroid.loc[reg].y
+
+        # Display Progress
+        status += 1
+        display_progress("Generating sites ", (nRegions, status))
 
     # Calculate area using Lambert Cylindrical Equal Area EPSG:9835
     regions_shp = regions_shp.to_crs("+proj=cea")

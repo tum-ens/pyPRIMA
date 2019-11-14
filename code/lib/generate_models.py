@@ -16,25 +16,26 @@ def generate_urbs_model(paths, param):
         sites = pd.read_csv(paths["sites_sub"], sep=";", decimal=",")
         sites = sites[["Name", "Area_m2"]].rename(columns={"Area_m2": "area"})
         urbs_model["Site"] = sites
+        del sites
 
     # Read electricity demand
     if os.path.exists(paths["load_regions"]):
         demand = pd.read_csv(paths["load_regions"], sep=";", decimal=",", index_col=0)
         demand.columns = demand.columns + ".Elec"
-        demand.index.name = "t"
         demand.index = range(1, 8761)
         demand.loc[0] = 0
         demand.sort_index(inplace=True)
+        demand.insert(0, "t", demand.index)
         urbs_model["Demand"] = demand
+        del demand
 
     # Read intermittent supply time series
     if os.path.exists(paths["potential_ren"]):
         suplm = pd.read_csv(paths["potential_ren"], sep=";", decimal=",", index_col=0)
-        suplm.index.name = "t"
         suplm.index = range(1, 8761)
+        suplm.insert(0, "t", suplm.index)
         urbs_model["Suplm"] = suplm
-
-
+        del suplm
 
     # # List all files present in urbs folder
     # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
@@ -79,11 +80,13 @@ def generate_urbs_model(paths, param):
     with pd.ExcelWriter(paths["urbs_model"], mode="w") as writer:
         # populate excel file with available sheets
         status = 0
-        for sheet in urbs_model.keys():
-            display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
-            urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
-            status += 1
         display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
+        for sheet in urbs_model.keys():
+            urbs_model[sheet].to_excel(writer, sheet_name=sheet, index=False, header=True)
+
+            # Display Progress bar
+            status += 1
+            display_progress("Writing to excel file in progress: ", (len(urbs_model.keys()), status))
     print("File saved: " + paths["urbs_model"])
 
     timecheck("End")
@@ -146,6 +149,20 @@ def generate_evrys_model(paths, param):
         ].rename(columns={"Name": "Site", "Latitude": "lat", "Longitude": "long"})
         evrys_model["Site"] = sites
 
+    # Read intermittent supply time series
+    if os.path.exists(paths["potential_ren"]):
+        # Format to evrys input format
+        raw_data = pd.read_csv(paths["potential_ren"], sep=";", decimal=",", index_col=0)
+        suplm = pd.DataFrame(data=None, index=range(0, sum(raw_data.count())), columns=["t", "sit", "co", "value"])
+        c = 0
+        display_progress("Formating suplm -", (sum(raw_data.count()), c))
+        for index, row in raw_data.iterrows():
+            for label, value in row.iteritems():
+                sit, co = str(label).split(".")
+                suplm.loc[c, ["t", "sit", "co", "value"]] = [index, sit, co, value]
+                c+=1
+                display_progress("Formating suplm -", (sum(raw_data.count()), c))
+
     # # List all files present in urbs folder
     # evrys_paths = glob.glob(paths["evrys"] + '*.csv')
     # # create empty dictionary
@@ -164,11 +181,14 @@ def generate_evrys_model(paths, param):
     # 'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
 
     # Create ExcelWriter
-    with ExcelWriter(paths["evrys_model"], mode="w") as writer:
+    with pd.ExcelWriter(paths["evrys_model"], mode="w") as writer:
         # populate excel file with available sheets
         status = 0
+        display_progress("Writing to excel file in progress: ", (len(evrys_model.keys()), status))
         for sheet in evrys_model.keys():
             evrys_model[sheet].to_excel(writer, sheet_name=sheet, index=False)
+
+            # Display Progress Bar
             status += 1
             display_progress("Writing to excel file in progress: ", (len(evrys_model.keys()), status))
 

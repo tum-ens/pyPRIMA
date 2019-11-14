@@ -696,12 +696,13 @@ def clean_GridKit_Europe(paths, param):
         w.field("Type", "C", 6, 0)
         count = len(grid_grouped.index)
         status = 0
+        display_progress("Writing grid to shapefile: ", (count, status))
         for i in grid_grouped.index:
-            display_progress("Writing grid to shapefile: ", (count, status))
             w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float),
                      grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
             w.record(grid_grouped.loc[i, "l_id"], grid_grouped.loc[i, "Capacity_MVA"], grid_grouped.loc[i, "tr_type"])
             status += 1
+            display_progress("Writing grid to shapefile: ", (count, status))
     create_json(paths["grid_shp"], param, ["grid"], paths,
                 ["transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"])
     print("File saved: " + paths["grid_shp"])
