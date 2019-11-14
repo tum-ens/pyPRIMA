@@ -34,9 +34,9 @@ In the folder ``code``, you will find multiple files:
 +-------------------------------------+---------------------------------------------------------------------------+
 | lib\input_maps.py                   | used to generate input maps for the scope.                                |
 +-------------------------------------+---------------------------------------------------------------------------+
-| lib\generate-models.py              | Missing                                                                   |
+| lib\generate-models.py              | used to generate the model files from intermediate files.                 |
 +-------------------------------------+---------------------------------------------------------------------------+
-| lib\generate_intermediate_files.py  | Missing                                                                   |
+| lib\generate_intermediate_files.py  | used to generate intermediate files from raw data.                        |
 +-------------------------------------+---------------------------------------------------------------------------+
 | lib\spatial_functions.py            | contains helping functions related to maps, coordinates and indices.      |
 +-------------------------------------+---------------------------------------------------------------------------+
@@ -67,6 +67,45 @@ runme.py
 
 Recommended input sources
 -------------------------
+Load time series for countries
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sectoral load profiles
+^^^^^^^^^^^^^^^^^^^^^^
+
+Sector shares (demand)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Power plants and storage units
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The powerplantmatching package within `FRESNA <https://github.com/FRESNA/powerplantmatching>`_ extracts a standardized power plant database that 
+combines several other databases covering Europe.
+In this repository, all non-renewable power plants, all storage units, and some renewable power plants (e.g. geothermal) are obtained from this database.
+Since the capacities for most renewable technologies are inaccurate, they are obtained from another source (see below).
+
+Renewable installed capacities
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Renewable electricity capacity and generation statistics are obtained from the Query Tool of `IRENA <https://www.irena.org/Statistics/View-Data-by-Topic/Capacity-and-Generation/Query-Tool>`_.
+The user has to create a query that includes all countries (but no groups of countries, such as continents), all technologies (but no groups of technology)
+for a particular year and name the file ``IRENA_RE_electricity_statistics_allcountries_alltech_YEAR.csv``.
+This dataset has a global coverage, however it does not provide the exact location of each project. The code includes an algorithm to distribute the
+renewable capacities spatially.
+
+Renewable potential maps
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
+Transmission lines
+^^^^^^^^^^^^^^^^^^
+High-voltage power grid data for Europe and North America can be obtained from `GridKit <https://zenodo.org/record/47317>`_, which used
+OpenStreetMap as a primary data source.
+In this repository, we only use the file with the lines (links.csv).
+In general, the minimum requirements for any data source are that the coordinates for the line vertices and the voltage are provided.
+
+
+Other assumptions
+^^^^^^^^^^^^^^^^^^
 
 
 Recommended workflow

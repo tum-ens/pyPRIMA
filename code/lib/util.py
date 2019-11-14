@@ -1,6 +1,5 @@
 # from osgeo import gdal, ogr, gdalnumeric
 import pandas as pd
-import re
 # from pandas import ExcelWriter
 # import fiona
 import geopandas as gpd
