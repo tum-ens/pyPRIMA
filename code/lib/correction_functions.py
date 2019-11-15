@@ -507,7 +507,6 @@ def clean_GridKit_Europe(paths, param):
     # Complete missing information
     grid_filled = grid_corrected.copy()
     grid_filled["length_m"] = grid_filled["length_m"].astype(float)
-
     grid_filled["x_ohmkm"] = assign_values_based_on_series(
         grid_filled["voltage"] / 1000, dict_line_voltage["specific_impedance_Ohm_per_km"].dropna().to_dict()
     )
@@ -627,9 +626,9 @@ def distribute_renewable_capacities_IRENA(paths, param):
     In the second part, it allocates coordinates for each unit, based on a potential raster map and on a random factor. This is done by calling the module
     :mod:`create_shapefiles_of_ren_power_plants` in :mod:`lib.spatial_functions`.
     
-    :param paths: Dictionary containing the paths to *IRENA_summary* and to *dict_technologies*, as well as otehr paths needed by :mod:`create_shapefiles_of_ren_power_plants`.
+    :param paths: Dictionary containing the paths to *IRENA_summary* and to *dict_technologies*, as well as other paths needed by :mod:`create_shapefiles_of_ren_power_plants`.
     :type paths: dict
-    :param param: Dictionary containing the dictionary of units' size for each technology, and other parameters needed by :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`.
+    :param param: Dictionary containing the dictionary of the size of units for each technology, and other parameters needed by :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`.
     :type param: dict
     
     :return: The submodules :mod:`clean_IRENA_summary` and :mod:`create_shapefiles_of_ren_power_plants`, which are called by this module, have outputs of their own.
