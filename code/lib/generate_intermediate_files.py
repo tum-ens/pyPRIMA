@@ -520,15 +520,26 @@ def generate_transmission(paths, param):
     df_completed["inst-cap"] = df_completed["cap-up-therm"]
     df_completed["cap-up"] = [max(df_completed.loc[ind, "inst-cap"], df_completed.loc[ind, "cap-up"]) for ind in df_completed.index]
     df_completed["idx"] = df_completed.index + 1
-    
+
     # Fix impedance for non existing lines, assuming a default voltage for the line
     dict_line_voltage = pd.read_csv(paths["dict_line_voltage"], header=0, sep=";", decimal=",", index_col=["voltage_kV"])
-    df_completed.loc[df_completed["impedance"].isna(), "impedance"] = assign_values_based_on_series(pd.Series(param["grid"]["default"]["voltage"]/1000), dict_line_voltage["specific_impedance_Ohm_per_km"].dropna().to_dict())[0] * df_completed.loc[df_completed["impedance"].isna(), "length"]
+    df_completed.loc[df_completed["impedance"].isna(), "impedance"] = (
+        assign_values_based_on_series(
+            pd.Series(param["grid"]["default"]["voltage"] / 1000), dict_line_voltage["specific_impedance_Ohm_per_km"].dropna().to_dict()
+        )[0]
+        * df_completed.loc[df_completed["impedance"].isna(), "length"]
+    )
 
     # Output
     df_completed.to_csv(paths["grid_completed"], sep=";", decimal=",", index=False)
     print("File saved: " + paths["grid_completed"])
-    create_json(paths["grid_completed"], param, ["grid"], paths, ["assumptions_transmission", "transmission_lines", "grid_cleaned", "subregions", "dict_line_voltage"])
+    create_json(
+        paths["grid_completed"],
+        param,
+        ["grid"],
+        paths,
+        ["assumptions_transmission", "transmission_lines", "grid_cleaned", "subregions", "dict_line_voltage"],
+    )
 
     timecheck("End")
 

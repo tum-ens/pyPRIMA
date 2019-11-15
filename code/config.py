@@ -215,7 +215,7 @@ def assumption_paths(paths):
     if PathTemp[-1] != fs:
         PathTemp = PathTemp + fs
     PathTemp = PathTemp + "assumptions"
-    
+
     paths["assumptions_landuse"] = PathTemp + fs + "assumptions_landuse.csv"
     paths["assumptions_flows"] = PathTemp + fs + "assumptions_flows.csv"
     paths["assumptions_processes"] = PathTemp + fs + "assumptions_processes.csv"
