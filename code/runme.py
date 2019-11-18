@@ -7,6 +7,11 @@ if __name__ == "__main__":
     paths, param = initialization()
 
     ## Clean raw data
+    # clean_residence_load_profile(paths, param)
+    # clean_commercial_load_profile(paths, param)
+    # clean_industry_load_profile(paths, param)
+    # clean_agriculture_load_profile(paths, param)
+    # clean_streetlight_load_profile(paths, param)
     # clean_GridKit_Europe(paths, param)
     # clean_sector_shares_Eurostat(paths, param)
     # clean_load_data_ENTSOE(paths, param)
@@ -18,6 +23,7 @@ if __name__ == "__main__":
     # generate_load_timeseries(paths, param)
     generate_transmission(paths, param)
     # generate_intermittent_supply_timeseries(paths, param)
+
     # generate_processes(paths, param)
     # generate_storage(paths, param)
     # generate_commodities(paths, param)

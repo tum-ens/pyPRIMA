@@ -23,13 +23,55 @@ from rasterio import MemoryFile, mask, windows
 
 # from scipy.ndimage import convolve
 # import osr
+import re
 import json
-
 import warnings
 from warnings import warn
 
 # gdal.PushErrorHandler('CPLQuietErrorHandler')
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+
+
+def get_sectoral_profiles(paths, param):
+    """
+    This function reads the raw standard load profiles, repeats them to obtain a full year, normalizes them so that the
+    sum is equal to 1, and stores the obtained load profile for each sector in the dataframe *profiles*.
+
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the *year* and load-related assumptions.
+    :type param: dict
+
+    :return profiles: The normalized load profiles for the sectors.
+    :rtype: pandas dataframe
+    """
+    timecheck("Start")
+    profiles_paths = paths["cleaned_profiles"]
+
+    # Prepare the dataframe for the yearly load per sector
+    profiles = pd.DataFrame(columns=param["load"]["sectors"])
+
+    # Residential load
+    if "RES" in param["load"]["sectors"]:
+        profiles["RES"] = pd.read_csv(profiles_paths["RES"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
+
+    # Industrial load
+    if "IND" in param["load"]["sectors"]:
+        profiles["IND"] = pd.read_csv(profiles_paths["IND"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
+
+    # Commercial load
+    if "COM" in param["load"]["sectors"]:
+        profiles["COM"] = pd.read_csv(profiles_paths["COM"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
+
+    # Agricultural load
+    if "AGR" in param["load"]["sectors"]:
+        profiles["AGR"] = pd.read_csv(profiles_paths["AGR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
+
+    # Street lights
+    if "STR" in param["load"]["sectors"]:
+        profiles["STR"] = pd.read_csv(profiles_paths["STR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
+    timecheck("End")
+    return profiles
 
 
 def timecheck(*args):
