@@ -39,15 +39,23 @@ from lib.util import *
 
 def clean_residential_load_profile(paths, param):
     """
-
-    :param paths:
-    :param param:
-    :return:
+    This function reads the raw standard load profiles, repeats them to obtain a full year, normalizes them so that the
+    sum is equal to 1, and stores the obtained load profile for each sector in the dataframe *profiles*.
+    
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the year of the data.
+    :type param: dict
+    
+    :return profiles: The normalized load profiles for the sectors.
+    :rtype: pandas dataframe
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["RES"])
     dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
     dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
+    list_sectors = list(pd.read_csv(paths["dict_sectors"], sep=";", decimal=",", index_col=["Model_sectors"]).index.dropna().unique())
+    profiles_paths = paths["profiles"]
 
     # Prepare the dataframe for the daily load
     start = datetime.datetime(param["year"], 1, 1)
@@ -266,7 +274,7 @@ def clean_load_data_ENTSOE(paths, param):
     
     :param paths: Dictionary containing the paths to the ENTSO-E input, to the dictionary of country names, and to the output.
     :type paths: dict
-    :param param: Dictionary containing information about the year.
+    :param param: Dictionary containing information about the year of the data.
     :type param: dict
     
     :return: The result is saved directly in a CSV file in the desired path, along with its corresponding metadata.
@@ -294,8 +302,7 @@ def clean_load_data_ENTSOE(paths, param):
     df_reshaped = pd.DataFrame(data, index=np.arange(data.shape[0]), columns=df_scaled["Country"].unique())
 
     # Rename countries
-    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["ENTSO-E"],
-                                 usecols=["ENTSO-E", "Countries shapefile"])
+    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["ENTSO-E"], usecols=["ENTSO-E", "Countries shapefile"])
     dict_countries = dict_countries.loc[dict_countries.index.dropna()]["Countries shapefile"].to_dict()
     dict_countries_old = dict_countries.copy()
     for k, v in dict_countries_old.items():
@@ -315,8 +322,7 @@ def clean_load_data_ENTSOE(paths, param):
     # Fill missing data by values from the day before, adjusted based on the trend of the previous five hours
     df_filled = df_grouped.copy()
     for i, j in np.argwhere(df_filled.values == 0):
-        df_filled.iloc[i, j] = df_filled.iloc[i - 5: i, j].sum() / df_filled.iloc[i - 5 - 24: i - 24, j].sum() * \
-                               df_filled.iloc[i - 24, j].sum()
+        df_filled.iloc[i, j] = df_filled.iloc[i - 5 : i, j].sum() / df_filled.iloc[i - 5 - 24 : i - 24, j].sum() * df_filled.iloc[i - 24, j].sum()
 
     df_filled.to_csv(paths["load_ts_clean"], index=False, sep=";", decimal=",")
     print("File saved: " + paths["load_ts_clean"])
@@ -332,7 +338,7 @@ def clean_sector_shares_Eurostat(paths, param):
     
     :param paths: Dictionary containing the paths to the Eurostat input, to the dictionary of country names, and to the output.
     :type paths: dict
-    :param param: Dictionary containing information about the year and load-related assumptions.
+    :param param: Dictionary containing information about the year of the data.
     :type param: dict
     
     :return: The result is saved directly in a CSV file in the desired path, along with its corresponding metadata.
@@ -349,22 +355,20 @@ def clean_sector_shares_Eurostat(paths, param):
     """
     timecheck("Start")
 
-    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["EUROSTAT"],
-                                 usecols=["EUROSTAT", "Countries shapefile"])
+    dict_countries = pd.read_csv(paths["dict_countries"], sep=";", decimal=",", index_col=["EUROSTAT"], usecols=["EUROSTAT", "Countries shapefile"])
     dict_countries = dict_countries.loc[dict_countries.index.dropna()]["Countries shapefile"].to_dict()
-    dict_sectors = param["load"]["sectors_eurostat"]
+    dict_sectors = pd.read_csv(paths["dict_sectors"], sep=";", decimal=",", index_col=["EUROSTAT"], usecols=["EUROSTAT", "Model_sectors"])
+    dict_sectors = dict_sectors.dropna()["Model_sectors"].to_dict()
 
     df_raw = pd.read_csv(
-        paths["sector_shares"], sep=",", decimal=".", index_col=["TIME", "GEO", "INDIC_NRG"],
-        usecols=["TIME", "GEO", "INDIC_NRG", "Value"]
+        paths["sector_shares"], sep=",", decimal=".", index_col=["TIME", "GEO", "INDIC_NRG"], usecols=["TIME", "GEO", "INDIC_NRG", "Value"]
     )
 
     # Filter the data
     filter_year = [param["year"]]
     filter_countries = list(dict_countries.keys())
-    filter_indices = list(param["load"]["sectors_eurostat"].keys())
-    filter_all = pd.MultiIndex.from_product([filter_year, filter_countries, filter_indices],
-                                            names=["Year", "Country", "Sector"])
+    filter_indices = list(dict_sectors.keys())
+    filter_all = pd.MultiIndex.from_product([filter_year, filter_countries, filter_indices], names=["Year", "Country", "Sector"])
     df_raw.index.names = ["Year", "Country", "Sector"]
     df_filtered = df_raw.loc[df_raw.index.isin(filter_all)]
 
@@ -392,8 +396,7 @@ def clean_sector_shares_Eurostat(paths, param):
     # Reshape
     df_reshaped = df_normalized.pivot(index="Country", columns="Sector", values="Value")
     df_reshaped.to_csv(paths["sector_shares_clean"], index=True, sep=";", decimal=",")
-    create_json(paths["sector_shares_clean"], param, ["region_name", "year", "load"], paths,
-                ["dict_countries", "sector_shares"])
+    create_json(paths["sector_shares_clean"], param, ["year"], paths, ["dict_countries", "sector_shares"])
     print("File saved: " + paths["sector_shares_clean"])
 
     timecheck("End")
@@ -506,28 +509,32 @@ def clean_processes_and_storage_FRESNA(paths, param):
     P_located = Process[~Process["Longitude"].isnull()].copy()
 
     # Prompt user for manual location input
-    ans = input("\nThere are " + str(len(P_missing)) + " power plants missing location data.\n"
-                                                       "Locations can be input manually, otherwise a random "
-                                                       "location within the country will be assigned.\n"
-                                                       "Would you like to input the locations manually? [y]/n ")
+    ans = input(
+        "\nThere are " + str(len(P_missing)) + " power plants missing location data.\n"
+        "Locations can be input manually, otherwise a random "
+        "location within the country will be assigned.\n"
+        "Would you like to input the locations manually? [y]/n "
+    )
     if ans in ["", "y", "[y]", "Y", "[Y]"]:
-        print("Please fill in the missing location data for the following power plants. \nskip: [s], location: "
-              "(Latitude, Longitude) with '.' as decimal delimiter")
-        for index, row in P_missing.sort_values(by=['Country', 'Name'], ascending=False).iterrows():
-            ans = input("\nCountry: " + row["Country"] + ", Name: " + row["Name"] + ", Fuel type:" +
-                        row["Fueltype"] + ", Missing coordinates:")
+        print(
+            "Please fill in the missing location data for the following power plants. \nskip: [s], location: "
+            "(Latitude, Longitude) with '.' as decimal delimiter"
+        )
+        for index, row in P_missing.sort_values(by=["Country", "Name"], ascending=False).iterrows():
+            ans = input("\nCountry: " + row["Country"] + ", Name: " + row["Name"] + ", Fuel type:" + row["Fueltype"] + ", Missing coordinates:")
             # Extract all number, decimal delimiter comma or point, negative or positive.
             loc = re.findall(r"[-+]?\d*\.\d+|[-+]?\d+", ans)
             if len(loc) == 2:
                 # Format as float
                 loc = list(map(float, loc))
                 # Save input
-                row['Latitude'] = loc[0]
-                row['Longitude'] = loc[1]
+                row["Latitude"] = loc[0]
+                row["Longitude"] = loc[1]
                 print("Input registered: (" + str(loc[0]) + "," + str(loc[1]) + ")")
             else:
-                P_missing.loc[index, ['Latitude', "Longitude"]] = \
-                P_located[P_located['Country'] == row["Country"]].sample(1, axis=0)[["Latitude", "Longitude"]].values[0]
+                P_missing.loc[index, ["Latitude", "Longitude"]] = (
+                    P_located[P_located["Country"] == row["Country"]].sample(1, axis=0)[["Latitude", "Longitude"]].values[0]
+                )
                 print("Random Value Assigned")
     else:
         print("Random values will be assigned to all " + str(len(P_missing)) + " power plants")
@@ -555,7 +562,7 @@ def clean_processes_and_storage_FRESNA(paths, param):
     Process = Process[["Name", "Type", "inst-cap", "Year", "geometry"]]
     # Transform into GeoDataFrame
     Process = gpd.GeoDataFrame(Process, geometry="geometry", crs={"init": "epsg:4326"})
-    try: 
+    try:
         os.remove(paths["process_cleaned"])
     except OSError:
         pass
@@ -591,6 +598,8 @@ def clean_GridKit_Europe(paths, param):
     """
     timecheck("Start")
 
+    dict_line_voltage = pd.read_csv(paths["dict_line_voltage"], header=0, sep=";", decimal=",", index_col=["voltage_kV"])
+
     # Read CSV file containing the lines data
     grid_raw = pd.read_csv(paths["transmission_lines"], header=0, sep=",", decimal=".")
 
@@ -598,8 +607,7 @@ def clean_GridKit_Europe(paths, param):
     grid_raw["wkt_srid_4326"] = pd.Series(map(lambda s: s[21:-1], grid_raw["wkt_srid_4326"]), grid_raw.index)
 
     # Extract the coordinates into a new dataframe with four columns for each coordinate
-    coordinates = pd.DataFrame(grid_raw["wkt_srid_4326"].str.split(" |,").tolist(),
-                               columns=["V1_long", "V1_lat", "V2_long", "V2_lat"])
+    coordinates = pd.DataFrame(grid_raw["wkt_srid_4326"].str.split(" |,").tolist(), columns=["V1_long", "V1_lat", "V2_long", "V2_lat"])
 
     # Merge the original dataframe (grid_raw) with the one for the coordinates
     grid_raw = grid_raw.merge(coordinates, how="outer", left_index=True, right_index=True)
@@ -639,18 +647,17 @@ def clean_GridKit_Europe(paths, param):
 
     # Save corrected grid
     grid_corrected.to_csv(paths["grid_corrected"], index=False, sep=";", decimal=",")
-    create_json(paths["grid_corrected"], param, ["grid"], paths,
-                ["transmission_lines", "grid_expanded", "grid_filtered"])
+    create_json(paths["grid_corrected"], param, ["grid"], paths, ["transmission_lines", "grid_expanded", "grid_filtered"])
 
     # Complete missing information
     grid_filled = grid_corrected.copy()
     grid_filled["length_m"] = grid_filled["length_m"].astype(float)
-    grid_filled["x_ohmkm"] = assign_values_based_on_series(grid_filled["voltage"] / 1000,
-                                                           param["grid"]["specific_impedance"])
+    grid_filled["x_ohmkm"] = assign_values_based_on_series(
+        grid_filled["voltage"] / 1000, dict_line_voltage["specific_impedance_Ohm_per_km"].dropna().to_dict()
+    )
     grid_filled["X_ohm"] = grid_filled["x_ohmkm"] * grid_filled["length_m"] / 1000 / grid_filled["wires"]
-    grid_filled["loadability"] = assign_values_based_on_series(grid_filled["length_m"] / 1000,
-                                                               param["grid"]["loadability"])
-    grid_filled["SIL_MW"] = assign_values_based_on_series(grid_filled["voltage"] / 1000, param["grid"]["SIL"])
+    grid_filled["loadability"] = assign_values_based_on_series(grid_filled["length_m"] / 1000, dict_line_voltage["loadability"].dropna().to_dict())
+    grid_filled["SIL_MW"] = assign_values_based_on_series(grid_filled["voltage"] / 1000, dict_line_voltage["SIL_MWh"].dropna().to_dict())
     grid_filled["Capacity_MVA"] = grid_filled["SIL_MW"] * grid_filled["loadability"] * grid_filled["wires"]
     grid_filled["Y_mho_ref_380kV"] = 1 / (grid_filled["X_ohm"] * ((380000 / grid_filled["voltage"]) ** 2))
     grid_filled.loc[grid_filled["frequency"] == 0, "tr_type"] = "DC_CAB"
@@ -660,16 +667,15 @@ def clean_GridKit_Europe(paths, param):
     # Group lines with same IDs
     grid_grouped = (
         grid_filled[["l_id", "tr_type", "Capacity_MVA", "Y_mho_ref_380kV", "V1_long", "V1_lat", "V2_long", "V2_lat"]]
-            .groupby(["l_id", "tr_type", "V1_long", "V1_lat", "V2_long", "V2_lat"])
-            .sum()
+        .groupby(["l_id", "tr_type", "V1_long", "V1_lat", "V2_long", "V2_lat"])
+        .sum()
     )
     grid_grouped.reset_index(inplace=True)
-    grid_grouped.loc[:, ["V1_long", "V1_lat", "V2_long", "V2_lat"]] = grid_grouped.loc[:,
-                                                                      ["V1_long", "V1_lat", "V2_long",
-                                                                       "V2_lat"]].astype(float)
+    grid_grouped.loc[:, ["V1_long", "V1_lat", "V2_long", "V2_lat"]] = grid_grouped.loc[:, ["V1_long", "V1_lat", "V2_long", "V2_lat"]].astype(float)
     grid_grouped.to_csv(paths["grid_cleaned"], index=False, sep=";", decimal=",")
-    create_json(paths["grid_cleaned"], param, ["grid"], paths,
-                ["transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"])
+    create_json(
+        paths["grid_cleaned"], param, ["grid"], paths, ["dict_line_voltage", "transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"]
+    )
     print("File saved: " + paths["grid_cleaned"])
 
     # Writing to shapefile
@@ -681,14 +687,14 @@ def clean_GridKit_Europe(paths, param):
         count = len(grid_grouped.index)
         status = 0
         display_progress("Writing grid to shapefile: ", (count, status))
-        for i in grid_grouped.index:
-            w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float),
-                     grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
+        for i in grid_grouped.index:            
+            w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float), grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
             w.record(grid_grouped.loc[i, "l_id"], grid_grouped.loc[i, "Capacity_MVA"], grid_grouped.loc[i, "tr_type"])
             status += 1
             display_progress("Writing grid to shapefile: ", (count, status))
-    create_json(paths["grid_shp"], param, ["grid"], paths,
-                ["transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"])
+    create_json(
+        paths["grid_shp"], param, ["grid"], paths, ["dict_line_voltage", "transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"]
+    )
     print("File saved: " + paths["grid_shp"])
     timecheck("End")
 
@@ -729,13 +735,11 @@ def clean_IRENA_summary(paths, param):
         inst_cap = sub_df.loc[sub_df["Indicator"] == "Electricity capacity (MW)", year][0]
         if isinstance(inst_cap, str):
             inst_cap = int(inst_cap.replace(" ", ""))
-            IRENA.loc[
-                (IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity capacity (MW)"), year] = inst_cap
+            IRENA.loc[(IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity capacity (MW)"), year] = inst_cap
         gen_prod = sub_df.loc[sub_df["Indicator"] == "Electricity generation (GWh)", year][0]
         if isinstance(gen_prod, str):
             gen_prod = 1000 * int(gen_prod.replace(" ", ""))
-            IRENA.loc[
-                (IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity generation (GWh)"), year] = gen_prod
+            IRENA.loc[(IRENA.index.isin([(c, t)])) & (IRENA["Indicator"] == "Electricity generation (GWh)"), year] = gen_prod
         if inst_cap == 0:
             FLH = 0
         else:
@@ -754,8 +758,7 @@ def clean_IRENA_summary(paths, param):
     )
     IRENA = IRENA.astype(float)
     IRENA.to_csv(paths["IRENA_summary"], sep=";", decimal=",", index=True)
-    create_json(paths["IRENA_summary"], param, ["author", "comment", "region_name", "year"], paths,
-                ["regions_land", "IRENA", "IRENA_dict"])
+    create_json(paths["IRENA_summary"], param, ["author", "comment", "region_name", "year"], paths, ["regions_land", "IRENA", "IRENA_dict"])
     print("files saved: " + paths["IRENA_summary"])
 
 
@@ -823,6 +826,6 @@ def clean_names(text):
     """
     """
     # Remove non-ASCII
-    text_clean = ''.join(i for i in text if ord(i) < 128)
+    text_clean = "".join(i for i in text if ord(i) < 128)
     text_short = text_clean[:63]
     return text_short
