@@ -37,6 +37,7 @@ def generate_urbs_model(paths, param):
         urbs_model["Suplm"] = suplm
         del suplm
 
+
     # # List all files present in urbs folder
     # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
     # # create empty dictionary
@@ -275,7 +276,7 @@ def generate_evrys_model(paths, param):
 # 'hotstart', 'pot', 'prepow', 'pretemp', 'preheat', 'prestate', 'precaponline', 'year']]
 # output_pro_evrys.iloc[:, 4:] = output_pro_evrys.iloc[:, 4:].astype(float)
 
-# function to 
+# function to
 
 
 # output_pro_evrys.loc[:, 'Pro'] = output_pro_evrys.loc[:, 'Pro'].apply(remove_non_ascii)
