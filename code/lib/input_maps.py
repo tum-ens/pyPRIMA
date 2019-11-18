@@ -1,4 +1,4 @@
-# from lib.spatial_functions import calc_region
+from lib.spatial_functions import *
 from lib.util import *
 
 

@@ -101,12 +101,13 @@ def scope_paths_and_parameters(paths, param):
     param["subregions_name"] = "Geothermal_WGC"  # Name tag of the subregions
 
     # Year
-    param["year"] = 2015 # Data
-    param["model_year"] = 2015 # Model
+    param["year"] = 2015  # Data
+    param["model_year"] = 2015  # Model
 
     # Technologies
     param["technology"] = {"Storage": ["Battery", "PumSt"],
-                           "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOff", "WindOn"],
+                           "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear",
+                                       "OilOther", "Solar", "WindOff", "WindOn"],
                            }
 
     return paths, param
@@ -120,7 +121,7 @@ def resolution_parameters(param):
 
     :param param: Dictionary including the user preferences.
     :type param: dict
-	
+
     :return param: The updated dictionary param.
     :rtype: dict
     """
@@ -132,15 +133,15 @@ def resolution_parameters(param):
 
 def load_parameters(param):
     """
-	This function defines the user preferences which are related to the load/demand.
-	
-	  * *sectors* are the sectors to be considered.
-	  * *sectors_eurostat* is a dictionary for identifying the sectors to be considered, which have different names.
-	  * *default_sec_shares* is the code name of the country to be used as a default, if the sector shares are missing for another region.
-	  
-	:param param: Dictionary including the user preferences.
+    This function defines the user preferences which are related to the load/demand.
+
+      * *sectors* are the sectors to be considered.
+      * *sectors_eurostat* is a dictionary for identifying the sectors to be considered, which have different names.
+      * *default_sec_shares* is the code name of the country to be used as a default, if the sector shares are missing for another region.
+
+    :param param: Dictionary including the user preferences.
     :type param: dict
-	
+
     :return param: The updated dictionary param.
     :rtype: dict
     """
@@ -162,8 +163,8 @@ def load_parameters(param):
 def renewable_time_series_parameters(param):
     """
     This function defines parameters relating to the renewable time series to be used in the models. In particular, the user can decide which
-	`modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
-	
+    `modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
+
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -215,7 +216,8 @@ def grid_parameters(param):
             1000: 0.6,  # upper bound
         },
         # dummy values??
-        "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736, 1000: 6312},  # in MW
+        "SIL": {10: 0.3, 30: 2.7, 69: 15, 110: 32, 138: 59.4, 220: 175, 345: 504, 380: 602, 500: 1200, 765: 2736,
+                1000: 6312},  # in MW
         "efficiency": {"AC_OHL": 0.92, "AC_CAB": 0.90, "DC_OHL": 0.95, "DC_CAB": 0.95},  # efficiency / 1000 km
         "wacc": 0.07,
         "depreciation": 50,
@@ -298,16 +300,21 @@ def load_input_paths(paths, param):
     # Raw Inputs
     PathTemp = root + "01 Raw inputs" + fs + "Load" + fs
     paths["sector_shares"] = PathTemp + "Eurostat" + fs + "nrg_105a_1_Data.csv"
-    paths["load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"  # CA: "CA_Load Profiles_11 Regions_correct names.csv"
+    paths[
+        "load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"  # CA: "CA_Load Profiles_11 Regions_correct names.csv"
     paths["profiles"] = {
-        "RES": PathTemp + "Load profiles" + fs + "Lastprofil_Haushalt_H0.xlsx",  # CA: "Residential Load Profile_2017_SCE.csv"
-        "IND": PathTemp + "Load profiles" + fs + "Lastprofil_Industrie_Tag.xlsx",  # CA: "Medium Commercial and Industrial_Load Profile_2017 SCE.xlsx"
+        "RES": PathTemp + "Load profiles" + fs + "Lastprofil_Haushalt_H0.xlsx",
+        # CA: "Residential Load Profile_2017_SCE.csv"
+        "IND": PathTemp + "Load profiles" + fs + "Lastprofil_Industrie_Tag.xlsx",
+        # CA: "Medium Commercial and Industrial_Load Profile_2017 SCE.xlsx"
         "COM": PathTemp
-        + "Load profiles"
-        + fs
-        + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",  # CA: "Small Commercial_Load Profile_2017 SCE.xlsx"
-        "AGR": PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",  # CA: "VDEW-Lastprofile-Landwirtschaft_L0.csv"
-        "STR": PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",  # CA: "Lastprofil_Strassenbeleuchtung_S0.xlsx"
+               + "Load profiles"
+               + fs
+               + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",  # CA: "Small Commercial_Load Profile_2017 SCE.xlsx"
+        "AGR": PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",
+        # CA: "VDEW-Lastprofile-Landwirtschaft_L0.csv"
+        "STR": PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",
+        # CA: "Lastprofil_Strassenbeleuchtung_S0.xlsx"
     }
 
     # Cleaned load profiles
@@ -324,7 +331,6 @@ def load_input_paths(paths, param):
 
 
 def renewable_time_series_paths(paths, param):
-
     """
 
     :param paths:
@@ -341,7 +347,8 @@ def renewable_time_series_paths(paths, param):
     paths["region"] = root + "03 Intermediate files" + fs + "Files " + region + fs
 
     paths["TS_ren"] = {}
-    PathTemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
+    PathTemp = paths[
+                   "region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
 
     paths["TS_ren"] = {
         "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
@@ -388,7 +395,8 @@ def processes_input_paths(paths, param):
     }
 
     PathTemp = root + "01 Raw inputs" + fs + "Power plants and storage" + fs
-    paths["FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
+    paths[
+        "FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
 
     return paths
 
@@ -486,7 +494,8 @@ def output_paths(paths, param):
     paths["df_sector"] = paths["load"] + "TS_countries_sectors_" + year + ".csv"
     paths["load_sector"] = paths["load"] + "Yearly_demand_countries_sectors_" + year + ".csv"
     paths["load_landuse"] = paths["load"] + "TS_countries_land_use_" + year + ".csv"
-    paths["intersection_subregions_countries"] = paths["load_sub"] + "Intersection_with_" + param["subregions_name"] + ".shp"
+    paths["intersection_subregions_countries"] = paths["load_sub"] + "Intersection_with_" + param[
+        "subregions_name"] + ".shp"
     paths["stats_country_parts"] = paths["load_sub"] + "Statistics_country_parts.csv"
     paths["load_regions"] = paths["load_sub"] + "TS_subregions_" + param["subregions_name"] + "_" + year + ".csv"
 
@@ -555,7 +564,6 @@ def local_maps_paths(paths, param):
     paths["POP"] = PathTemp + "_Population.tif"  # Population
 
     return paths
-
 
 # ##############################
 # #### Move to assumptions #####

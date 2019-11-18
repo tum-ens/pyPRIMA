@@ -1,4 +1,3 @@
-# from config import ts_paths
 from lib.util import *
 
 

@@ -1,29 +1,25 @@
-# from osgeo import gdal, ogr, gdalnumeric
-import pandas as pd
-# from pandas import ExcelWriter
-# import fiona
-import geopandas as gpd
-import numpy as np
-from shapely import geometry
-from shapely.geometry import Polygon, Point  # , mapping
-import shapefile as shp
-import pysal as ps
-from geopy import distance
 import sys
-import datetime
-import inspect
 import os
-# import glob
-# import shutil
-import math
-import rasterio
-from rasterio import MemoryFile, mask, windows
-# from scipy.ndimage import convolve
-# import osr
-import re
-import json
 import warnings
 from warnings import warn
+import inspect
+import datetime
+import math
+import numpy as np
+from numpy.matlib import repmat, reshape
+import pandas as pd
+from osgeo import gdal, ogr, osr, gdal_array
+import rasterio
+from rasterio import MemoryFile, mask, windows
+from geopy import distance
+import shapefile as shp
+import pysal as ps
+from shapely import geometry
+from shapely.geometry import Polygon, Point
+import geopandas as gpd
+import re
+import json
+
 
 # gdal.PushErrorHandler('CPLQuietErrorHandler')
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
@@ -69,6 +65,34 @@ def get_sectoral_profiles(paths, param):
         profiles["STR"] = pd.read_csv(profiles_paths["STR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
     timecheck("End")
     return profiles
+
+
+def resizem(A_in, row_new, col_new):
+    """
+    This function resizes regular data grid, by copying and pasting parts of the original array.
+
+    :param A_in: Input matrix.
+    :type A_in: numpy array
+    :param row_new: New number of rows.
+    :type row_new: integer
+    :param col_new: New number of columns.
+    :type col_new: integer
+
+    :return A_out: Resized matrix.
+    :rtype: numpy array
+    """
+    row_rep = row_new // np.shape(A_in)[0]
+    col_rep = col_new // np.shape(A_in)[1]
+    A_inf = A_in.flatten(order="F")[np.newaxis]
+    A_out = reshape(
+        repmat(
+            reshape(reshape(repmat((A_in.flatten(order="F")[np.newaxis]), row_rep, 1), (row_new, -1), order="F").T, (-1, 1), order="F"), 1, col_rep
+        ).T,
+        (col_new, row_new),
+        order="F",
+    ).T
+
+    return A_out
 
 
 def timecheck(*args):
@@ -180,6 +204,27 @@ def expand_dataframe(df, column_names):
 
     return df_final
 
+
+def field_exists(field_name, shp_path):
+    """
+    This function returns whether the specified field exists or not in the shapefile linked by a path.
+
+    :param field_name: Name of the field to be checked for.
+    :type field_name: str
+    :param shp_path: Path to the shapefile.
+    :type shp_path: str
+
+    :return: ``True`` if it exists or ``False`` if it doesn't exist.
+    :rtype: bool
+    """
+    shp = ogr.Open(shp_path, 0)
+    lyr = shp.GetLayer()
+    lyr_dfn = lyr.GetLayerDefn()
+
+    exists = False
+    for i in range(lyr_dfn.GetFieldCount()):
+        exists = exists or (field_name == lyr_dfn.GetFieldDefn(i).GetName())
+    return exists
 
 # def add_suffix(df, suffix):
 # # Check whether there is only one copy of the initial row, or more
