@@ -30,4 +30,4 @@ if __name__ == "__main__":
 
     ## Generate model files
     # generate_urbs_model(paths, param)
-    generate_evrys_model(paths, param)
+    # generate_evrys_model(paths, param)
