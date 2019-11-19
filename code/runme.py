@@ -23,11 +23,10 @@ if __name__ == "__main__":
     generate_load_timeseries(paths, param)
     generate_transmission(paths, param)
     generate_intermittent_supply_timeseries(paths, param)
-
-    # generate_processes(paths, param)
-    # generate_storage(paths, param)
-    # generate_commodities(paths, param)
+    generate_processes(paths, param)
+    generate_storage(paths, param)
+    generate_commodities(paths, param)
 
     ## Generate model files
-    # generate_urbs_model(paths, param)
-    # generate_evrys_model(paths, param)
+    generate_urbs_model(paths, param)
+    generate_evrys_model(paths, param)

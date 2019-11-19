@@ -255,7 +255,7 @@ def clean_streetlight_load_profile(paths, param):
     streets_profile = streets_profile_raw.values
 
     # Normalize the load over the year, ei. integral over the year of all loads for each individual sector is 1
-    profile["STR"] = streets_profile / streets_profile.sum()
+    profile["STR"] = np.concatenate((streets_profile / streets_profile.sum()))
 
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["STR"], sep=";", decimal=",")

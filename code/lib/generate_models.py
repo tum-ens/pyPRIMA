@@ -36,6 +36,14 @@ def generate_urbs_model(paths, param):
         urbs_model["Suplm"] = suplm
         del suplm
 
+    # Read transmission
+    if os.path.exists(paths["grid_completed"]):
+        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
+        grid.rename(columns={"tr_type": "Transmission"}, inplace=True)
+        grid = grid[['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
+                     'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
+        urbs_model["Grid"] = grid
+        del grid
 
     # # List all files present in urbs folder
     # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
@@ -172,6 +180,20 @@ def generate_evrys_model(paths, param):
         evrys_model["suplm"] = suplm
         del suplm
 
+    # Read Transmission
+    if os.path.exists(paths["grid_completed"]):
+        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
+        grid.rename(columns={"Site In": "SitIn",
+                             "Site Out": "SitOut",
+                             "Commodity": "Co",
+                             "impedance": "reactance"
+                             }, inplace=True)
+        grid = grid[['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up', 'reactance','cap-up-therm',
+                     'angle-up', 'length', 'tr_type', 'PSTmax', 'idx']]
+        evrys_model["grid"] = grid
+        del grid
+
+
     # # List all files present in urbs folder
     # evrys_paths = glob.glob(paths["evrys"] + '*.csv')
     # # create empty dictionary
@@ -181,13 +203,6 @@ def generate_evrys_model(paths, param):
     # # clean input names and associate them with the relevant dataframe
     # sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
     # evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
-
-    # TRANSMISSION
-    # # evrys
-    # output_evrys = pd.DataFrame(icl_final,
-    # columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up',
-    # 'reactance',
-    # 'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
 
     # Create ExcelWriter
     with pd.ExcelWriter(paths["evrys_model"], mode="w") as writer:

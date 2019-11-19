@@ -1,4 +1,5 @@
 from lib.correction_functions import get_sectoral_profiles, clean_names
+from lib.spatial_functions import *
 from lib.input_maps import *
 
 
@@ -55,8 +56,9 @@ def generate_sites_from_shapefile(paths, param):
         A_sea = np.flipud(A_sea).astype(int)
 
     status = 0
-    display_progress("Generating sites ", (nRegions, status))
     for reg in range(0, nRegions):
+        # Display status bar
+        display_progress("Generating sites ", (nRegions, status))
         # Compute region_mask
         A_region_extended = calc_region(regions_shp.loc[reg], Crd_all, res_desired, GeoRef)
 
@@ -70,7 +72,7 @@ def generate_sites_from_shapefile(paths, param):
         regions.loc[reg, "Longitude"] = regions_shp.geometry.centroid.loc[reg].x
         regions.loc[reg, "Latitude"] = regions_shp.geometry.centroid.loc[reg].y
 
-        # Display Progress
+        # Update status bar
         status += 1
         display_progress("Generating sites ", (nRegions, status))
 
