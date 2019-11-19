@@ -10,6 +10,8 @@ def generate_urbs_model(paths, param):
 
     urbs_model = {}
 
+    # Read Global
+
     # Read sites
     if os.path.exists(paths["sites_sub"]):
         sites = pd.read_csv(paths["sites_sub"], sep=";", decimal=",")
@@ -135,6 +137,57 @@ def generate_evrys_model(paths, param):
         ].rename(columns={"Name": "Site", "Latitude": "lat", "Longitude": "long"})
         evrys_model["Site"] = sites
 
+    # Read commodities
+    if os.path.exists(paths["commodities_regions"]):
+        com = pd.read_csv(paths["commodities_regions"], sep=";", decimal=",")
+        com.rename(columns={"Commodity": "Co", "Type_evrys": "type"}, inplace=True)
+        com = com[["Site", "Co", "price", "annual", "losses", "type"]]
+        evrys_model["Commodity"] = com
+        del com
+
+    # Read Processes
+    if os.path.exists(paths["process_regions"]):
+        proc = pd.read_csv(paths["process_regions"], sep=";", decimal=",")
+        proc.rename(columns={"Name": "Pro",
+                             "Type": "CoIn",
+                             "Year": "year"}, inplace=True)
+        proc["CoOut"] = "Elec"
+        proc = proc[["Site", "Pro", "CoIn", "CoOut", "inst-cap", "eff", "effmin", "act-lo", "act-up", "on-off",
+                     "start-cost", "reserve-cost", "ru", "rd", "rumax", "rdmax", "cotwo", "detail", "lambda", "heatmax",
+                     "maxdeltaT", "heatupcost", "su", "sd", "pdt", "hotstart", "pot", "prepow", "pretemp", "preheat",
+                     "prestate", "precaponline", "year"]]
+        evrys_model["Process"] = proc
+        del proc
+
+    # Read transmission
+    if os.path.exists(paths["grid_completed"]):
+        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
+        grid.rename(columns={"Site In": "SitIn",
+                             "Site Out": "SitOut",
+                             "Commodity": "Co",
+                             "impedance": "reactance"}, inplace=True)
+        grid = grid[["SitIn", "SitOut", "Co", "var-cost", "inst-cap", "act-lo", "act-up", "reactance", "cap-up-therm",
+                     "angle-up", "length", "tr_type", "PSTmax", "idx"]]
+        evrys_model["Transmission"] = grid
+        del grid
+
+    # Read storage
+    if os.path.exists(paths["storage_regions"]):
+        sto = pd.read_csv(paths["storage_regions"], sep=";", decimal=",")
+        sto.rename(columns={"Type": "Sto",
+                            "Commodity": "Co"}, inplace=True)
+        sto["inst-cap-pi"] = sto["inst-cap"]
+        sto["inst-cap-po"] = sto["inst-cap"]
+        sto["inst-cap-c"] = sto["inst-cap"] * sto["ep-ratio"]
+        sto = sto[
+            ["Site", "Sto", "Co", "inst-cap-pi", "inst-cap-po", "inst-cap-c", "eff-in", "eff-out", "var-cost-pi",
+             "var-cost-po", "var-cost-c", "act-lo-pi", "act-up-pi", "act-lo-po", "act-up-po", "act-lo-c", "act-up-c",
+             "precont", "prepowin", "prepowout", "ru", "rd", "rumax", "rdmax", "seasonal", "ctr"]]
+        evrys_model["Storage"] = sto
+        del sto
+
+    # Read DSM
+
     # Read intermittent supply time series
     if os.path.exists(paths["potential_ren"]):
         # Format to evrys input format
@@ -157,20 +210,6 @@ def generate_evrys_model(paths, param):
         suplm = suplm[["t", "sit", "co", "value"]]
         evrys_model["suplm"] = suplm
         del suplm
-
-    # Read Transmission
-    if os.path.exists(paths["grid_completed"]):
-        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
-        grid.rename(columns={"Site In": "SitIn",
-                             "Site Out": "SitOut",
-                             "Commodity": "Co",
-                             "impedance": "reactance"
-                             }, inplace=True)
-        grid = grid[['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up', 'reactance','cap-up-therm',
-                     'angle-up', 'length', 'tr_type', 'PSTmax', 'idx']]
-        evrys_model["grid"] = grid
-        del grid
-
 
     # # List all files present in urbs folder
     # evrys_paths = glob.glob(paths["evrys"] + '*.csv')
