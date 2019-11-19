@@ -365,6 +365,7 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
       its corresponding metadata in a JSON file.
     :rtype: None
     """
+    timecheck(tech + " - Start")
 
     Crd_all = param["Crd_all"]
     res_desired = param["res_desired"]
@@ -445,8 +446,9 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         p = p + power_plants
         c = c + potential_new[ind_needed].tolist()  # Power_plants
 
+        # Show status bar
         status = status + 1
-
+        display_progress("Distribution for " + tech + ": ", (length, status))
     # Format point locations
     points = [(x[i], y[i]) for i in range(0, len(y))]
 
@@ -468,7 +470,7 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
     )
     print("File saved: " + paths["locations_ren"][tech])
     print("\n")
-    timecheck("End")
+    timecheck(tech + " - End")
 
 
 def get_sites(points_shp, param):

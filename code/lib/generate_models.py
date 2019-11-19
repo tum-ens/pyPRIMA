@@ -10,12 +10,57 @@ def generate_urbs_model(paths, param):
 
     urbs_model = {}
 
+    # Read Global
+
     # Read sites
     if os.path.exists(paths["sites_sub"]):
         sites = pd.read_csv(paths["sites_sub"], sep=";", decimal=",")
         sites = sites[["Name", "Area_m2"]].rename(columns={"Area_m2": "area"})
         urbs_model["Site"] = sites
         del sites
+
+    # Read commodities
+    if os.path.exists(paths["commodities_regions"]):
+        com = pd.read_csv(paths["commodities_regions"], sep=";", decimal=",")
+        com.rename(columns={"Type_urbs": "Type"}, inplace=True)
+        com = com[["Site", "Commodity", "Type", "price", "max", "maxperhour"]]
+        urbs_model["Commodity"] = com
+        del com
+
+    # Read Processes
+    if os.path.exists(paths["process_regions"]):
+        proc = pd.read_csv(paths["process_regions"], sep=";", decimal=",")
+        proc.rename(columns={"Name": "Process",
+                             "min-fraction": "min-frac",
+                             "start-cost": "startup-cost"}, inplace=True)
+        proc = proc[["Site", "Process", "cap-lo", "cap-up", "max-grad", "min-frac", "inv-cost", "fix-cost", "var-cost",
+                     "startup-cost", "wacc", "depreciation", "area-per-cap"]]
+        urbs_model["Process"] = proc
+        del proc
+
+    # Read Process-Commodity
+
+    # Read transmission
+    if os.path.exists(paths["grid_completed"]):
+        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
+        grid.rename(columns={"tr_type": "Transmission"}, inplace=True)
+        grid = grid[['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
+                     'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
+        urbs_model["Transmission"] = grid
+        del grid
+
+    # Read storage
+    if os.path.exists(paths["storage_regions"]):
+        sto = pd.read_csv(paths["storage_regions"], sep=";", decimal=",")
+        sto.rename(columns={"Type": "Storage"}, inplace=True)
+        sto["cap-lo-c"] = 0
+        sto["cap-lo-p"] = 0
+        sto = sto[["Site", "Storage", "Commodity", "cap-lo-c", "cap-up-c", "cap-lo-p", "cap-up-p", "eff-in", "eff-out",
+                   "inv-cost-p", "inv-cost-c", "fix-cost-p", "fix-cost-c", "var-cost-p", "var-cost-c", "wacc", "depreciation", "init", "discharge", "ep-ratio"]]
+        urbs_model["Storage"] = sto
+        del sto
+
+    # Read DSM
 
     # Read electricity demand
     if os.path.exists(paths["load_regions"]):
@@ -35,23 +80,6 @@ def generate_urbs_model(paths, param):
         suplm.insert(0, "t", suplm.index)
         urbs_model["Suplm"] = suplm
         del suplm
-
-
-    # # List all files present in urbs folder
-    # urbs_paths = glob.glob(paths["urbs"] + '*.csv')
-    # # create empty dictionary
-    # urbs_model = {}
-    # # read .csv files and associate them with relevant sheet
-    # for name in urbs_paths:
-    # # clean input names and associate them with the relevant dataframe
-    # sheet = os.path.basename(name).replace('_urbs_' + str(param["year"]) + '.csv', '')
-    # urbs_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
-
-    # TRANSMISSION
-    # # Change the order of the columns
-    # output_urbs = output_urbs[
-    # ['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
-    # 'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
 
     # # Add global parameters
     # urbs_model["Global"] = pd.read_excel(paths["assumptions"], sheet_name='Global')
@@ -91,46 +119,6 @@ def generate_urbs_model(paths, param):
 
     timecheck("End")
 
-    # # Calculate the sum (yearly consumption) in a separate vector
-    # yearly_load = load_regions.sum(axis=1)
-
-    # # Calculte the ratio of the hourly load to the yearly load
-    # df_normed = load_regions / np.tile(yearly_load.to_numpy(), (8760, 1)).transpose()
-
-    # # Prepare the output in the desired format
-    # df_output = pd.DataFrame(list(df_normed.index) * 8760, columns=['sit'])
-    # df_output['value'] = np.reshape(df_normed.to_numpy(), -1, order='F')
-    # df_output['t'] = df_output.index // len(df_normed) + 1
-    # df_output = pd.concat([df_output, pd.DataFrame({'co': 'Elec'}, index=df_output.index)], axis=1)
-
-    # df_evrys = df_output[['t', 'sit', 'co', 'value']]  # .rename(columns={'Region': 'sit'})
-
-    # # Transform the yearly load into a dataframe
-    # df_load = pd.DataFrame()
-
-    # df_load['annual'] = yearly_load
-
-    # # Preparation of dataframe
-    # df_load = df_load.reset_index()
-    # df_load = df_load.rename(columns={'Region': 'sit'})
-
-    # # Merging load dataframes and calculation of total demand
-    # df_load['total'] = param["load"]["degree_of_eff"] * df_load['annual']
-    # df_merged = pd.merge(df_output, df_load, how='outer', on=['sit'])
-    # df_merged['value_normal'] = df_merged['value'] * df_merged['total']
-
-    # # Calculation of the absolute load per country
-    # df_absolute = df_merged  # .reset_index()[['t','Countries','value_normal']]
-
-    # # Rename the countries
-    # df_absolute['sitco'] = df_absolute['sit'] + '.Elec'
-
-    # df_urbs = df_absolute.pivot(index='t', columns='sitco', values='value_normal')
-    # df_urbs = df_urbs.reset_index()
-
-    # # Yearly consumption for each zone
-    # annual_load = pd.DataFrame(df_absolute.groupby('sit').sum()['value_normal'].rename('Load'))
-
 
 def generate_evrys_model(paths, param):
     """
@@ -148,6 +136,57 @@ def generate_evrys_model(paths, param):
             ["Name", "slacknode", "syncharea", "Latitude", "Longitude", "ctrarea", "primpos", "primneg", "secpos", "secneg", "terpos", "terneg"]
         ].rename(columns={"Name": "Site", "Latitude": "lat", "Longitude": "long"})
         evrys_model["Site"] = sites
+
+    # Read commodities
+    if os.path.exists(paths["commodities_regions"]):
+        com = pd.read_csv(paths["commodities_regions"], sep=";", decimal=",")
+        com.rename(columns={"Commodity": "Co", "Type_evrys": "type"}, inplace=True)
+        com = com[["Site", "Co", "price", "annual", "losses", "type"]]
+        evrys_model["Commodity"] = com
+        del com
+
+    # Read Processes
+    if os.path.exists(paths["process_regions"]):
+        proc = pd.read_csv(paths["process_regions"], sep=";", decimal=",")
+        proc.rename(columns={"Name": "Pro",
+                             "Type": "CoIn",
+                             "Year": "year"}, inplace=True)
+        proc["CoOut"] = "Elec"
+        proc = proc[["Site", "Pro", "CoIn", "CoOut", "inst-cap", "eff", "effmin", "act-lo", "act-up", "on-off",
+                     "start-cost", "reserve-cost", "ru", "rd", "rumax", "rdmax", "cotwo", "detail", "lambda", "heatmax",
+                     "maxdeltaT", "heatupcost", "su", "sd", "pdt", "hotstart", "pot", "prepow", "pretemp", "preheat",
+                     "prestate", "precaponline", "year"]]
+        evrys_model["Process"] = proc
+        del proc
+
+    # Read transmission
+    if os.path.exists(paths["grid_completed"]):
+        grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
+        grid.rename(columns={"Site In": "SitIn",
+                             "Site Out": "SitOut",
+                             "Commodity": "Co",
+                             "impedance": "reactance"}, inplace=True)
+        grid = grid[["SitIn", "SitOut", "Co", "var-cost", "inst-cap", "act-lo", "act-up", "reactance", "cap-up-therm",
+                     "angle-up", "length", "tr_type", "PSTmax", "idx"]]
+        evrys_model["Transmission"] = grid
+        del grid
+
+    # Read storage
+    if os.path.exists(paths["storage_regions"]):
+        sto = pd.read_csv(paths["storage_regions"], sep=";", decimal=",")
+        sto.rename(columns={"Type": "Sto",
+                            "Commodity": "Co"}, inplace=True)
+        sto["inst-cap-pi"] = sto["inst-cap"]
+        sto["inst-cap-po"] = sto["inst-cap"]
+        sto["inst-cap-c"] = sto["inst-cap"] * sto["ep-ratio"]
+        sto = sto[
+            ["Site", "Sto", "Co", "inst-cap-pi", "inst-cap-po", "inst-cap-c", "eff-in", "eff-out", "var-cost-pi",
+             "var-cost-po", "var-cost-c", "act-lo-pi", "act-up-pi", "act-lo-po", "act-up-po", "act-lo-c", "act-up-c",
+             "precont", "prepowin", "prepowout", "ru", "rd", "rumax", "rdmax", "seasonal", "ctr"]]
+        evrys_model["Storage"] = sto
+        del sto
+
+    # Read DSM
 
     # Read intermittent supply time series
     if os.path.exists(paths["potential_ren"]):
@@ -181,13 +220,6 @@ def generate_evrys_model(paths, param):
     # # clean input names and associate them with the relevant dataframe
     # sheet = os.path.basename(name).replace('_evrys_' + str(param["year"]) + '.csv', '')
     # evrys_model[sheet] = pd.read_csv(name, sep=';', decimal=',')
-
-    # TRANSMISSION
-    # # evrys
-    # output_evrys = pd.DataFrame(icl_final,
-    # columns=['SitIn', 'SitOut', 'Co', 'var-cost', 'inst-cap', 'act-lo', 'act-up',
-    # 'reactance',
-    # 'cap-up-therm', 'angle-up', 'length', 'tr_type', 'PSTmax', 'idx'])
 
     # Create ExcelWriter
     with pd.ExcelWriter(paths["evrys_model"], mode="w") as writer:

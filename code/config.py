@@ -224,6 +224,26 @@ def global_maps_input_paths(paths):
 
 def assumption_paths(paths):
     """
+    This function defines the paths where the assumption files are located:
+
+      * *assumptions_landuse*
+      * *assumptions_flows*
+      * *assumptions_processes*
+      * *assumptions_storage*
+      * *assumptions_commodities*
+      * *assumptions_transmission*
+      * *dict_season*
+      * *dict_daytype*
+      * *dict_sectors*
+      * *dict_counties*
+      * *dict_line_voltage*
+      * *dict_lines_costs*
+      * *dict_technologies*
+
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+    :return: The updated dictionary paths.
+    :rtype: dict
     """
     global fs
 
