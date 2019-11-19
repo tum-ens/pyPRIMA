@@ -1,8 +1,4 @@
-# from osgeo import gdal, ogr, gdalnumeric
 import pandas as pd
-
-# from pandas import ExcelWriter
-# import fiona
 import geopandas as gpd
 import numpy as np
 from shapely import geometry
@@ -14,21 +10,13 @@ import sys
 import datetime
 import inspect
 import os
-
-# import glob
-# import shutil
 import math
 import rasterio
 from rasterio import MemoryFile, mask, windows
-
-# from scipy.ndimage import convolve
-# import osr
 import re
 import json
 import warnings
 from warnings import warn
-
-# gdal.PushErrorHandler('CPLQuietErrorHandler')
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 

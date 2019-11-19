@@ -2,44 +2,9 @@ from lib.spatial_functions import create_shapefiles_of_ren_power_plants
 from lib.util import *
 
 
-# def filter_life_time(param, raw, depreciation):
-# if param["year"] > param["pro_sto"]["year_ref"]:
-# # Set depreciation period
-# for c in raw["CoIn"].unique():
-# raw.loc[raw["CoIn"] == c, "lifetime"] = depreciation[c]
-# lifetimeleft = raw["lifetime"] + raw["year"]
-# current = raw.drop(raw.loc[lifetimeleft < param["year"]].index)
-# print('Already depreciated units:\n')
-# print(str(len(raw) - len(current)) + '# Units have been removed')
-# else:
-# current = raw.copy()
-# print('Number of current units: ' + str(len(current)))
-# return current
-
-
-# def get_sites(current, paths):
-# # Get regions from shapefile
-# regions = gpd.read_file(paths["SHP"])
-# regions["geometry"] = regions.buffer(0)
-
-# # Spacial join
-# current.crs = regions[["NAME_SHORT", "geometry"]].crs
-# located = gpd.sjoin(current, regions[["NAME_SHORT", "geometry"]], how='left', op='intersects')
-# located.rename(columns={'NAME_SHORT': 'Site'}, inplace=True)
-
-# # Remove duplicates that lie in the border between land and sea
-# located.drop_duplicates(subset=["CoIn", "Pro", "inst-cap", "year", "Site"], inplace=True)
-
-# # Remove duplicates that lie in two different zones
-# located = located.loc[~located.index.duplicated(keep='last')]
-
-# located.dropna(axis=0, subset=["Site"], inplace=True)
-
-# return located, regions
-
 def clean_residential_load_profile(paths, param):
     """
-    This function reads the raw standard load profiles, repeats them to obtain a full year, normalizes them so that the
+    This function reads the raw standard residential profile, repeats it to obtain a full year, normalizes it so that the
     sum is equal to 1, and stores the obtained load profile for each sector in the dataframe *profiles*.
     
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
@@ -93,7 +58,7 @@ def clean_residential_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["RES"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["RES"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -118,7 +83,7 @@ def clean_industry_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["IND"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["IND"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -173,7 +138,7 @@ def clean_commercial_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["COM"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["COM"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -228,7 +193,7 @@ def clean_agriculture_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["AGR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["AGR"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -261,7 +226,7 @@ def clean_streetlight_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["STR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["STR"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
