@@ -93,7 +93,7 @@ def clean_residential_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["RES"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["RES"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -118,7 +118,7 @@ def clean_industry_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["IND"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["IND"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -173,7 +173,7 @@ def clean_commercial_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["COM"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["COM"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -228,7 +228,7 @@ def clean_agriculture_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["AGR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["AGR"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
@@ -261,7 +261,7 @@ def clean_streetlight_load_profile(paths, param):
     profile.to_csv(paths["cleaned_profiles"]["STR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["STR"])
     create_json(paths["cleaned_profiles"]["RES"], param,
-                ["author", "comment", "region_name", "subregions_name", "year", "load"], paths,
+                ["region_name", "subregions_name", "year", "load"], paths,
                 ["profiles", "dict_daytype", "dict_season"])
     timecheck("End")
 
