@@ -153,8 +153,6 @@ def generate_evrys_model(paths, param):
     if os.path.exists(paths["potential_ren"]):
         # Format to evrys input format
         raw_data = pd.read_csv(paths["potential_ren"], sep=";", decimal=",", index_col=0)
-
-        # Prepare data for pivot
         sites = []
         com = []
         for col in list(raw_data.columns):
@@ -165,6 +163,14 @@ def generate_evrys_model(paths, param):
         com = sorted(set(com))
         site_com_ind = pd.MultiIndex.from_product([sites, com], names=["Sites", "Commodities"])
         suplm = pd.DataFrame(data=None, index=raw_data.index, columns=site_com_ind)
+        for col in list(raw_data.columns):
+            sit, co = str(col).split(".")
+            suplm[sit, co] = raw_data[col]
+        suplm = suplm.transpose().stack().reset_index()
+        suplm = suplm.rename(columns={"Sites": "sit", "Commodities": "co", "level_2": "t", 0: "value"})
+        suplm = suplm[["t", "sit", "co", "value"]]
+        evrys_model["suplm"] = suplm
+        del suplm
 
     # # List all files present in urbs folder
     # evrys_paths = glob.glob(paths["evrys"] + '*.csv')
