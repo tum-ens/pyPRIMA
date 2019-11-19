@@ -162,7 +162,7 @@ def renewable_time_series_parameters(param):
     :rtype: dict
     """
 
-    param["ren_potential"] = {"WindOn": ["all", "mid"], "WindOff": ["all"], "PV": ["all"], "CSP": ["all"]}  # "Technology":[list of modes]
+    param["ren_potential"] = {"WindOn": ["all"], "WindOff": ["all"], "PV": ["all"], "CSP": ["all"]}  # "Technology":[list of modes]
 
     return param
 
