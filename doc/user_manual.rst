@@ -21,7 +21,7 @@ Then activate the environment::
 
 In the folder ``code``, you will find multiple files:
 
-.. tabularcolumns:: |p{3.7cm}|p{9cm}|
+.. tabularcolumns:: |l|l|
 
 +---------------------------------------+------------------------------------------------------------------------------------+
 | File                                  | Description                                                                        |
