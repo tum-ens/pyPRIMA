@@ -54,9 +54,9 @@ def general_settings():
     root = str(Path(current_folder).parent.parent.parent)
     # For use at TUM ENS
     if root[-1] != fs:
-        root = root + fs + "Database_KS" + fs
+        root = root + fs + "Database_example" + fs
     else:
-        root = root + "Database_KS" + fs
+        root = root + "Database_example" + fs
 
     return paths, param
 
