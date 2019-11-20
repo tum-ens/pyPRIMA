@@ -1,22 +1,25 @@
-import pandas as pd
-import geopandas as gpd
-import numpy as np
-from shapely import geometry
-from shapely.geometry import Polygon, Point
-import shapefile as shp
-import pysal as ps
-from geopy import distance
 import sys
-import datetime
-import inspect
 import os
-import math
-import rasterio
-from rasterio import MemoryFile, mask, windows
-import re
-import json
 import warnings
 from warnings import warn
+import inspect
+import datetime
+import math
+import numpy as np
+from numpy.matlib import repmat, reshape
+import pandas as pd
+from osgeo import gdal, ogr, osr, gdal_array
+import rasterio
+from rasterio import MemoryFile, mask, windows
+from geopy import distance
+import shapefile as shp
+import pysal as ps
+from shapely import geometry
+from shapely.geometry import Polygon, Point
+import geopandas as gpd
+import re
+import json
+
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
@@ -60,6 +63,34 @@ def get_sectoral_profiles(paths, param):
         profiles["STR"] = pd.read_csv(profiles_paths["STR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
     timecheck("End")
     return profiles
+
+
+def resizem(A_in, row_new, col_new):
+    """
+    This function resizes regular data grid, by copying and pasting parts of the original array.
+
+    :param A_in: Input matrix.
+    :type A_in: numpy array
+    :param row_new: New number of rows.
+    :type row_new: integer
+    :param col_new: New number of columns.
+    :type col_new: integer
+
+    :return A_out: Resized matrix.
+    :rtype: numpy array
+    """
+    row_rep = row_new // np.shape(A_in)[0]
+    col_rep = col_new // np.shape(A_in)[1]
+    A_inf = A_in.flatten(order="F")[np.newaxis]
+    A_out = reshape(
+        repmat(
+            reshape(reshape(repmat((A_in.flatten(order="F")[np.newaxis]), row_rep, 1), (row_new, -1), order="F").T, (-1, 1), order="F"), 1, col_rep
+        ).T,
+        (col_new, row_new),
+        order="F",
+    ).T
+
+    return A_out
 
 
 def timecheck(*args):
@@ -170,6 +201,41 @@ def expand_dataframe(df, column_names):
     df_final[column_names] = df_final[column_names].astype(float)
 
     return df_final
+
+
+def field_exists(field_name, shp_path):
+    """
+    This function returns whether the specified field exists or not in the shapefile linked by a path.
+
+    :param field_name: Name of the field to be checked for.
+    :type field_name: str
+    :param shp_path: Path to the shapefile.
+    :type shp_path: str
+
+    :return: ``True`` if it exists or ``False`` if it doesn't exist.
+    :rtype: bool
+    """
+    shp = ogr.Open(shp_path, 0)
+    lyr = shp.GetLayer()
+    lyr_dfn = lyr.GetLayerDefn()
+
+    exists = False
+    for i in range(lyr_dfn.GetFieldCount()):
+        exists = exists or (field_name == lyr_dfn.GetFieldDefn(i).GetName())
+    return exists
+
+
+# def add_suffix(df, suffix):
+# # Check whether there is only one copy of the initial row, or more
+# if str(df.index_old.iloc[1]).find('_') > 0:  # There are more than one copy of the row
+# # Increment the suffix and replace the old one
+# suffix = suffix + 1
+# df.index_old.iloc[1] = df.index_old.iloc[1].replace('_' + str(suffix - 1), '_' + str(suffix))
+# else:  # No other copy has been created so far
+# # Reinitialize the suffix and concatenate it at the end of the old index
+# suffix = 1
+# df.index_old.iloc[1] = str(df.index_old.iloc[1]) + '_' + str(suffix)
+# return (df, suffix)
 
 
 def assign_values_based_on_series(series, dict):

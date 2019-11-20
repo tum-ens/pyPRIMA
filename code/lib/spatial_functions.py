@@ -71,6 +71,32 @@ def ind_merra(Crd, Crd_all, res):
     return Ind
 
 
+def ind_global(Crd, res_desired):
+    """
+    This function converts longitude and latitude coordinates into indices on a global data scope, where the origin is at (-90, -180).
+
+    :param Crd: Coordinates to be converted into indices.
+    :type Crd: numpy array
+    :param res_desired: Desired resolution in the vertical and horizontal dimensions.
+    :type res_desired: list
+
+    :return Ind: Indices on a global data scope.
+    :rtype: numpy array
+    """
+    if len(Crd.shape) == 1:
+        Crd = Crd[np.newaxis]
+    Ind = np.array(
+        [
+            np.round((90 - Crd[:, 0]) / res_desired[0]) + 1,
+            np.round((180 + Crd[:, 1]) / res_desired[1]),
+            np.round((90 - Crd[:, 2]) / res_desired[0]),
+            np.round((180 + Crd[:, 3]) / res_desired[1]) + 1,
+        ]
+    )
+    Ind = np.transpose(Ind.astype(int))
+    return Ind
+
+
 def crd_exact_points(Ind_points, Crd_all, res):
     """
     This function converts indices of points in high resolution rasters into longitude and latitude coordinates.
@@ -158,6 +184,41 @@ def calc_region(region, Crd_reg, res_desired, GeoRef):
         A_region = out_image[0]
 
     return A_region
+
+
+def array2raster(newRasterfn, rasterOrigin, pixelWidth, pixelHeight, array):
+    """
+    This function saves array to geotiff raster format based on EPSG 4326.
+
+    :param newRasterfn: Output path of the raster.
+    :type newRasterfn: string
+    :param rasterOrigin: Latitude and longitude of the Northwestern corner of the raster.
+    :type rasterOrigin: list of two floats
+    :param pixelWidth:  Pixel width (might be negative).
+    :type pixelWidth: integer
+    :param pixelHeight: Pixel height (might be negative).
+    :type pixelHeight: integer
+    :param array: Array to be converted into a raster.
+    :type array: numpy array
+
+    :return: The raster file will be saved in the desired path *newRasterfn*.
+    :rtype: None
+    """
+    cols = array.shape[1]
+    rows = array.shape[0]
+    originX = rasterOrigin[0]
+    originY = rasterOrigin[1]
+
+    driver = gdal.GetDriverByName("GTiff")
+    outRaster = driver.Create(newRasterfn, cols, rows, 1, gdal.GDT_Float64, ["COMPRESS=PACKBITS"])
+    outRaster.SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
+    outRasterSRS = osr.SpatialReference()
+    outRasterSRS.ImportFromEPSG(4326)
+    outRaster.SetProjection(outRasterSRS.ExportToWkt())
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(np.flipud(array))
+    outband.FlushCache()
+    outband = None
 
 
 def intersection_subregions_countries(paths, param):
@@ -304,6 +365,7 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
       its corresponding metadata in a JSON file.
     :rtype: None
     """
+    timecheck(tech + " - Start")
 
     Crd_all = param["Crd_all"]
     res_desired = param["res_desired"]
@@ -384,8 +446,9 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         p = p + power_plants
         c = c + potential_new[ind_needed].tolist()  # Power_plants
 
+        # Show status bar
         status = status + 1
-
+        display_progress("Distribution for " + tech + ": ", (length, status))
     # Format point locations
     points = [(x[i], y[i]) for i in range(0, len(y))]
 
@@ -407,7 +470,7 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
     )
     print("File saved: " + paths["locations_ren"][tech])
     print("\n")
-    timecheck("End")
+    timecheck(tech + " - End")
 
 
 def get_sites(points_shp, param):

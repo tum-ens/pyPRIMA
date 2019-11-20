@@ -28,5 +28,5 @@ if __name__ == "__main__":
     generate_commodities(paths, param)
 
     ## Generate model files
-    # generate_urbs_model(paths, param)
-    # generate_evrys_model(paths, param)
+    generate_urbs_model(paths, param)
+    generate_evrys_model(paths, param)
