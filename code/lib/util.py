@@ -20,8 +20,6 @@ import geopandas as gpd
 import re
 import json
 
-
-# gdal.PushErrorHandler('CPLQuietErrorHandler')
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
