@@ -395,6 +395,9 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         display_progress("Distribution for " + tech + ": ", (length, status))
 
         if not inst_cap.loc[(inst_cap["Country/area"] == reg) & (inst_cap["Technology"] == tech), "Units"].values[0]:
+            # Show status bar
+            status = status + 1
+            display_progress("Distribution for " + tech + ": ", (length, status))
             continue
 
         # Calculate A_region_extended
