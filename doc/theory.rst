@@ -12,7 +12,7 @@ countries and their administrative subdivisions. The generate_load_timeseries() 
 and disaggregate them according to a set of parameters, before aggregating them at a different spatial level. It is then possible to obtain time series for 
 any region.
 
-.. figure:: img/generate_load_ts.png
+.. figure:: img/generate_load_TS.png
    :width: 100%
    :align: center
    :alt: generate_load_timeseries() description
