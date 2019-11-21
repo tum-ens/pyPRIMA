@@ -5,15 +5,15 @@ from lib.util import *
 def clean_residential_load_profile(paths, param):
     """
     This function reads the raw standard residential profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and stores the obtained load profile for each sector in the dataframe *profiles*.
+    sum is equal to 1, and saves the obtained load profile in a .csv file.
     
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
     
-    :return profiles: The normalized load profiles for the sectors.
-    :rtype: pandas dataframe
+    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :rtype: None
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["RES"])
@@ -65,10 +65,16 @@ def clean_residential_load_profile(paths, param):
 
 def clean_industry_load_profile(paths, param):
     """
+    This function reads the raw standard industrial profile, repeats it to obtain a full year, normalizes it so that the
+    sum is equal to 1, and saves the obtained load profile in a .csv file.
 
-    :param paths:
-    :param param:
-    :return:
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the year of the data.
+    :type param: dict
+
+    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :rtype: None
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["IND"])
@@ -90,10 +96,16 @@ def clean_industry_load_profile(paths, param):
 
 def clean_commercial_load_profile(paths, param):
     """
+    This function reads the raw standard commercial profile, repeats it to obtain a full year, normalizes it so that the
+    sum is equal to 1, and saves the obtained load profile in a .csv file.
 
-    :param paths:
-    :param param:
-    :return:
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the year of the data.
+    :type param: dict
+
+    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :rtype: None
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["COM"])
@@ -145,10 +157,16 @@ def clean_commercial_load_profile(paths, param):
 
 def clean_agriculture_load_profile(paths, param):
     """
+    This function reads the raw standard agricultural profile, repeats it to obtain a full year, normalizes it so that the
+    sum is equal to 1, and saves the obtained load profile in a .csv file.
 
-    :param paths:
-    :param param:
-    :return:
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the year of the data.
+    :type param: dict
+
+    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :rtype: None
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["AGR"])
@@ -200,10 +218,16 @@ def clean_agriculture_load_profile(paths, param):
 
 def clean_streetlight_load_profile(paths, param):
     """
+    This function reads the raw standard street light profile, repeats it to obtain a full year, normalizes it so that the
+    sum is equal to 1, and saves the obtained load profile in a .csv file.
 
-    :param paths:
-    :param param:
-    :return:
+    :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
+    :type paths: dict
+    :param param: Dictionary containing the year of the data.
+    :type param: dict
+
+    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :rtype: None
     """
     timecheck("Start")
     profile = pd.DataFrame(columns=["STR"])

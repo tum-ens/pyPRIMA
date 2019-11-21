@@ -133,11 +133,10 @@ def resolution_parameters(param):
 
 def load_parameters(param):
     """
-
-	  This function defines the user preferences which are related to the load/demand. Currently, only one parameter is used, namely
+    This function defines the user preferences which are related to the load/demand. Currently, only one parameter is used, namely
     *default_sec_shares*, which sets the reference region to be used in case data for other regions is missing.
-	  
-	  :param param: Dictionary including the user preferences.
+
+    :param param: Dictionary including the user preferences.
     :type param: dict
 
     :return param: The updated dictionary param.
@@ -151,8 +150,8 @@ def load_parameters(param):
 def renewable_time_series_parameters(param):
     """
     This function defines parameters related to the renewable time series to be used in the models. In particular, the user can decide which
-	  `modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
-	
+    `modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
+
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -171,7 +170,7 @@ def grid_parameters(param):
     
       * *quality* is a user assessment of the quality of the data in GridKit. If the data is trustworthy, use 1, if it is not trustworthy at all, use 0. You can use values inbetween.
       * *default* is a colleaction of default values for voltage, wires, cables, and frequency, to use when these data are missing.
-	
+
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -203,7 +202,7 @@ def processes_parameters(param):
         otherwise all the power plants will be located in a small area of high potential, close to each other.
       * *default_pa_type* and *default_pa_availability* are two arrays defining the availability for each type of protected land. These arrays are used as default, along
         with the protected areas raster, in case no potential map is available for a distributed renewable technology.
-	
+
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -272,19 +271,19 @@ def assumption_paths(paths):
       * *assumptions_processes* is a table with the following columns:
       
         * `year`: data reference year.
-        * `Process`
-        * `cap-lo`
-        * `cap-up`
-        * `max-grad`
-        * `min-fraction`
-        * `inv-cost`
-        * `fix-cost`
-        * `var-cost`
-        * `start-cost`
-        * `wacc`
-        * `depreciation`
-        * `lifetime`
-        * `area-per-cap`
+        * `Process`:  name of the process usually given as the technology type.
+        * `cap-lo`: minimum power capacity.
+        * `cap-up`: maximum power capacity.
+        * `max-grad`: maximum allowed power gradient (1/h) relative to power capacity.
+        * `min-fraction`: minimum load fraction at which the process can run at.
+        * `inv-cost`: total investment cost per power capacity (Euro/MW). It will be annualized in the model using an annuity factor derived from the wacc and depreciation period.
+        * `fix-cost`: annual operation independent or fix cost (Euro/MW/a)
+        * `var-cost`: variable cost per throughput energy unit(Euro/MWh) but excludes fuel costs.
+        * `start-cost`: startup cost when the process is switch on from the off condition.
+        * `wacc`: weighted average cost of capital. Percentage of cost of capital after taxes.
+        * `depreciation`: deprecation period in years.
+        * `lifetime`: lifetime of already installed capacity in years.
+        * `area-per-cap`: area required per power capacity (m²/MW).
         * `act-up`
         * `act-lo`
         * `on-off`
@@ -311,16 +310,114 @@ def assumption_paths(paths):
         * `year_mu`
         * `year_stdev`
 
-      * *assumptions_storage* ...
-      * *assumptions_commodities* ...
-      * *assumptions_transmission* ...
-      * *dict_season*
-      * *dict_daytype*
-      * *dict_sectors*
-      * *dict_counties*
-      * *dict_line_voltage*
-      * *dict_lines_costs*
-      * *dict_technologies*
+      * *assumptions_storage* is a table with the following columns:
+
+        * `year`: data reference year.
+        * `Storage`: name of the storage usually given as the technology type.
+        * `ep-ratio`: fixed energy to power ratio (hours).
+        * `cap-up-c`: maximum allowed energy capacity (MWh)
+        * `cap-up-p`: maximum allowed power capacity (MW)
+        * `inv-cost-p`: total investment cost per power capacity (Euro/MW). It will be annualized in the model using an annuity factor derived from the wacc and depreciation period.
+        * `inv-cost-c`: total investment cost per energy capacity (Euro/MWh). It will be annualized in the model using an annuity factor derived from the wacc and depreciation period.
+        * `fix-cost-p`: annual operation independent or fix cost per power capacity (Euro/MW/a)
+        * `fix-cost-c`: annual operation independent or fix cost per energy capacity (Euro/MWh/a)
+        * `var-cost-p`: opertion dependent costs for input and output of energy per MWh_out stored or retreived (euro/MWh)
+        * `var-cost-c`: operation dependent costs per MWh stored. This value can used to model technologies that have increased wear and tear proportional to the amount of stored energy.
+        * `lifetime`: lifetime of already installed capacity in years.
+        * `depreciation`: deprecation period in years.
+        * `wacc`: weighted average cost of capital. Percentage of cost of capital after taxes.
+        * `init`: initial storage content. Fraction of storage capacity that is full at the simulation start. This level has to be reached in the final timestep.
+        * `var-cost-pi`:
+        * `var-cost-po`:
+        * `act-lo-pi`:
+        * `act-up-pi`:
+        * `act-lo-po`:
+        * `act-up-po`:
+        * `act-lo-c`:
+        * `act-up-c`:
+        * `precont`:
+        * `prepowin`:
+        * `prepowout`:
+        * `ru`:
+        * `rd`:
+        * `rumax`:
+        * `rdmax`:
+        * `seasonal`:
+        * `ctr`:
+        * `discharge`: energy losses due to serl-discarge per hour as a percentage of the installed energy capacity.
+        * `year_mu`:
+        * `year_stdev`:
+
+      * *assumptions_commodities* is a table with the following columns:
+
+        * `year`: data reference year.
+        * `Commodity`: name of the commodity.
+        * `Type_urbs`: type of the commodity according to urbs' terminology.
+        * `Type_evrys`: type of the commodity according to evrys' terminology.
+        * `price`: commodity price (euro/MWh).
+        * `max`: maximum annual commodity use (MWh).
+        * `maxperhour`: Maxium commodity use per hour (MW).
+        * `annual`:
+        * `losses`:
+
+      * *assumptions_transmission* is a table with the following columns:
+
+        * `Type`: type of transmission.
+        * `length_limit_km`: maximum length of the transmission line in kilometers.
+        * `year`: data reference year.
+        * `Commodity`: name of the commodity to be transported along the transmission line.
+        * `eff_per_1000km`: transmission efficiency after 1000km in percent.
+        * `inv-cost-fix`: length independent investment cost (euro).
+        * `inv-cost-length`: length dependent investment cost (euro/km).
+        * `fix-cost-length`: fixed annual cost dependent on the length of the line (euro/km/a).
+        * `var-cost`: variable costs per energy unit transmitted (euro/MWh)
+        * `cap-lo`: minimum required power capacity (MW).
+        * `cap-up`: maximum allowed power capacity (MW).
+        * `wacc`: weighted average cost of capital. Percentage of cost of capital after taxes.
+        * `depreciation`: deprecation period in years.
+        * `act-lo`:
+        * `act-up`:
+        * `angle-up`:
+        * `PSTmax`:
+
+      * *dict_season_north* is a table with the following columns:
+
+        * `Month`:
+        * `Season`:
+
+      * *dict_daytype* is a table with the following columns:
+
+        * `Weak day`:
+        * `Type`:
+
+      * *dict_sectors* is a table with the following columns:
+
+        * `EUROSTAT`:
+        * `Model_sectors`
+
+      * *dict_counties* is a table with the following columns:
+
+        * `IRENA`:
+        * `Counties shapefile`:
+        * `NAME_SHORT`:
+        * `ENTSO-E`:
+        * `EUROSTAT`:
+
+      * *dict_line_voltage* is a table with the following columns:
+
+        * `voltage_kV`:
+        * `specific_impedance_Ohm_per_km`:
+        * `loadability`:
+        * `SIL_MWh`:
+
+      * *dict_technologies* is a table with the following columns:
+
+        * `IRENA`:
+        * `FRESNA`:
+        * `Model names`:
+
+      * *dict_lines_costs* is a table with the following columns:
+
     
     :param paths: Dictionary including the paths.
     :type paths: dict
