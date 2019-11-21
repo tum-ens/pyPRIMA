@@ -8,7 +8,7 @@ def configuration():
     This function is the main configuration function that calls all the other modules in the code.
 
     :return (paths, param): The dictionary param containing all the user preferences, and the dictionary path containing all the paths to inputs and outputs.
-    :rtype: tuple of dict
+    :rtype: tuple(dict, dict)
     """
     paths, param = general_settings()
     paths, param = scope_paths_and_parameters(paths, param)
@@ -38,7 +38,7 @@ def general_settings():
     and the system-dependent file separator ``fs``.
 
     :return (paths, param): The empty dictionary paths, and the dictionary param including some general information.
-    :rtype: tuple of dict
+    :rtype: tuple(dict, dict)
     """
     # These variables will be initialized here, then read in other modules without modifying them.
     global fs
@@ -133,13 +133,11 @@ def resolution_parameters(param):
 
 def load_parameters(param):
     """
-    This function defines the user preferences which are related to the load/demand.
 
-      * *sectors* are the sectors to be considered.
-      * *sectors_eurostat* is a dictionary for identifying the sectors to be considered, which have different names.
-      * *default_sec_shares* is the code name of the country to be used as a default, if the sector shares are missing for another region.
-
-    :param param: Dictionary including the user preferences.
+	  This function defines the user preferences which are related to the load/demand. Currently, only one parameter is used, namely
+    *default_sec_shares*, which sets the reference region to be used in case data for other regions is missing.
+	  
+	  :param param: Dictionary including the user preferences.
     :type param: dict
 
     :return param: The updated dictionary param.
@@ -152,9 +150,9 @@ def load_parameters(param):
 
 def renewable_time_series_parameters(param):
     """
-    This function defines parameters relating to the renewable time series to be used in the models. In particular, the user can decide which
-    `modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
-
+    This function defines parameters related to the renewable time series to be used in the models. In particular, the user can decide which
+	  `modes` to use from the files of the time series, provided they exist. See the repository tum-ens/renewable-timeseries for more information.
+	
     :param param: Dictionary including the user preferences.
     :type param: dict
 
@@ -169,6 +167,16 @@ def renewable_time_series_parameters(param):
 
 def grid_parameters(param):
     """
+    This function defines parameters related to the grid to be used while cleaning the GridKit data.
+    
+      * *quality* is a user assessment of the quality of the data in GridKit. If the data is trustworthy, use 1, if it is not trustworthy at all, use 0. You can use values inbetween.
+      * *default* is a colleaction of default values for voltage, wires, cables, and frequency, to use when these data are missing.
+	
+    :param param: Dictionary including the user preferences.
+    :type param: dict
+
+    :return param: The updated dictionary param.
+    :rtype: dict
     """
 
     param["grid"] = {
@@ -181,15 +189,37 @@ def grid_parameters(param):
 
 def processes_parameters(param):
     """
+    This function defines parameters related to the processes in general, and to distributed renewable capacities in particular.
+    
+    For *process*, only the parameter *cohorts* is currently used. It defines how power plants should be grouped according to their construction period.
+    If *cohorts* is 5, then you will have groups of coal power plants from 1960, then another from 1965, and so on. If you do not wish to group the power plants,
+    use the value 1.
+    
+    For distributed renewable capacities, *dist_ren*, the following parameters are needed:
+
+      * *units* is a dictionary defining the standard power plant size for each distributed renewable technology in MW.
+      * *randomness* is a value between 0 and 1, defining the randomness of the spatial distribution of renewable capacities. The complementary value (1 - randomness)
+        is affected by the values of the potential raster used for the distribution. When using a high resolution map, set *randomness* at a high level (close to 1),
+        otherwise all the power plants will be located in a small area of high potential, close to each other.
+      * *default_pa_type* and *default_pa_availability* are two arrays defining the availability for each type of protected land. These arrays are used as default, along
+        with the protected areas raster, in case no potential map is available for a distributed renewable technology.
+	
+    :param param: Dictionary including the user preferences.
+    :type param: dict
+
+    :return param: The updated dictionary param.
+    :rtype: dict
     """
 
+    param["process"] = {"cohorts": 5}  # 5 means 5-year steps, if no cohorts needed type 1
+    
     param["dist_ren"] = {
         "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
         "randomness": 0.99,
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
     }
-    param["process"] = {"cohorts": 5}  # 5 means 5-year steps, if no cohorts needed type 1
+    
     return param
 
 
@@ -205,9 +235,11 @@ def global_maps_input_paths(paths):
     
     :param paths: Dictionary including the paths.
     :type paths: dict
+    
     :return: The updated dictionary paths.
     :rtype: dict
     """
+    
     global root
     global fs
 
@@ -224,14 +256,64 @@ def global_maps_input_paths(paths):
 
 def assumption_paths(paths):
     """
-    This function defines the paths where the assumption files are located:
+    This function defines the paths for the assumption files and the dictionaries.
+    
+      * *assumptions_landuse* is a table with land use types as rows and sectors as columns. The table is filled with values between 0 and 1, so that each row
+        has a total of 0 (no sectoral load there) or 1 (if there is a load, it will be distributed according to the shares of each sector).
+      * *assumptions_flows* is a table with the following columns:
+        
+        * `year`: data reference year.
+        * `Process/Storage`: name of the process or storage type.
+        * `Direction`: either ``In`` or ``Out``. You can have multiple inputs and outputs, each one in a separate row.
+        * `Commodity`: name of the input or output commodity.
+        * `ratio`: ratio to the throughput, which is an intermediate level between input and output. It could be any positive value. The ratio of the output to the input corresponds to the efficiency. 
+        * `ratio-min` similar to `ratio`, but at partial load.
+        
+      * *assumptions_processes* is a table with the following columns:
+      
+        * `year`: data reference year.
+        * `Process`
+        * `cap-lo`
+        * `cap-up`
+        * `max-grad`
+        * `min-fraction`
+        * `inv-cost`
+        * `fix-cost`
+        * `var-cost`
+        * `start-cost`
+        * `wacc`
+        * `depreciation`
+        * `lifetime`
+        * `area-per-cap`
+        * `act-up`
+        * `act-lo`
+        * `on-off`
+        * `reserve-cost`
+        * `ru`
+        * `rd`
+        * `rumax`
+        * `rdmax`
+        * `detail`
+        * `lambda`
+        * `heatmax`
+        * `maxdeltaT`
+        * `heatupcost`
+        * `su`
+        * `sd`
+        * `pdt`
+        * `hotstart`
+        * `pot`
+        * `pretemp`
+        * `preheat`
+        * `prestate`
+        * `prepow`
+        * `precaponline`
+        * `year_mu`
+        * `year_stdev`
 
-      * *assumptions_landuse*
-      * *assumptions_flows*
-      * *assumptions_processes*
-      * *assumptions_storage*
-      * *assumptions_commodities*
-      * *assumptions_transmission*
+      * *assumptions_storage* ...
+      * *assumptions_commodities* ...
+      * *assumptions_transmission* ...
       * *dict_season*
       * *dict_daytype*
       * *dict_sectors*
@@ -239,9 +321,10 @@ def assumption_paths(paths):
       * *dict_line_voltage*
       * *dict_lines_costs*
       * *dict_technologies*
-
+    
     :param paths: Dictionary including the paths.
     :type paths: dict
+    
     :return: The updated dictionary paths.
     :rtype: dict
     """
@@ -298,16 +381,6 @@ def load_input_paths(paths, param):
         # CA: "Lastprofil_Strassenbeleuchtung_S0.xlsx"
     }
 
-    # Cleaned load profiles
-    PathTemp = root + "03 Intermediate files" + fs + "Files " + region + fs + "Load" + fs
-    paths["cleaned_profiles"] = {
-        "RES": PathTemp + "Residence_Load_profiles.csv",
-        "IND": PathTemp + "Industry_Load_profiles.csv",
-        "COM": PathTemp + "Commercial_Load_profiles.csv",
-        "AGR": PathTemp + "Agriculture_Load_profiles.csv",
-        "STR": PathTemp + "Streetlight_Load_profiles.csv",
-    }
-
     return paths
 
 
@@ -333,7 +406,7 @@ def renewable_time_series_paths(paths, param):
 
     paths["TS_ren"] = {
         "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
-        "WindOff": PathTemp + "Geothermal_WGC_WindOff_reg_TimeSeries_80_100_120_2015.csv",
+        "WindOff": PathTemp + "",
         "PV": PathTemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
         "CSP": PathTemp + "",
     }
@@ -479,6 +552,15 @@ def output_paths(paths, param):
         "subregions_name"] + ".shp"
     paths["stats_country_parts"] = paths["load_sub"] + "Statistics_country_parts.csv"
     paths["load_regions"] = paths["load_sub"] + "TS_subregions_" + param["subregions_name"] + "_" + year + ".csv"
+    
+    # Cleaned load profiles
+    paths["cleaned_profiles"] = {
+        "RES": paths["load"] + "Residential_Load_profiles.csv",
+        "IND": paths["load"] + "Industry_Load_profiles.csv",
+        "COM": paths["load"] + "Commercial_Load_profiles.csv",
+        "AGR": paths["load"] + "Agriculture_Load_profiles.csv",
+        "STR": paths["load"] + "Streetlight_Load_profiles.csv",
+    }
 
     # Grid
     paths["grid_expanded"] = paths["grid"] + "grid_expanded.csv"
@@ -545,85 +627,3 @@ def local_maps_paths(paths, param):
     paths["POP"] = PathTemp + "_Population.tif"  # Population
 
     return paths
-
-# ##############################
-# #### Move to assumptions #####
-# ##############################
-
-# # Processes and Storages in California
-
-# Cal_urbs = {'cap_lo': {'Biomass': 0, 'Coal': 0, 'Gas': 0, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
-# 'Nuclear': 0, 'Oil': 0, 'Slack': 999999, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
-# 'cap_up': {'Biomass': 100, 'Coal': 0, 'Gas': 10000, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
-# 'Nuclear': 0, 'Oil': 0, 'Slack': 999999, 'Solar': np.inf, 'Waste': 0, 'WindOn': np.inf},
-# 'max_grad': {'Biomass': 1.2, 'Coal': 0.6, 'Gas': 4.8, 'Geothermal': 0.6, 'Hydro_Large': np.inf,
-# 'Hydro_Small': np.inf,
-# 'Nuclear': 0.3, 'Oil': 3, 'Slack': np.inf, 'Solar': np.inf, 'Waste': 1.2, 'WindOn': np.inf},
-# 'min_fraction': {'Biomass': 0, 'Coal': 0.5, 'Gas': 0.25, 'Geothermal': 0, 'Hydro_Large': 0,
-# 'Hydro_Small': 0,
-# 'Nuclear': 0.7, 'Oil': 0.4, 'Slack': 0, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
-# 'inv_cost': {'Biomass': 875000, 'Coal': 600000, 'Gas': 450000, 'Geothermal': 1000000,
-# 'Hydro_Large': 1600000, 'Hydro_Small': 320000,
-# 'Nuclear': 1600000, 'Oil': 600000, 'Slack': 0, 'Solar': 600000, 'Waste': 800000,
-# 'WindOn': 900000},
-# 'fix_cost': {'Biomass': 28000, 'Coal': 18000, 'Gas': 6000, 'Geothermal': 10000, 'Hydro_Large': 20000,
-# 'Hydro_Small': 1000,
-# 'Nuclear': 50000, 'Oil': 9000, 'Slack': 0, 'Solar': 25000, 'Waste': 4000, 'WindOn': 30000},
-# 'var_cost': {'Biomass': 5, 'Coal': 14, 'Gas': 25, 'Geothermal': 5, 'Hydro_Large': 3, 'Hydro_Small': 3,
-# 'Nuclear': 10, 'Oil': 35, 'Slack': 200, 'Solar': 0, 'Waste': 2, 'WindOn': 0},
-# 'startup_cost': {'Biomass': 0, 'Coal': 90, 'Gas': 40, 'Geothermal': 0, 'Hydro_Large': 0, 'Hydro_Small': 0,
-# 'Nuclear': 150, 'Oil': 40, 'Slack': 0, 'Solar': 0, 'Waste': 0, 'WindOn': 0},
-# 'wacc': 0.07,
-# 'depreciation': {'Biomass': 25, 'Coal': 40, 'Gas': 30, 'Geothermal': 100, 'Hydro_Large': 100,
-# 'Hydro_Small': 30,
-# 'Nuclear': 60, 'Oil': 30, 'Slack': 1, 'Solar': 25, 'Waste': 25, 'WindOn': 25},
-# 'area_per_cap': {'Biomass': np.nan, 'Coal': np.nan, 'Gas': np.nan, 'Geothermal': np.nan,
-# 'Hydro_Large': np.nan, 'Hydro_Small': np.nan,
-# 'Nuclear': np.nan, 'Oil': np.nan, 'Slack': np.nan, 'Solar': 14000, 'Waste': np.nan,
-# 'WindOn': np.nan}
-# }
-
-# pro_sto_Cal = {'proc_dict': {'AB': 'Biomass', 'BLQ': 'Biomass', 'OBG': 'Biomass', 'WDS': 'Biomass',
-# 'BIT': 'Coal', 'RC': 'Coal',
-# 'DFO': 'Oil', 'JF': 'Oil', 'PG': 'Oil', 'PC': 'Oil',
-# 'LFG': 'Gas', 'NG': 'Gas', 'OG': 'Gas', 'PUR': 'Gas', 'WH': 'Gas',
-# 'GEO': 'Geothermal',
-# 'WAT': 'Hydro_Small',
-# # Later, we will define Hydro_Large as power plants with capacity > 30MW
-# 'MWH': 'Battery',
-# 'NUC': 'Nuclear',
-# 'SUN': 'Solar',
-# 'MSW': 'Waste',
-# 'WND': 'WindOn'},
-# 'storage': ['PumSt', 'Battery'],
-# 'status': ['(OP) Operating', '(SB) Standby/Backup: available for service but not normally used'],
-# 'states': ['CA'],
-# 'Cal_urbs': Cal_urbs
-# }
-
-# ###########################
-# #### User preferences #####
-# ###########################
-
-# # Models input file Sheets
-# param["model_sheets"] = {'urbs': ['Global', 'Site', 'Commodity', 'Process', 'Process-Commodity', 'Transmission', 'Storage',
-# 'DSM', 'Demand', 'Suplm', 'Buy-Sell-Price'],
-# 'evrys': ['Flags', 'Sites', 'Commodity', 'Process', 'Transmission', 'Storage', 'DSM', 'Demand']}
-
-# # urbs Global paramters
-# urbs_global = {"Support timeframe": param["year"],
-# "Discount rate": 0.03,
-# "CO2 limit": 'inf',
-# "Cost budget": 6.5e11,
-# "CO2 budget": 'inf'
-# }
-# param["urbs_global"] = urbs_global
-
-
-# ##################################
-# #           Input files          #
-# ##################################
-
-# # Process and storage data
-# PathTemp = root + '01 Raw inputs' + fs + 'Power plants and storage' + fs
-# paths["database_Cal"] = PathTemp + 'CA_Powerplants' + fs + 'april_generator2017 (original data).xlsx'
