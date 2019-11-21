@@ -42,7 +42,7 @@ The load is assumed to be perfectly divided into four distinct sectors (load sou
 * Agricultural
 
 .. figure:: img/sector_load_profiles.png
-   :width: 60%
+   :width: 80%
    :align: center
    :alt: Sectorial load profiles
    
