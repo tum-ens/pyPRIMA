@@ -3,22 +3,22 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - pip=19.3.1=py37_0
+  - pip=19.3.1
   - pip:
     - pyproj
-  - numpy=1.16.4=py37h19fb1c0_0
-  - pandas=0.25.1=py37ha925a31_0
-  - gdal=2.4.2=py37hab3e11c_7
-  - geopandas=0.5.1=py_0
-  - geopy=1.20.0=py_0
-  - openpyxl=3.0.0=py_0
+  - numpy=1.16.4
+  - pandas=0.25.1
+  - gdal=2.4.2
+  - geopandas=0.5.1
+  - geopy=1.20.0
+  - openpyxl=3.0.0
   - pysal=2.0.0
-  - dill=0.3.1.1=py37_0
-  - pyshp=2.1.0=py_0
-  - python=3.7.5=h8c8aaf0_0
-  - rasterio=1.0.25=py37he350917_1
-  - scipy=1.3.1=py37h29ff71c_0
-  - shapely=1.6.4=py37ha35856d_1006
-  - xlrd=1.2.0=py37_0
+  - dill=0.3.1.1
+  - pyshp=2.1.0
+  - python=3.7.5
+  - rasterio=1.0.25
+  - scipy=1.3.1
+  - shapely=1.6.4
+  - xlrd=1.2.0
 prefix: D:\Miniconda3\envs\gen_mod
 
