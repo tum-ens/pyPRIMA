@@ -1,10 +1,10 @@
-================
-generate-models
-================
+========
+pyPRIMA
+========
 
------------------------------------------------------------------------------------------------
-A pre-processing tool to automate the creation of energy system models using a common database
------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------
+**py**thon **PR**eprocessing of **I**nputs for **M**odel fr**A**meworks
+------------------------------------------------------------------------
 
 :Code developers: Kais Siala, Houssame Houmy
 :Documentation authors:	Kais Siala		
@@ -43,7 +43,7 @@ Contents
 User manual
 ^^^^^^^^^^^^^
 
-These documents give a general overview and help you getting started from the installation to you first running model.
+These documents give a general overview and help you get started from the installation to you first running model.
 
 .. the following section contains the links to the other parts of the documentation, the 'maxdepth' component define how many sub sections should be displayed
 
