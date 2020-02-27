@@ -1,5 +1,5 @@
-# generate-models
-A pre-processing tool to automate the creation of energy system models using a common database
+# pyPRIMA
+**py**thon **PR**eprocessing of **I**nputs for **M**odel fr**A**meworks: a tool to automate the creation of energy system models using a common database
 
 [![Documentation Status](https://readthedocs.org/projects/generate-models/badge/?version=latest)](http://generate-models.readthedocs.io/en/latest/?badge=latest)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
