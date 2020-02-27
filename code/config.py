@@ -46,7 +46,7 @@ def general_settings():
 
     param = {}
     param["author"] = "Kais Siala"  # the name of the person running the script
-    param["comment"] = "Testing"
+    param["comment"] = "Frieder NUTS1"
 
     paths = {}
     fs = os.path.sep
@@ -54,9 +54,9 @@ def general_settings():
     root = str(Path(current_folder).parent.parent.parent)
     # For use at TUM ENS
     if root[-1] != fs:
-        root = root + fs + "Database_example" + fs
+        root = root + fs + "Database_KS" + fs
     else:
-        root = root + "Database_example" + fs
+        root = root + "Database_KS" + fs
 
     return paths, param
 
@@ -94,11 +94,11 @@ def scope_paths_and_parameters(paths, param):
     # Paths to the shapefiles
     PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
     paths["spatial_scope"] = PathTemp + "Europe_NUTS0_wo_Balkans_with_EEZ.shp"
-    paths["subregions"] = PathTemp + "Bavaria_WGC.shp"
+    paths["subregions"] = PathTemp + "Europe_NUTS1_wo_Balkans.shp"
 
     # Name tags for the scope and the subregions
     param["region_name"] = "Europe"  # Name tag of the spatial scope
-    param["subregions_name"] = "Geothermal_WGC"  # Name tag of the subregions
+    param["subregions_name"] = "Europe_wo_Balkans_NUTS1"  # Name tag of the subregions
 
     # Year
     param["year"] = 2015  # Data
