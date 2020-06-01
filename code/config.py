@@ -46,7 +46,7 @@ def general_settings():
 
     param = {}
     param["author"] = "Kais Siala"  # the name of the person running the script
-    param["comment"] = "Mekong"
+    param["comment"] = "Europe"
 
     paths = {}
     fs = os.path.sep
