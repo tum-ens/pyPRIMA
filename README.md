@@ -18,3 +18,20 @@ This code is useful if:
 * You want to create different models using the same input database, but different model regions
 * You want to harmonize the assumptions used in different model frameworks (for comparison and/or linking)
 * You want to generate many models in a short amount of time with fewer human errors
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore -->
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/kais-siala"><img src="https://avatars2.githubusercontent.com/u/21306297?v=4" width="100px;" alt="kais-siala"/><br /><sub><b>kais-siala</b></sub></a><br /><a href="#question-kais-siala" title="Answering Questions">💬</a> <a href="https://github.com/tum-ens/renewable-timeseries/issues?q=author%3Akais-siala" title="Bug reports">🐛</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Code">💻</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Documentation">📖</a> <a href="#ideas-kais-siala" title="Ideas, Planning, & Feedback">🤔</a> <a href="#maintenance-kais-siala" title="Maintenance">🚧</a> <a href="#review-kais-siala" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Tests">⚠️</a> <a href="#talk-kais-siala" title="Talks">📢</a></td>
+    <td align="center"><a href="https://github.com/HoussameH"><img src="https://avatars2.githubusercontent.com/u/48953960?v=4" width="100px;" alt="HoussameH"/><br /><sub><b>HoussameH</b></sub></a><br /> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=HoussameH" title="Code">💻</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=HoussameH" title="Documentation">📖</a></td>
+  </tr>
+</table>
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
