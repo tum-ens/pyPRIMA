@@ -845,15 +845,17 @@ def generate_storage(paths, param):
     storage_agg["eff-in"] = storage_agg[["Type"]].join(df_effin, on=["Type"], how="left")["ratio"]
     storage_agg["eff-out"] = storage_agg[["Type"]].join(df_effout, on=["Type"], how="left")["ratio"]
     storage_agg["Commodity"] = storage_agg[["Type"]].join(df_com, on=["Type"], how="left")["Commodity"]
-    
+
     # Rename inst-cap
     storage_agg.rename(columns={"inst-cap": "inst-cap-p"}, inplace=True)
     storage_agg["inst-cap-c"] = storage_agg["inst-cap-p"] * storage_agg["ep-ratio"]
-    
+
     # Add cap-lo, fix cap-up
     storage_agg["cap-lo-c"] = 0
     storage_agg["cap-lo-p"] = 0
-    storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-c"] = storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-p"] * storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "ep-ratio"]
+    storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-c"] = (
+        storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-p"] * storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "ep-ratio"]
+    )
 
     # Output
     storage_agg.to_csv(paths["storage_regions"], index=False, sep=";", decimal=",")

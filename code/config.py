@@ -211,14 +211,14 @@ def processes_parameters(param):
     """
 
     param["process"] = {"cohorts": 1}  # 5 means 5-year steps, if no cohorts needed type 1
-    
+
     param["dist_ren"] = {
         "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
         "randomness": 0.99,
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
     }
-    
+
     return param
 
 
@@ -238,7 +238,7 @@ def global_maps_input_paths(paths):
     :return: The updated dictionary paths.
     :rtype: dict
     """
-    
+
     global root
     global fs
 
@@ -468,17 +468,16 @@ def load_input_paths(paths):
     # Raw Inputs
     PathTemp = root + "01 Raw inputs" + fs + "Load" + fs
     paths["sector_shares"] = PathTemp + "Eurostat" + fs + "nrg_105a_1_Data.csv"
-    paths[
-        "load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"  # CA: "CA_Load Profiles_11 Regions_correct names.csv"
+    paths["load_ts"] = PathTemp + "ENTSOE" + fs + "Monthly-hourly-load-values_2006-2015.xlsx"  # CA: "CA_Load Profiles_11 Regions_correct names.csv"
     paths["profiles"] = {
         "RES": PathTemp + "Load profiles" + fs + "Lastprofil_Haushalt_H0.xlsx",
         # CA: "Residential Load Profile_2017_SCE.csv"
         "IND": PathTemp + "Load profiles" + fs + "Lastprofil_Industrie_Tag.xlsx",
         # CA: "Medium Commercial and Industrial_Load Profile_2017 SCE.xlsx"
         "COM": PathTemp
-               + "Load profiles"
-               + fs
-               + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",  # CA: "Small Commercial_Load Profile_2017 SCE.xlsx"
+        + "Load profiles"
+        + fs
+        + "VDEW-Lastprofile-Gewerbe-Landwirtschaft_G0.csv",  # CA: "Small Commercial_Load Profile_2017 SCE.xlsx"
         "AGR": PathTemp + "Load profiles" + fs + "VDEW-Lastprofile-Landwirtschaft_L0.csv",
         # CA: "VDEW-Lastprofile-Landwirtschaft_L0.csv"
         "STR": PathTemp + "Load profiles" + fs + "Lastprofil_Strassenbeleuchtung_S0.xlsx",
@@ -511,8 +510,7 @@ def renewable_time_series_paths(paths, param):
     paths["region"] = root + "03 Intermediate files" + fs + "Files " + region + fs
 
     paths["TS_ren"] = {}
-    PathTemp = paths[
-                   "region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
+    PathTemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
 
     paths["TS_ren"] = {
         "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
@@ -579,8 +577,7 @@ def processes_input_paths(paths, param):
     }
 
     PathTemp = root + "01 Raw inputs" + fs + "Power plants and storage" + fs
-    paths[
-        "FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
+    paths["FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
 
     return paths
 
@@ -734,11 +731,10 @@ def output_paths(paths, param):
     paths["df_sector"] = paths["load"] + "TS_countries_sectors_" + year + ".csv"
     paths["load_sector"] = paths["load"] + "Yearly_demand_countries_sectors_" + year + ".csv"
     paths["load_landuse"] = paths["load"] + "TS_countries_land_use_" + year + ".csv"
-    paths["intersection_subregions_countries"] = paths["load_sub"] + "Intersection_with_" + param[
-        "subregions_name"] + ".shp"
+    paths["intersection_subregions_countries"] = paths["load_sub"] + "Intersection_with_" + param["subregions_name"] + ".shp"
     paths["stats_country_parts"] = paths["load_sub"] + "Statistics_country_parts.csv"
     paths["load_regions"] = paths["load_sub"] + "TS_subregions_" + param["subregions_name"] + "_" + year + ".csv"
-    
+
     # Cleaned load profiles
     paths["cleaned_profiles"] = {
         "RES": paths["load"] + "Residential_Load_profiles.csv",
