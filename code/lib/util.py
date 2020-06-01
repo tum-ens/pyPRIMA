@@ -225,19 +225,6 @@ def field_exists(field_name, shp_path):
     return exists
 
 
-# def add_suffix(df, suffix):
-# # Check whether there is only one copy of the initial row, or more
-# if str(df.index_old.iloc[1]).find('_') > 0:  # There are more than one copy of the row
-# # Increment the suffix and replace the old one
-# suffix = suffix + 1
-# df.index_old.iloc[1] = df.index_old.iloc[1].replace('_' + str(suffix - 1), '_' + str(suffix))
-# else:  # No other copy has been created so far
-# # Reinitialize the suffix and concatenate it at the end of the old index
-# suffix = 1
-# df.index_old.iloc[1] = str(df.index_old.iloc[1]) + '_' + str(suffix)
-# return (df, suffix)
-
-
 def assign_values_based_on_series(series, dict):
     """
     This function fills a series based on the values of another series and a dictionary.

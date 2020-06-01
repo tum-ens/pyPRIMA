@@ -22,7 +22,7 @@ def configuration():
     paths = global_maps_input_paths(paths)
     paths = assumption_paths(paths)
     paths = grid_input_paths(paths)
-    paths = load_input_paths(paths, param)
+    paths = load_input_paths(paths)
     paths = renewable_time_series_paths(paths, param)
     paths = processes_input_paths(paths, param)
     paths = output_folders(paths, param)
@@ -93,16 +93,16 @@ def scope_paths_and_parameters(paths, param):
 
     # Paths to the shapefiles
     PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
-    paths["spatial_scope"] = PathTemp + "Mekong.shp"
-    paths["subregions"] = PathTemp + "Mekong.shp"
+    paths["spatial_scope"] = PathTemp + "Europe_NUTS0_wo_Balkans_with_EEZ.shp"
+    paths["subregions"] = PathTemp + "Europe_NUTS1_wo_Balkans.shp"
 
     # Name tags for the scope and the subregions
-    param["region_name"] = "Mekong"  # Name tag of the spatial scope
-    param["subregions_name"] = "Mekong_provinces"  # Name tag of the subregions
+    param["region_name"] = "Europe"  # Name tag of the spatial scope
+    param["subregions_name"] = "Europe_wo_Balkans_NUTS1"  # Name tag of the subregions
 
     # Year
-    param["year"] = 2016  # Data
-    param["model_year"] = 2016  # Model
+    param["year"] = 2015  # Data
+    param["model_year"] = 2015  # Model
 
     # Technologies
     param["technology"] = {
@@ -166,9 +166,9 @@ def renewable_time_series_parameters(param):
 
 def grid_parameters(param):
     """
-    This function defines parameters related to the grid to be used while cleaning the GridKit data.
+    This function defines parameters related to the grid to be used while cleaning the data.
     
-      * *quality* is a user assessment of the quality of the data in GridKit. If the data is trustworthy, use 1, if it is not trustworthy at all, use 0. You can use values inbetween.
+      * *quality* is a user assessment of the quality of the data. If the data is trustworthy, use 1, if it is not trustworthy at all, use 0. You can use values inbetween.
       * *default* is a colleaction of default values for voltage, wires, cables, and frequency, to use when these data are missing.
 
     :param param: Dictionary including the user preferences.
@@ -284,31 +284,31 @@ def assumption_paths(paths):
         * `depreciation`: deprecation period in years.
         * `lifetime`: lifetime of already installed capacity in years.
         * `area-per-cap`: area required per power capacity (m²/MW).
-        * `act-up`
-        * `act-lo`
-        * `on-off`
-        * `reserve-cost`
-        * `ru`
-        * `rd`
-        * `rumax`
-        * `rdmax`
-        * `detail`
-        * `lambda`
-        * `heatmax`
-        * `maxdeltaT`
-        * `heatupcost`
-        * `su`
-        * `sd`
-        * `pdt`
-        * `hotstart`
-        * `pot`
-        * `pretemp`
-        * `preheat`
-        * `prestate`
-        * `prepow`
-        * `precaponline`
-        * `year_mu`
-        * `year_stdev`
+        * `act-up`: maximal load (per unit).
+        * `act-lo`: minimal load (per unit).
+        * `on-off`: binary variable, 1 for controllable power plants, otherwise 0 (must-run).
+        * `reserve-cost`: cost of power reserves (Euro/MW) (to be verified).
+        * `ru`: ramp-up capacity (MW/MWp/min).
+        * `rd`: ramp-down capacity (MW/MWp/min).
+        * `rumax`: maximal ramp-up (MW/MWp/h).
+        * `rdmax`: minimal ramp-up (MW/MWp/h).
+        * `detail`: level of detail for modeling thermal power plants, modes 1-5.
+        * `lambda`: cooling coefficient (to be verified).
+        * `heatmax`: maximal heating capacity (to be verified).
+        * `maxdeltaT`: maximal temperature gradient (to be verified).
+        * `heatupcost`: costs of heating up (Euro/MWh_th) (to be verified).
+        * `su`: ramp-up at start (to be verified).
+        * `sd`: ramp-down at switch-off (to be verified).
+        * `pdt`: (to be verified).
+        * `hotstart`: (to be verified).
+        * `pot`: (to be verified).
+        * `pretemp`: temperature at the initial time step, per unit of the maximum operating temperature.
+        * `preheat`: heat content at the initial time step, per unit of the maximum operating heat content.
+        * `prestate`: operating state at the initial time step (binary).
+        * `prepow`: available power at the initial time step (MW) (to be verified).
+        * `precaponline`: online capacity at the initial time step (MW).
+        * `year_mu`: average construction year for that type of power plants.
+        * `year_stdev`: standard deviation from the average construction year for that type of power plants.
 
       * *assumptions_storage* is a table with the following columns:
 
@@ -327,26 +327,26 @@ def assumption_paths(paths):
         * `depreciation`: deprecation period in years.
         * `wacc`: weighted average cost of capital. Percentage of cost of capital after taxes.
         * `init`: initial storage content. Fraction of storage capacity that is full at the simulation start. This level has to be reached in the final timestep.
-        * `var-cost-pi`:
-        * `var-cost-po`:
-        * `act-lo-pi`:
-        * `act-up-pi`:
-        * `act-lo-po`:
-        * `act-up-po`:
-        * `act-lo-c`:
-        * `act-up-c`:
-        * `precont`:
-        * `prepowin`:
-        * `prepowout`:
-        * `ru`:
-        * `rd`:
-        * `rumax`:
-        * `rdmax`:
-        * `seasonal`:
-        * `ctr`:
-        * `discharge`: energy losses due to serl-discarge per hour as a percentage of the installed energy capacity.
-        * `year_mu`:
-        * `year_stdev`:
+        * `var-cost-pi`: variable costs for charing (Euro/MW).
+        * `var-cost-po`: variable costs for discharing (Euro/MW).
+        * `act-lo-pi`: minimal share of active capacity for charging (per unit).
+        * `act-up-pi`: maximal share of active capacity for charging (per unit).
+        * `act-lo-po`: minimal share of active capacity for discharging (per unit).
+        * `act-up-po`: maximal share of active capacity for discharging (per unit).
+        * `act-lo-c`: minimal share of storage capacity (per unit).
+        * `act-up-c`: maximal share of storage capacity (per unit).
+        * `precont`: energy content of the storage unit at the initial time step (MWh) (to be verified).
+        * `prepowin`: energy stored at the initial time step (MW).
+        * `prepowout`: energy discharged at the initial time step (MW).
+        * `ru`: ramp-up capacity (MW/MWp/min).
+        * `rd`: ramp-down capacity (MW/MWp/min).
+        * `rumax`: maximal ramp-up (MW/MWp/h).
+        * `rdmax`: minimal ramp-up (MW/MWp/h).
+        * `seasonal`: binary variable, 1 for seasonal storage.
+        * `ctr`: binary variable, 1 if can be used for secondary reserve.
+        * `discharge`: energy losses due to self-discharge per hour as a percentage of the energy capacity.
+        * `year_mu`: average construction year for that type of storage.
+        * `year_stdev`: standard deviation from the average construction year for that type of storage.
 
       * *assumptions_commodities* is a table with the following columns:
 
@@ -356,14 +356,14 @@ def assumption_paths(paths):
         * `Type_evrys`: type of the commodity according to evrys' terminology.
         * `price`: commodity price (euro/MWh).
         * `max`: maximum annual commodity use (MWh).
-        * `maxperhour`: Maxium commodity use per hour (MW).
-        * `annual`:
-        * `losses`:
+        * `maxperhour`: maximum commodity use per hour (MW).
+        * `annual`: total value per year (MWh).
+        * `losses`: losses (to be verified).
 
       * *assumptions_transmission* is a table with the following columns:
 
         * `Type`: type of transmission.
-        * `length_limit_km`: maximum length of the transmission line in kilometers.
+        * `length_limit_km`: maximum length of the transmission line in km, for which the assumptions are valid.
         * `year`: data reference year.
         * `Commodity`: name of the commodity to be transported along the transmission line.
         * `eff_per_1000km`: transmission efficiency after 1000km in percent.
@@ -375,48 +375,46 @@ def assumption_paths(paths):
         * `cap-up`: maximum allowed power capacity (MW).
         * `wacc`: weighted average cost of capital. Percentage of cost of capital after taxes.
         * `depreciation`: deprecation period in years.
-        * `act-lo`:
-        * `act-up`:
-        * `angle-up`:
-        * `PSTmax`:
+        * `act-lo`: minimum capacity (MW/MWp).
+        * `act-up`: maximum capacity (MW/MWp).
+        * `angle-up`: maximum phase angle ramp-up (to be verified).
+        * `PSTmax`: maximum phase angle difference.
 
       * *dict_season_north* is a table with the following columns:
 
-        * `Month`:
-        * `Season`:
+        * `Month`: number of the month (1-12).
+        * `Season`: corresponding season.
 
       * *dict_daytype* is a table with the following columns:
 
-        * `Weak day`:
-        * `Type`:
+        * `Weak day`: name of the weekday (Monday-Sunday).
+        * `Type`: either `Working day`, `Saturday`, or `Sunday`.
 
       * *dict_sectors* is a table with the following columns:
 
-        * `EUROSTAT`:
-        * `Model_sectors`
+        * `EUROSTAT`: name of the entry in the EUROSTAT table.
+        * `Model_sectors`: corresponding sector (leave empty if irrelevant).
 
       * *dict_counties* is a table with the following columns:
 
-        * `IRENA`:
-        * `Counties shapefile`:
-        * `NAME_SHORT`:
-        * `ENTSO-E`:
-        * `EUROSTAT`:
+        * `IRENA`: names of countries in IRENA database.
+        * `Counties shapefile`: names of countries in the countries shapefile.
+        * `NAME_SHORT`: code names for the countries as used by the code.
+        * `ENTSO-E`: names of countries in the ENTSO-E dataset.
+        * `EUROSTAT`: names of countries in the EUROSTAT table.
 
       * *dict_line_voltage* is a table with the following columns:
 
-        * `voltage_kV`:
-        * `specific_impedance_Ohm_per_km`:
-        * `loadability`:
-        * `SIL_MWh`:
+        * `voltage_kV`: sorted values of possible line voltages.
+        * `specific_impedance_Ohm_per_km`: specific impedance (leave empty if unknown).
+        * `loadability`: loadability factor according to the St Clair's curve (leave empty if unknown).
+        * `SIL_MWh`: corresponding surge impedance load (leave empty if unknown).
 
       * *dict_technologies* is a table with the following columns:
 
-        * `IRENA`:
-        * `FRESNA`:
-        * `Model names`:
-
-      * *dict_lines_costs* is a table with the following columns:
+        * `IRENA`: names of technologies in the IRENA database.
+        * `FRESNA`: names of technologies in the FRESNA database.
+        * `Model names`: names of technologies as used in the model.
 
     
     :param paths: Dictionary including the paths.
@@ -450,13 +448,22 @@ def assumption_paths(paths):
     return paths
 
 
-def load_input_paths(paths, param):
+def load_input_paths(paths):
     """
+    This function defines the paths where the load related inputs are saved:
+    
+      * *sector_shares* for the sectoral shares in the annual electricity demand.
+      * *load_ts* for the load time series.
+      * *profiles* for the sectoral load profiles.
+    
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+
+    :return paths: The updated dictionary paths.
+    :rtype: dict
     """
     global root
     global fs
-
-    region = param["region_name"]
 
     # Raw Inputs
     PathTemp = root + "01 Raw inputs" + fs + "Load" + fs
@@ -483,10 +490,16 @@ def load_input_paths(paths, param):
 
 def renewable_time_series_paths(paths, param):
     """
+    This function defines the paths where the renewable time series (inputs) are located. *TS_ren* is itself a dictionary
+    with the keys *WindOn*, *WindOff*, *PV*, *CSP* pointing to the individual files for each technology.
+    
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+    :param param: Dictionary including the parameters *region_name*, *subregions_name*, and *year*.
+    :type param: dict
 
-    :param paths:
-    :param param:
-    :return:
+    :return paths: The updated dictionary paths.
+    :rtype: dict
     """
     global root
     global fs
@@ -513,18 +526,38 @@ def renewable_time_series_paths(paths, param):
 
 def grid_input_paths(paths):
     """
+    This function defines the paths where the transmission lines (inputs) are located.
+    
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+
+    :return paths: The updated dictionary paths.
+    :rtype: dict
     """
     global root
     global fs
 
-    PathTemp = root + "03 Intermediate Files" + fs + "Files Mekong" + fs + "Grid" + fs
-    paths["transmission_lines"] = PathTemp + "grid_raw.shp"
+    PathTemp = root + "01 Raw inputs" + fs + "Grid" + fs
+    paths["transmission_lines"] = PathTemp + "gridkit_europe" + fs + "gridkit_europe-highvoltage-links.csv"
 
     return paths
 
 
 def processes_input_paths(paths, param):
     """
+    This function defines the paths where the process-related inputs are located:
+    
+      * *IRENA*: IRENA electricity statistics (useful to derive installed capacities of renewable energy technologies).
+      * *dist_ren*: dictionary of paths to rasters defining how the potential for the renewable energy is spatially distributed. The rasters have to be the same size as the spatial scope.
+      * *FRESNA*: path to the locally saved FRESNA database.
+    
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+    :param param: Dictionary including the parameter *year*.
+    :type param: dict
+
+    :return paths: The updated dictionary paths.
+    :rtype: dict
     """
     global root
     global fs
@@ -545,9 +578,9 @@ def processes_input_paths(paths, param):
         }
     }
 
-    PathTemp = root + "01 Raw inputs" + fs + "to sort" + fs + "Powerplant_data_alltypes" + fs
+    PathTemp = root + "01 Raw inputs" + fs + "Power plants and storage" + fs
     paths[
-        "PP_Mekong"] = PathTemp + "Powerplant_Data_alltypes_LaoThaiCamb.csv"
+        "FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
 
     return paths
 
@@ -557,17 +590,23 @@ def output_folders(paths, param):
     This function defines the paths to multiple output folders:
     
       * *region* is the main output folder.
-      * *weather_data* is the output folder for the weather data of the spatial scope.
       * *local_maps* is the output folder for the local maps of the spatial scope.
-      * *potential* is the output folder for the ressource and technical potential maps.
-      * *regional_analysis* is the output folder for the time series and the report of the subregions.
-      * *regression_out* is the output folder for the regression results.
+      * *sites* is the output folder for the files related to the modeled sites.
+      * *load* is the output folder for the subregions-independent, load-related intermediate files.
+      * *load_sub* is the output folder for the subregions-dependent, load-related intermediate files.
+      * *grid* is the output folder for the subregions-independent, grid-related intermediate files.
+      * *grid_sub* is the output folder for the subregions-dependent, grid-related intermediate files.
+      * *regional_analysis* is the output folder for the regional analysis of renewable energy.
+      * *proc* is the output folder for the subregions-independent, process-related intermediate files.
+      * *proc_sub* is the output folder for the subregions-dependent, process-related intermediate files.
+      * *urbs* is the output folder for the urbs model input file.
+      * *evrys* is the output folder for the evrys model input files.
       
-    All the folders are created at the beginning of the calculation, if they do not already exist,
+    All the folders are created at the beginning of the calculation, if they do not already exist.
     
     :param paths: Dictionary including the paths.
     :type paths: dict
-    :param param: Dictionary including the user preferences.
+    :param param: Dictionary including the user preferences *region_name* and *subregions_name*.
     :type param: dict
     :return: The updated dictionary paths.
     :rtype: dict
@@ -629,6 +668,56 @@ def output_folders(paths, param):
 
 def output_paths(paths, param):
     """
+    This function defines the paths to multiple output files.
+    
+    Sites:
+      * *sites_sub* is the CSV output file listing the modeled sites and their attributes.
+      
+    Load:
+      * *stats_countries* is the CSV output file listing some load statistics on a country level.
+      * *load_ts_clean* is the CSV output file with cleaned load time series on a country level.
+      * *cleaned_profiles* is a dictionary of paths to the CSV file with cleaned load profiles for each sector.
+      * *df_sector* is the CSV output file with load time series for each sector on a country level.
+      * *load_sector* is the CSV output file with yearly electricity demand for each sector and country.
+      * *load_landuse* is the CSV output file with load time series for each land use type on a country level.
+      * *intersection_subregions_countries* is a shapefile where the polygons are the outcome of the intersection between the countries and the subregions.
+      * *stats_country_parts* is the CSV output file listing some load statistics on the level of country parts.
+      * *load_ts_clean* is the CSV output file with load time series on the level of subregions.
+    
+    Grid:
+      * *grid_expanded* is a CSV file including a reformatted table of transmission lines.
+      * *grid_filtered* is a CSV file obtained after filtering out erronous/useless data points.
+      * *grid_corrected* is a CSV file obtained after correcting erronous data points.
+      * *grid_filled* is a CSV file obtained after filling missing data with default values.
+      * *grid_cleaned* is a CSV file obtained after cleaning the data and reformatting the table.
+      * *grid_shp* is a shapefile of the transmission lines.
+      * *grid_completed* is a CSV file containing the aggregated transmission lines between the subregions and their attributes.
+      
+    Renewable processes:
+      * *IRENA_summary* is a CSV file with a summary of renewable energy statistics for the countries within the scope.
+      * *locations_ren* is a dictionary of paths pointing to shapefiles of possible spatial distributions of renewable power plants.
+      * *potential_ren* is a CSV file with renewable potentials.
+      
+    Other processes and storage:
+      * *process_raw* is a CSV file including aggregated information about the power plants before processing it.
+      * *process_filtered* is a CSV file obtained after filtering out erronous/useless data points.
+      * *process_joined* is a CSV file obtained after joining the table with default attribute assumptions (like costs).
+      * *process_completed* is a CSV file obtained after filling missing data with default values.
+      * *process_cleaned* is a CSV file obtained after cleaning the data and reformatting the table.
+      * *process_regions* is a CSV file containing the power plants for each subregion.
+      * *storage_regions* is a CSV file containing the storage devices for each subregion.
+      * *commodities_regions* is a CSV file containing the commodities for each subregion.
+      
+    Framework models:
+      * *urbs_model* is the urbs model input file.
+      * *evrys_model* is the evrys model input file.
+    
+    :param paths: Dictionary including the paths.
+    :type paths: dict
+    :param param: Dictionary including the user preferences *region_name*, *subregions_name*, and *year*.
+    :type param: dict
+    :return: The updated dictionary paths.
+    :rtype: dict
     """
 
     region = param["region_name"]

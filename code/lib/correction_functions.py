@@ -5,14 +5,14 @@ from lib.util import *
 def clean_residential_load_profile(paths, param):
     """
     This function reads the raw standard residential profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
     
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
     
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -66,14 +66,14 @@ def clean_residential_load_profile(paths, param):
 def clean_industry_load_profile(paths, param):
     """
     This function reads the raw standard industrial profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -97,14 +97,14 @@ def clean_industry_load_profile(paths, param):
 def clean_commercial_load_profile(paths, param):
     """
     This function reads the raw standard commercial profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -158,14 +158,14 @@ def clean_commercial_load_profile(paths, param):
 def clean_agriculture_load_profile(paths, param):
     """
     This function reads the raw standard agricultural profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -219,14 +219,14 @@ def clean_agriculture_load_profile(paths, param):
 def clean_streetlight_load_profile(paths, param):
     """
     This function reads the raw standard street light profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -566,183 +566,6 @@ def clean_processes_and_storage_FRESNA(paths, param):
     )
 
     timecheck("End")
-    
-    
-def clean_processes_and_storage_Mekong(paths, param):
-    """ 
-    This function reads the Mekong database of power plants, filters it by leaving out the technologies that are not used in the models based on *dict_technologies*,
-    and completes it by joining it with the distributed renewable capacities as provided by :mod:`distribute_renewable_capacities_IRENA`. It allocates a type for each
-    power plant, a unique name, a construction year, and coordinates, if these pieces of information are missing. It then saves the result both as a CSV and a shapefile.
-    
-      * Type: This is derived from the properties *Fueltype*, *Technology*, and *Set* that are provided in FRESNA, in combination with user preferences in *dict_technologies*.
-      
-      * Name: If a name is missing, the power plant is named ``'unnamed'``. A number is added as a suffix to distinguish power plants with the same name. Names do not contain spaces.
-      
-      * Year: If provided, the year for retrofitting is used instead of the commissioning year. If both are missing, a year is chosen randomly based on a normal distribution for
-        each power plant type. The average and the standard deviation of that distribution is provided by the user in *assumptions_processes* and *assumptions_storage*.
-        
-      * Coordinates: Only a few power plants are lacking coordinates. The user has the possibility to allocate coordinates for these power plants, otherwise
-        coordinates of a random power plant within the same country are chosen to fill in the missing information.
-      
-    :param paths: Dictionary containing the paths to the database *FRESNA*, to user preferences in *dict_technologies*, *assumptions_processes*, *assumptions_storage*, to *locations_ren*
-      for the shapefiles of distributed renewable capacities, and to all the intermediate and final outputs of the module.
-    :type paths: dict
-    :param param: Dictionary including information about the reference year of the data, and assumptions related to processes.
-    :type param: dict
-    
-    :return: The intermediate and final outputs are saved directly as CSV files in the respective path. The final result is also saved as a shapefile of points. The metadata is saved in JSON files.
-    :rtype: None
-    """
-    timecheck("Start")
-
-    year = param["year"]
-
-    # Read assumptions regarding processes
-    assumptions_pro = pd.read_csv(paths["assumptions_processes"], sep=";", decimal=",")
-    assumptions_pro = assumptions_pro.loc[assumptions_pro["year"] == year]
-
-    # Read assumptions regarding storage
-    assumptions_sto = pd.read_csv(paths["assumptions_storage"], sep=";", decimal=",")
-    assumptions_sto = assumptions_sto.loc[assumptions_sto["year"] == year]
-
-    # Read dictionary of technology names
-    dict_technologies = pd.read_csv(paths["dict_technologies"], sep=";", decimal=",")
-    dict_technologies = dict_technologies[["FRESNA", "Model names"]].set_index(["FRESNA"])
-    dict_technologies = dict_technologies.loc[dict_technologies.index.dropna()]
-    dict_technologies = dict_technologies["Model names"].to_dict()
-
-    # Get data from FRESNA database
-    Process = pd.read_csv(paths["FRESNA"], header=0, skipinitialspace=True, usecols=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-    Process.rename(columns={"Capacity": "inst-cap", "lat": "Latitude", "lon": "Longitude"}, inplace=True)
-
-    # Obtain preliminary information before cleaning
-    Process["Technology"].fillna("NaN", inplace=True)
-    Process["inst-cap"].fillna(0, inplace=True)
-    Process[["Fueltype", "Technology", "Set", "inst-cap"]].groupby(["Fueltype", "Technology", "Set"]).sum().to_csv(
-        paths["process_raw"], sep=";", decimal=",", index=True
-    )
-    create_json(paths["process_raw"], param, [], paths, ["FRESNA"])
-    print("Number of power plants in FRESNA: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
-
-    # TYPE
-    # Define type of process/storage
-    Process["Type"] = "(" + Process["Fueltype"] + "," + Process["Technology"] + "," + Process["Set"] + ")"
-    for key in dict_technologies.keys():
-        Process.loc[Process["Type"] == key, "Type"] = dict_technologies[key]
-    # Remove useless rows (Type not needed)
-    Process.dropna(subset=["Type"], inplace=True)
-    Process.to_csv(paths["process_filtered"], sep=";", decimal=",", index=False)
-    create_json(paths["process_filtered"], param, [], paths, ["FRESNA", "dict_technologies"])
-    print("Number of power plants after filtering FRESNA: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
-
-    # INCLUDE RENEWABLE POWER PLANTS (IRENA)
-    for pp in paths["locations_ren"].keys():
-        # Shapefile with power plants
-        pp_shapefile = gpd.read_file(paths["locations_ren"][pp])
-        pp_df = pd.DataFrame(pp_shapefile.rename(columns={"Capacity": "inst-cap"}))
-        pp_df["Longitude"] = [pp_df.loc[i, "geometry"].x for i in pp_df.index]
-        pp_df["Latitude"] = [pp_df.loc[i, "geometry"].y for i in pp_df.index]
-        pp_df["Type"] = pp
-        pp_df["Name"] = [pp + "_" + str(i) for i in pp_df.index]
-        pp_df.drop(["geometry"], axis=1, inplace=True)
-        Process = Process.append(pp_df, ignore_index=True, sort=True)
-    Process.to_csv(paths["process_joined"], sep=";", decimal=",", index=False)
-    create_json(paths["process_joined"], param, [], paths, ["FRESNA", "process_filtered", "dict_technologies", "locations_ren"])
-    print("Number of power plants after adding distributed renewable capacity: ", len(Process), "- installed capacity: ", Process["inst-cap"].sum())
-
-    # NAME
-    Process["Name"].fillna("unnamed", inplace=True)
-    # Add suffix to deduplicate names
-    Process["Name"] = Process["Name"] + Process.groupby(["Name"]).cumcount().astype(str).replace("0", "")
-    # Remove spaces from the name and replace them with underscores
-    Process["Name"] = [Process.loc[i, "Name"].replace(" ", "_") for i in Process.index]
-
-    # YEAR
-    Process["Year"] = [max(Process.loc[i, "YearCommissioned"], Process.loc[i, "Retrofit"]) for i in Process.index]
-    # Assign a dummy year for entries with missing information
-    year_mu = dict(zip(assumptions_pro["Process"], assumptions_pro["year_mu"].astype(float)))
-    year_mu.update(dict(zip(assumptions_sto["Storage"], assumptions_sto["year_mu"].astype(float))))
-    year_stdev = dict(zip(assumptions_pro["Process"], assumptions_pro["year_stdev"].astype(float)))
-    year_stdev.update(dict(zip(assumptions_sto["Storage"], assumptions_sto["year_stdev"].astype(float))))
-    filter = Process["Year"].isnull()
-    for p in Process["Type"].unique():
-        Process.loc[(Process["Type"] == p) & filter, "year_mu"] = year_mu[p]
-        Process.loc[(Process["Type"] == p) & filter, "year_stdev"] = year_stdev[p]
-    Process.loc[filter, "Year"] = np.floor(np.random.normal(Process.loc[filter, "year_mu"], Process.loc[filter, "year_stdev"]))
-
-    # COORDINATES
-    P_missing = Process[Process["Longitude"].isnull()].copy()
-    P_located = Process[~Process["Longitude"].isnull()].copy()
-
-    # Prompt user for manual location input
-    ans = input(
-        "\nThere are " + str(len(P_missing)) + " power plants missing location data.\n"
-        "Locations can be input manually, otherwise a random "
-        "location within the country will be assigned.\n"
-        "Would you like to input the locations manually? [y]/n "
-    )
-    if ans in ["", "y", "[y]", "Y", "[Y]"]:
-        print(
-            "Please fill in the missing location data for the following power plants. \nskip: [s], location: "
-            "(Latitude, Longitude) with '.' as decimal delimiter"
-        )
-        for index, row in P_missing.sort_values(by=["Country", "Name"], ascending=False).iterrows():
-            ans = input("\nCountry: " + row["Country"] + ", Name: " + row["Name"] + ", Fuel type:" + row["Fueltype"] + ", Missing coordinates:")
-            # Extract all number, decimal delimiter comma or point, negative or positive.
-            loc = re.findall(r"[-+]?\d*\.\d+|[-+]?\d+", ans)
-            if len(loc) == 2:
-                # Format as float
-                loc = list(map(float, loc))
-                # Save input
-                row["Latitude"] = loc[0]
-                row["Longitude"] = loc[1]
-                print("Input registered: (" + str(loc[0]) + "," + str(loc[1]) + ")")
-            else:
-                P_missing.loc[index, ["Latitude", "Longitude"]] = (
-                    P_located[P_located["Country"] == row["Country"]].sample(1, axis=0)[["Latitude", "Longitude"]].values[0]
-                )
-                print("Random Value Assigned")
-    else:
-        print("Random values will be assigned to all " + str(len(P_missing)) + " power plants")
-        # Assign dummy coordinates within the same country
-        for country in P_missing["Country"].unique():
-            sample_size = len(P_missing.loc[P_missing["Country"] == country])
-            P_missing.loc[P_missing["Country"] == country, ["Latitude", "Longitude"]] = (
-                P_located[P_located["Country"] == country].sample(sample_size, axis=0)[["Latitude", "Longitude"]].values
-            )
-    Process = P_located.append(P_missing)
-    Process.to_csv(paths["process_completed"], sep=";", decimal=",", index=False)
-    print("File saved: " + paths["process_completed"])
-    create_json(
-        paths["process_completed"],
-        param,
-        ["year", "process"],
-        paths,
-        ["FRESNA", "process_joined", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"],
-    )
-
-    # GEOMETRY
-    # Create point geometries (shapely)
-    Process["geometry"] = list(zip(Process.Longitude, Process.Latitude))
-    Process["geometry"] = Process["geometry"].apply(Point)
-    Process = Process[["Name", "Type", "inst-cap", "Year", "geometry"]]
-    # Transform into GeoDataFrame
-    Process = gpd.GeoDataFrame(Process, geometry="geometry", crs={"init": "epsg:4326"})
-    try:
-        os.remove(paths["process_cleaned"])
-    except OSError:
-        pass
-    Process.to_file(driver="ESRI Shapefile", filename=paths["process_cleaned"])
-    print("File saved: " + paths["process_cleaned"])
-    create_json(
-        paths["process_cleaned"],
-        param,
-        ["year", "process"],
-        paths,
-        ["FRESNA", "process_completed", "dict_technologies", "locations_ren", "assumptions_processes", "assumptions_storage"],
-    )
-
-    timecheck("End")
 
 
 def clean_GridKit_Europe(paths, param):
@@ -803,130 +626,6 @@ def clean_GridKit_Europe(paths, param):
 
     # Replace voltage = 0 with most common value
     grid_corrected.loc[grid_corrected["voltage"] == 0, "voltage"] = grid_corrected["voltage"].value_counts().index[0]
-
-    # Eventually overwrite the values in 'wires' using 'cables'
-    if param["grid"]["quality"]["cables"] > param["grid"]["quality"]["wires"]:
-        grid_corrected.loc[:, "wires"] = np.minimum(grid_corrected.loc[:, "cables"] // 3, 1)
-
-    # Make sure no wires are equal to 0
-    grid_corrected.replace({"wires": 0}, 1, inplace=True)
-
-    # Save corrected grid
-    grid_corrected.to_csv(paths["grid_corrected"], index=False, sep=";", decimal=",")
-    create_json(paths["grid_corrected"], param, ["grid"], paths, ["transmission_lines", "grid_expanded", "grid_filtered"])
-
-    # Complete missing information
-    grid_filled = grid_corrected.copy()
-    grid_filled["length_m"] = grid_filled["length_m"].astype(float)
-    grid_filled["x_ohmkm"] = assign_values_based_on_series(
-        grid_filled["voltage"] / 1000, dict_line_voltage["specific_impedance_Ohm_per_km"].dropna().to_dict()
-    )
-    grid_filled["X_ohm"] = grid_filled["x_ohmkm"] * grid_filled["length_m"] / 1000 / grid_filled["wires"]
-    grid_filled["loadability"] = assign_values_based_on_series(grid_filled["length_m"] / 1000, dict_line_voltage["loadability"].dropna().to_dict())
-    grid_filled["SIL_MW"] = assign_values_based_on_series(grid_filled["voltage"] / 1000, dict_line_voltage["SIL_MWh"].dropna().to_dict())
-    grid_filled["Capacity_MVA"] = grid_filled["SIL_MW"] * grid_filled["loadability"] * grid_filled["wires"]
-    grid_filled["Y_mho_ref_380kV"] = 1 / (grid_filled["X_ohm"] * ((380000 / grid_filled["voltage"]) ** 2))
-    grid_filled.loc[grid_filled["frequency"] == 0, "tr_type"] = "DC_CAB"
-    grid_filled.loc[~(grid_filled["frequency"] == 0), "tr_type"] = "AC_OHL"
-    grid_filled.to_csv(paths["grid_filled"], index=False, sep=";", decimal=",")
-
-    # Group lines with same IDs
-    grid_grouped = (
-        grid_filled[["l_id", "tr_type", "Capacity_MVA", "Y_mho_ref_380kV", "V1_long", "V1_lat", "V2_long", "V2_lat"]]
-        .groupby(["l_id", "tr_type", "V1_long", "V1_lat", "V2_long", "V2_lat"])
-        .sum()
-    )
-    grid_grouped.reset_index(inplace=True)
-    grid_grouped.loc[:, ["V1_long", "V1_lat", "V2_long", "V2_lat"]] = grid_grouped.loc[:, ["V1_long", "V1_lat", "V2_long", "V2_lat"]].astype(float)
-    grid_grouped.to_csv(paths["grid_cleaned"], index=False, sep=";", decimal=",")
-    create_json(
-        paths["grid_cleaned"], param, ["grid"], paths, ["dict_line_voltage", "transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"]
-    )
-    print("File saved: " + paths["grid_cleaned"])
-
-    # Writing to shapefile
-    with shp.Writer(paths["grid_shp"], shapeType=3) as w:
-        w.autoBalance = 1
-        w.field("ID", "N", 6, 0)
-        w.field("Cap_MVA", "N", 8, 2)
-        w.field("Type", "C", 6, 0)
-        count = len(grid_grouped.index)
-        status = 0
-        display_progress("Writing grid to shapefile: ", (count, status))
-        for i in grid_grouped.index:            
-            w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float), grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
-            w.record(grid_grouped.loc[i, "l_id"], grid_grouped.loc[i, "Capacity_MVA"], grid_grouped.loc[i, "tr_type"])
-            status += 1
-            display_progress("Writing grid to shapefile: ", (count, status))
-    create_json(
-        paths["grid_shp"], param, ["grid"], paths, ["dict_line_voltage", "transmission_lines", "grid_expanded", "grid_filtered", "grid_corrected"]
-    )
-    print("File saved: " + paths["grid_shp"])
-    timecheck("End")
-    
-    
-def clean_grid_Mekong(paths, param):
-    """
-    This function reads the raw grid data for the Mekong. First, it converts the column of locations into separate columns
-    of longitude and latitude of starting and ending points. Then, it expands the dataframe, so that every row would only have
-    one entry in the columns for *voltage*, *wires*, *cables*, and *frequency*. Based on the user judgement of the *quality* of
-    the data, the dataframe is filtered and rows with missing data are filled with most common value.
-    Based on *length_m* and *voltage*, the values for the impedance *X_ohm*, the *loadability* and the surge impedance loading
-    *SIL_MW* are determined.
-    
-    :param paths: Dictionary including the paths to the raw database *transmission_lines*, and to the desired intermediate and finally output locations.
-    :type paths: dict
-    :param param: Dictionary including the *grid* dictionary.
-    :type param: dict
-
-    :return: The cleaned database is saved as a CSV in the path *grid_cleaned* and as a shapefile in the path *grid_shp*, along with the corresponding metadata in JSON files.
-    :rtype: None
-    """
-    timecheck("Start")
-
-    dict_line_voltage = pd.read_csv(paths["dict_line_voltage"], header=0, sep=";", decimal=",", index_col=["voltage_kV"])
-
-    # Read CSV file containing the lines data
-    grid_raw = gpd.read_file(paths["transmission_lines"])
-
-    import pdb; pdb.set_trace()
-    # Fill susceptance
-    grid_corrected = grid_raw.copy()
-    grid_corrected.loc[grid_corrected["linesus"]==0, "linesus"] = np.nan
-    grid_corrected.loc[grid_corrected["linesus"].isnull(), "linesus"] = grid_corrected["linesus"].value_counts().index[0]
-    
-    # Calculating the length of each line
-    grid_corrected = grid_corrected.to_crs("epsg:32662")
-    grid_corrected["Length2"] = grid_corrected["geometry"].length / 10 ** 3
-    grid_corrected = grid_corrected.to_crs(epsg=4326)
-            
-    # Calculate susceptance
-    grid_corrected["Y_mho_ref_380kV"] = grid_corrected["linesus"] * grid_corrected["Length2"] * ((230000 / grid_corrected["kV"]) ** 2)
-    
-    # Prepare dataframe
-    grid_corrected["Cap_MVA"] = grid_corrected["linemva"]
-    grid_corrected["tr_type"] = "AC_OHL"
-    grid_corrected["l_id"] = grid_corrected.index
-
-    # Expand columns with multiple values
-    grid_expanded = grid_raw.copy()
-    grid_expanded = expand_dataframe(grid_expanded, ["voltage", "wires", "cables", "frequency"])
-    grid_expanded.to_csv(paths["grid_expanded"], index=False, sep=";", decimal=",")
-    create_json(paths["grid_expanded"], param, [], paths, ["transmission_lines"])
-
-    # If data is trustworthy, remove NaN values
-    grid_filtered = grid_expanded.copy()
-    for col in ["voltage", "wires", "cables", "frequency"]:
-        if param["grid"]["quality"][col] == 1:
-            grid_filtered = grid_filtered[~grid_filtered[col].isnull()]
-    grid_filtered.to_csv(paths["grid_filtered"], index=False, sep=";", decimal=",")
-    create_json(paths["grid_filtered"], param, ["grid"], paths, ["transmission_lines", "grid_expanded"])
-
-    # Fill missing data with most common value
-    grid_corrected = grid_filtered.copy()
-    for col in ["voltage", "wires", "cables", "frequency"]:
-        grid_corrected.loc[grid_corrected[col].isnull(), col] = grid_corrected[col].value_counts().index[0]
-
 
     # Eventually overwrite the values in 'wires' using 'cables'
     if param["grid"]["quality"]["cables"] > param["grid"]["quality"]["wires"]:
@@ -1114,6 +813,13 @@ def distribute_renewable_capacities_IRENA(paths, param):
 
 def clean_names(text):
     """
+    This functions reads a string, removes non-ASCII characters, and shortens it to 64 characters.
+    
+    :param text: Input string (e.g. power plant name).
+    :type text: string
+    
+    :return text_short: The shortened name without non-ASCII characters.
+    :rtype: string
     """
     # Remove non-ASCII
     text_clean = "".join(i for i in text if ord(i) < 128)

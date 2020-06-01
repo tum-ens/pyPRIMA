@@ -3,8 +3,18 @@ from lib.util import *
 
 def generate_urbs_model(paths, param):
     """
-    Read model's .csv files, and create relevant dataframes.
-    Writes dataframes to urbs input excel file.
+    This function reads all the intermediate CSV files, adapts the formatting to the structure of the urbs Excel input file,
+    and combines the datasets into one dataframe. It writes the dataframe into an urbs input Excel file.
+    The function would still run even if some files have not been generated. They will simply be skipped.
+    
+    :param paths: Dictionary including the paths to the intermediate files *sites_sub*, *commodities_regions*, *process_regions*,
+      *assumptions_flows*, *grid_completed*, *storage_regions*, *load_regions*, *potential_ren*, and to the output *urbs_model*.
+    :type paths: dict
+    :param param: Dictionary of user preferences, including *model_year* and *technology*.
+    :type param: dict
+    
+    :return: The XLSX model input file is saved directly in the desired path.
+    :rtype: None
     """
     timecheck("Start")
 
@@ -138,8 +148,18 @@ def generate_urbs_model(paths, param):
 
 def generate_evrys_model(paths, param):
     """
-    Read model's .csv files, and create relevant dataframes.
-    Writes dataframes to evrys input excel file.
+    This function reads all the intermediate CSV files, adapts the formatting to the structure of the evrys Excel input file,
+    and combines the datasets into one dataframe. It writes the dataframe into an evrys input Excel file.
+    The function would still run even if some files have not been generated. They will simply be skipped.
+    
+    :param paths: Dictionary including the paths to the intermediate files *sites_sub*, *commodities_regions*, *process_regions*,
+      *grid_completed*, *storage_regions*, *load_regions*, *potential_ren*, and to the output *evrys_model*.
+    :type paths: dict
+    :param param: Dictionary of user preferences, including *model_year* and *technology*.
+    :type param: dict
+    
+    :return: The XLSX model input file is saved directly in the desired path.
+    :rtype: None
     """
     timecheck("Start")
 
