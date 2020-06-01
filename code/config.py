@@ -46,7 +46,7 @@ def general_settings():
 
     param = {}
     param["author"] = "Kais Siala"  # the name of the person running the script
-    param["comment"] = "Frieder NUTS1"
+    param["comment"] = "Mekong"
 
     paths = {}
     fs = os.path.sep
@@ -93,16 +93,16 @@ def scope_paths_and_parameters(paths, param):
 
     # Paths to the shapefiles
     PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
-    paths["spatial_scope"] = PathTemp + "Europe_NUTS0_wo_Balkans_with_EEZ.shp"
-    paths["subregions"] = PathTemp + "Europe_NUTS1_wo_Balkans.shp"
+    paths["spatial_scope"] = PathTemp + "Mekong.shp"
+    paths["subregions"] = PathTemp + "Mekong.shp"
 
     # Name tags for the scope and the subregions
-    param["region_name"] = "Europe"  # Name tag of the spatial scope
-    param["subregions_name"] = "Europe_wo_Balkans_NUTS1"  # Name tag of the subregions
+    param["region_name"] = "Mekong"  # Name tag of the spatial scope
+    param["subregions_name"] = "Mekong_provinces"  # Name tag of the subregions
 
     # Year
-    param["year"] = 2015  # Data
-    param["model_year"] = 2015  # Model
+    param["year"] = 2016  # Data
+    param["model_year"] = 2016  # Model
 
     # Technologies
     param["technology"] = {
@@ -210,7 +210,7 @@ def processes_parameters(param):
     :rtype: dict
     """
 
-    param["process"] = {"cohorts": 5}  # 5 means 5-year steps, if no cohorts needed type 1
+    param["process"] = {"cohorts": 1}  # 5 means 5-year steps, if no cohorts needed type 1
     
     param["dist_ren"] = {
         "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
@@ -517,8 +517,8 @@ def grid_input_paths(paths):
     global root
     global fs
 
-    PathTemp = root + "01 Raw inputs" + fs + "Grid" + fs
-    paths["transmission_lines"] = PathTemp + "gridkit_europe" + fs + "gridkit_europe-highvoltage-links.csv"
+    PathTemp = root + "03 Intermediate Files" + fs + "Files Mekong" + fs + "Grid" + fs
+    paths["transmission_lines"] = PathTemp + "grid_raw.shp"
 
     return paths
 
@@ -545,9 +545,9 @@ def processes_input_paths(paths, param):
         }
     }
 
-    PathTemp = root + "01 Raw inputs" + fs + "Power plants and storage" + fs
+    PathTemp = root + "01 Raw inputs" + fs + "to sort" + fs + "Powerplant_data_alltypes" + fs
     paths[
-        "FRESNA"] = PathTemp + "EU_Powerplants" + fs + "FRESNA2" + fs + "Matched_CARMA_ENTSOE_ESE_GEO_GPD_OPSD_reduced.csv"
+        "PP_Mekong"] = PathTemp + "Powerplant_Data_alltypes_LaoThaiCamb.csv"
 
     return paths
 
