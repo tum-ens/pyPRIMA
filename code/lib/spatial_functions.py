@@ -181,6 +181,7 @@ def calc_region(region, Crd_reg, res_desired, GeoRef):
         with memfile.open(**profile) as f:
             f.write(A_region, 1)
             out_image, out_transform = mask.mask(f, features, crop=False, nodata=0, all_touched=False, filled=True)
+            
         A_region = out_image[0]
 
     return A_region
