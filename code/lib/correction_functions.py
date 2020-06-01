@@ -332,15 +332,6 @@ def clean_sector_shares_Eurostat(paths, param):
     
     :return: The result is saved directly in a CSV file in the desired path, along with its corresponding metadata.
     :rtype: None
-    
-    MOVE THIS TO DOCUMENTATION ABOUT RECOMMENDED INPUTS
-    For data from Eurostat, table: [nrg_105a]
-    GEO: Choose all countries, but not EU
-    INDIC_NRG: Choose all indices
-    PRODUCT: Electrical energy (code 6000)
-    TIME: Choose years
-    UNIT: GWh
-    Download in one single csv file
     """
     timecheck("Start")
 
