@@ -79,7 +79,7 @@ def scope_paths_and_parameters(paths, param):
     
     *year* defines the year of the weather/input data, and *model_year* refers to the year to be modeled (could be the same as *year*, or in the future).
 
-    *technology* is a dictionary of the technologies (*Storage*, *Prcess*) to be used in the model. The names of the technologies should match the names
+    *technology* is a dictionary of the technologies (*Storage*, *Process*) to be used in the model. The names of the technologies should match the names
     which are used in assumptions_flows.csv, assumptions_processes.csv and assumptions_storage.csv.
 
     :param paths: Dictionary including the paths.
@@ -169,7 +169,7 @@ def grid_parameters(param):
     This function defines parameters related to the grid to be used while cleaning the data.
     
       * *quality* is a user assessment of the quality of the data. If the data is trustworthy, use 1, if it is not trustworthy at all, use 0. You can use values inbetween.
-      * *default* is a colleaction of default values for voltage, wires, cables, and frequency, to use when these data are missing.
+      * *default* is a collection of default values for voltage, wires, cables, and frequency, to use when these data are missing.
 
     :param param: Dictionary including the user preferences.
     :type param: dict

@@ -1,8 +1,8 @@
 ******
 Theory
 ******
-Load time series
-================
+This chapters explains how the load time series are disaggregated spatially and according to sectors, then aggregated again
+according to the desired model regions.
 
 Purpose
 -------
