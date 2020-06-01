@@ -166,6 +166,8 @@ are model-independent. These files can be shared with modelers whose models are 
 according to their model input requirements, and use them.
 
 .. _generateModels:
-^^^^^^^^^^^^^^^^^^^^
+
+Generation of model input files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Here, the input files are adapted to the requirements of the supported model frameworks (currently urbs and evrys).
 Input files as needed by the scripts of urbs and evrys are generated at the end of this step.
