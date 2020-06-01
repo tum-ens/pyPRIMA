@@ -1,7 +1,7 @@
 from lib.util import *
 from config import configuration
-from lib.spatial_functions import *
-from lib.input_maps import *
+from lib.spatial_functions import define_spatial_scope, crd_merra, ind_merra, calc_geotiff
+from lib.input_maps import generate_landsea
 
 
 def initialization():

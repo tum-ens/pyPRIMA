@@ -1,5 +1,5 @@
-from lib.spatial_functions import *
 from lib.util import *
+import lib.spatial_functions as spatial_functions
 
 
 def generate_landsea(paths, param):
@@ -26,7 +26,7 @@ def generate_landsea(paths, param):
     # Extract land areas
     countries_shp = param["regions_land"]
     Crd_regions_land = param["Crd_regions"][:nRegions_land]
-    Ind = ind_merra(Crd_regions_land, Crd_all, res_desired)
+    Ind = spatial_functions.ind_merra(Crd_regions_land, Crd_all, res_desired)
     A_land = np.zeros((m_high, n_high))
     status = 0
     for reg in range(0, param["nRegions_land"]):
@@ -34,15 +34,17 @@ def generate_landsea(paths, param):
         display_progress("Creating A_land ", (nRegions_land, status))
 
         # Calculate A_region
-        A_region = calc_region(countries_shp.iloc[reg], Crd_regions_land[reg, :], res_desired, GeoRef)
-
+        try:
+            A_region = spatial_functions.calc_region(countries_shp.iloc[reg], Crd_regions_land[reg, :], res_desired, GeoRef)
+        except:
+            continue
         # Include A_region in A_land
         A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
             A_land[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] + A_region
         )
         status = status + 1
     # Saving file
-    array2raster(paths["LAND"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_land)
+    spatial_functions.array2raster(paths["LAND"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_land)
     create_json(
         paths["LAND"], param, ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_land"], paths, ["Countries", "LAND"]
     )
@@ -53,7 +55,7 @@ def generate_landsea(paths, param):
     # Extract sea areas
     eez_shp = param["regions_sea"]
     Crd_regions_sea = param["Crd_regions"][-nRegions_sea:]
-    Ind = ind_merra(Crd_regions_sea, Crd_all, res_desired)
+    Ind = spatial_functions.ind_merra(Crd_regions_sea, Crd_all, res_desired)
     A_sea = np.zeros((m_high, n_high))
     status = 0
     for reg in range(0, param["nRegions_sea"]):
@@ -61,7 +63,7 @@ def generate_landsea(paths, param):
         display_progress("Creating A_land ", (param["nRegions_sea"], status))
 
         # Calculate A_region
-        A_region = calc_region(eez_shp.iloc[reg], Crd_regions_sea[reg, :], res_desired, GeoRef)
+        A_region = spatial_functions.calc_region(eez_shp.iloc[reg], Crd_regions_sea[reg, :], res_desired, GeoRef)
 
         # Include A_region in A_sea
         A_sea[(Ind[reg, 2] - 1) : Ind[reg, 0], (Ind[reg, 3] - 1) : Ind[reg, 1]] = (
@@ -73,7 +75,7 @@ def generate_landsea(paths, param):
     A_sea[A_sea > 0] = 1
     A_sea[A_land > 0] = 0
     # Saving file
-    array2raster(paths["EEZ"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_sea)
+    spatial_functions.array2raster(paths["EEZ"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_sea)
     create_json(
         paths["EEZ"], param, ["region_name", "m_high", "n_high", "Crd_all", "res_desired", "GeoRef", "nRegions_sea"], paths, ["EEZ_global", "EEZ"]
     )
@@ -103,7 +105,7 @@ def generate_landuse(paths, param):
     with rasterio.open(paths["LU_global"]) as src:
         w = src.read(1, window=windows.Window.from_slices(slice(Ind[0] - 1, Ind[2]), slice(Ind[3] - 1, Ind[1])))
     w = np.flipud(w)
-    array2raster(paths["LU"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], w)
+    spatial_functions.array2raster(paths["LU"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], w)
     create_json(paths["LU"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["LU_global", "LU"])
     print("files saved: " + paths["LU"])
     timecheck("End")
@@ -125,7 +127,7 @@ def generate_population(paths, param):
     timecheck("Start")
     res_desired = param["res_desired"]
     Crd_all = param["Crd_all"]
-    Ind = ind_global(Crd_all, res_desired)[0]
+    Ind = spatial_functions.ind_global(Crd_all, res_desired)[0]
     GeoRef = param["GeoRef"]
     with rasterio.open(paths["Pop_global"]) as src:
         A_POP_part = src.read(1)  # map is only between latitudes -60 and 85
@@ -133,7 +135,7 @@ def generate_population(paths, param):
     A_POP[600:18000, :] = A_POP_part
     A_POP = resizem(A_POP, 180 * 240, 360 * 240) / 4  # density is divided by 4
     A_POP = np.flipud(A_POP[Ind[0] - 1 : Ind[2], Ind[3] - 1 : Ind[1]])
-    array2raster(paths["POP"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_POP)
+    spatial_functions.array2raster(paths["POP"], GeoRef["RasterOrigin"], GeoRef["pixelWidth"], GeoRef["pixelHeight"], A_POP)
     create_json(paths["POP"], param, ["region_name", "Crd_all", "res_desired", "GeoRef"], paths, ["Pop_global", "POP"])
     print("\nfiles saved: " + paths["POP"])
     timecheck("End")

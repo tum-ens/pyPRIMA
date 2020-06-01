@@ -556,7 +556,11 @@ def generate_commodities(paths, param):
     :param paths: Dictionary containing the paths to *assumptions_commodities*, *assumptions_flows", *sites_sub*, *load_regions*, as well as
       the output *commodities_regions*.
     :type paths: dict
-    :param param: Dictionary 
+    :param param: Dictionary containing the user preferences *model_year* and *technology*.
+    :type param: dict
+    
+    :return: The CSV file with the commodities for each region is saved directly in the desired path, along with its metadata in a JSON file.
+    :rtype: None
     """
     timecheck("Start")
 
@@ -607,7 +611,22 @@ def generate_commodities(paths, param):
 
 
 def generate_processes(paths, param):
-    """ documentation """
+    """
+    This function reads the assumptions related to the flows and processes and filters them based on the needs of the user.
+    Then it reads the shapefile of processes and storages, and filters out the technologies which are not used in the model.
+    Afterwards, it fills in the attributes of the processes based on the assumptions, removes processes that have exceeded their lifetime,
+    and eventually groups the remaining entries into cohorts based on their construction year. Finally, it expands the list
+    with possible site-power plant combinations.
+    
+    :param paths: Dictionary containing the paths to *assumptions_processes*, *assumptions_flows", *sites_sub*, and *process_cleaned*, as well as
+      the output *process_regions*.
+    :type paths: dict
+    :param param: Dictionary containing the user preferences *model_year*, *year*, *process*, and *technology*.
+    :type param: dict
+    
+    :return: The CSV file with the power plants for each region is saved directly in the desired path, along with its metadata in a JSON file.
+    :rtype: None
+    """
     timecheck("Start")
 
     # Read assumptions related to the processes and flows
@@ -725,7 +744,22 @@ def generate_processes(paths, param):
 
 
 def generate_storage(paths, param):
-    """ documentation """
+    """
+    This function reads the assumptions related to the flows and storages and filters them based on the needs of the user.
+    Then it reads the shapefile of processes and storages, and filters out the technologies which are not used in the model.
+    Afterwards, it fills in the attributes of the storages based on the assumptions, removes storages that have exceeded their lifetime,
+    and eventually groups the remaining entries into cohorts based on their construction year. Finally, it expands the list
+    with possible site-storage combinations.
+    
+    :param paths: Dictionary containing the paths to *assumptions_storage*, *assumptions_flows", *sites_sub*, and *process_cleaned*, as well as
+      the output *storage_regions*.
+    :type paths: dict
+    :param param: Dictionary containing the user preferences *model_year*, *year*, *process*, and *technology*.
+    :type param: dict
+    
+    :return: The CSV file with the storage units for each region is saved directly in the desired path, along with its metadata in a JSON file.
+    :rtype: None
+    """
     timecheck("Start")
 
     # Read assumptions related to the storage and flows
@@ -811,15 +845,17 @@ def generate_storage(paths, param):
     storage_agg["eff-in"] = storage_agg[["Type"]].join(df_effin, on=["Type"], how="left")["ratio"]
     storage_agg["eff-out"] = storage_agg[["Type"]].join(df_effout, on=["Type"], how="left")["ratio"]
     storage_agg["Commodity"] = storage_agg[["Type"]].join(df_com, on=["Type"], how="left")["Commodity"]
-    
+
     # Rename inst-cap
     storage_agg.rename(columns={"inst-cap": "inst-cap-p"}, inplace=True)
     storage_agg["inst-cap-c"] = storage_agg["inst-cap-p"] * storage_agg["ep-ratio"]
-    
+
     # Add cap-lo, fix cap-up
     storage_agg["cap-lo-c"] = 0
     storage_agg["cap-lo-p"] = 0
-    storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-c"] = storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-p"] * storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "ep-ratio"]
+    storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-c"] = (
+        storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "cap-up-p"] * storage_agg.loc[storage_agg["cap-up-c"] != np.inf, "ep-ratio"]
+    )
 
     # Output
     storage_agg.to_csv(paths["storage_regions"], index=False, sep=";", decimal=",")

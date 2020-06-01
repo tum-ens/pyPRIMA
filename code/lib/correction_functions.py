@@ -5,14 +5,14 @@ from lib.util import *
 def clean_residential_load_profile(paths, param):
     """
     This function reads the raw standard residential profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
     
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
     
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -35,20 +35,12 @@ def clean_residential_load_profile(paths, param):
     # Residential load
     residential_profile_raw = pd.read_excel(paths["profiles"]["RES"], header=[3, 4], skipinitialspace=True)
     residential_profile_raw.rename(
-        columns={
-            "Übergangszeit": "Spring/Fall",
-            "Sommer": "Summer",
-            "Werktag": "Working day",
-            "Sonntag/Feiertag": "Sunday",
-            "Samstag": "Saturday",
-        },
+        columns={"Übergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag/Feiertag": "Sunday", "Samstag": "Saturday"},
         inplace=True,
     )
     residential_profile = time_series.copy()
     for i in residential_profile.index:
-        residential_profile.loc[i, hours] = list(
-            residential_profile_raw[(residential_profile.loc[i, "Season"], residential_profile.loc[i, "Day"])]
-        )
+        residential_profile.loc[i, hours] = list(residential_profile_raw[(residential_profile.loc[i, "Season"], residential_profile.loc[i, "Day"])])
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     residential_profile = np.reshape(residential_profile.loc[:, hours].values, -1, order="C")
@@ -57,23 +49,27 @@ def clean_residential_load_profile(paths, param):
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["RES"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["RES"])
-    create_json(paths["cleaned_profiles"]["RES"], param,
-                ["region_name", "subregions_name", "year", "load"], paths,
-                ["profiles", "dict_daytype", "dict_season"])
+    create_json(
+        paths["cleaned_profiles"]["RES"],
+        param,
+        ["region_name", "subregions_name", "year", "load"],
+        paths,
+        ["profiles", "dict_daytype", "dict_season"],
+    )
     timecheck("End")
 
 
 def clean_industry_load_profile(paths, param):
     """
     This function reads the raw standard industrial profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -88,23 +84,27 @@ def clean_industry_load_profile(paths, param):
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["IND"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["IND"])
-    create_json(paths["cleaned_profiles"]["RES"], param,
-                ["region_name", "subregions_name", "year", "load"], paths,
-                ["profiles", "dict_daytype", "dict_season"])
+    create_json(
+        paths["cleaned_profiles"]["RES"],
+        param,
+        ["region_name", "subregions_name", "year", "load"],
+        paths,
+        ["profiles", "dict_daytype", "dict_season"],
+    )
     timecheck("End")
 
 
 def clean_commercial_load_profile(paths, param):
     """
     This function reads the raw standard commercial profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -123,24 +123,20 @@ def clean_commercial_load_profile(paths, param):
     hours = [str(x) for x in list(range(0, 24))]
 
     commercial_profile_raw = pd.read_csv(
-        paths["profiles"]["COM"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1],
-        skipinitialspace=True
+        paths["profiles"]["COM"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1], skipinitialspace=True
     )
     commercial_profile_raw.rename(
-        columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday",
-                 "Samstag": "Saturday"},
+        columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday", "Samstag": "Saturday"},
         inplace=True,
     )
 
     # Aggregate from 15 min --> hourly load
-    commercial_profile_raw[("Hour", "All")] = [int(str(commercial_profile_raw.loc[i, ("G0", "[W]")])[:2]) for i in
-                                               commercial_profile_raw.index]
+    commercial_profile_raw[("Hour", "All")] = [int(str(commercial_profile_raw.loc[i, ("G0", "[W]")])[:2]) for i in commercial_profile_raw.index]
     commercial_profile_raw = commercial_profile_raw.groupby([("Hour", "All")]).sum()
     commercial_profile_raw.reset_index(inplace=True)
     commercial_profile = time_series.copy()
     for i in commercial_profile.index:
-        commercial_profile.loc[i, hours] = list(
-            commercial_profile_raw[(commercial_profile.loc[i, "Season"], commercial_profile.loc[i, "Day"])])
+        commercial_profile.loc[i, hours] = list(commercial_profile_raw[(commercial_profile.loc[i, "Season"], commercial_profile.loc[i, "Day"])])
 
     # Reshape the hourly load in one vector, where the rows are the hours of the year
     commercial_profile = np.reshape(commercial_profile.loc[:, hours].values, -1, order="C")
@@ -149,23 +145,27 @@ def clean_commercial_load_profile(paths, param):
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["COM"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["COM"])
-    create_json(paths["cleaned_profiles"]["RES"], param,
-                ["region_name", "subregions_name", "year", "load"], paths,
-                ["profiles", "dict_daytype", "dict_season"])
+    create_json(
+        paths["cleaned_profiles"]["RES"],
+        param,
+        ["region_name", "subregions_name", "year", "load"],
+        paths,
+        ["profiles", "dict_daytype", "dict_season"],
+    )
     timecheck("End")
 
 
 def clean_agriculture_load_profile(paths, param):
     """
     This function reads the raw standard agricultural profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -184,18 +184,15 @@ def clean_agriculture_load_profile(paths, param):
     hours = [str(x) for x in list(range(0, 24))]
 
     agricultural_profile_raw = pd.read_csv(
-        paths["profiles"]["AGR"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1],
-        skipinitialspace=True
+        paths["profiles"]["AGR"], sep="[;]", engine="python", decimal=",", skiprows=[0, 99], header=[0, 1], skipinitialspace=True
     )
     agricultural_profile_raw.rename(
-        columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday",
-                 "Samstag": "Saturday"},
+        columns={"Ãœbergangszeit": "Spring/Fall", "Sommer": "Summer", "Werktag": "Working day", "Sonntag": "Sunday", "Samstag": "Saturday"},
         inplace=True,
     )
 
     # Aggregate from 15 min --> hourly load
-    agricultural_profile_raw["Hour"] = [int(str(agricultural_profile_raw.loc[i, ("L0", "[W]")])[:2]) for i in
-                                        agricultural_profile_raw.index]
+    agricultural_profile_raw["Hour"] = [int(str(agricultural_profile_raw.loc[i, ("L0", "[W]")])[:2]) for i in agricultural_profile_raw.index]
     agricultural_profile_raw = agricultural_profile_raw.groupby(["Hour"]).sum()
     agricultural_profile = time_series.copy()
     for i in agricultural_profile.index:
@@ -210,23 +207,27 @@ def clean_agriculture_load_profile(paths, param):
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["AGR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["AGR"])
-    create_json(paths["cleaned_profiles"]["RES"], param,
-                ["region_name", "subregions_name", "year", "load"], paths,
-                ["profiles", "dict_daytype", "dict_season"])
+    create_json(
+        paths["cleaned_profiles"]["RES"],
+        param,
+        ["region_name", "subregions_name", "year", "load"],
+        paths,
+        ["profiles", "dict_daytype", "dict_season"],
+    )
     timecheck("End")
 
 
 def clean_streetlight_load_profile(paths, param):
     """
     This function reads the raw standard street light profile, repeats it to obtain a full year, normalizes it so that the
-    sum is equal to 1, and saves the obtained load profile in a .csv file.
+    sum is equal to 1, and saves the obtained load profile in a CSV file.
 
     :param paths: Dictionary containing the paths to *dict_daytype*, *dict_season*, and to the raw standard load profiles.
     :type paths: dict
     :param param: Dictionary containing the year of the data.
     :type param: dict
 
-    :return: The outputs is saved in CSV in the defined paths, along with their metadata in JSON files.
+    :return: The outputs are saved in CSV in the defined paths, along with their metadata in JSON files.
     :rtype: None
     """
     timecheck("Start")
@@ -234,8 +235,7 @@ def clean_streetlight_load_profile(paths, param):
     streets_profile_raw = pd.read_excel(paths["profiles"]["STR"], header=[4], skipinitialspace=True, usecols=[0, 1, 2])
 
     # Aggregate from 15 min --> hourly load
-    streets_profile_raw["Hour"] = [int(str(streets_profile_raw.loc[i, "Uhrzeit"])[:2]) for i in
-                                   streets_profile_raw.index]
+    streets_profile_raw["Hour"] = [int(str(streets_profile_raw.loc[i, "Uhrzeit"])[:2]) for i in streets_profile_raw.index]
     streets_profile_raw = streets_profile_raw.groupby(["Datum", "Hour"]).sum()
     streets_profile_raw.iloc[0] = streets_profile_raw.iloc[0] + streets_profile_raw.iloc[-1]
     streets_profile_raw = streets_profile_raw.iloc[:-1]
@@ -249,9 +249,13 @@ def clean_streetlight_load_profile(paths, param):
     # Save Profile
     profile.to_csv(paths["cleaned_profiles"]["STR"], sep=";", decimal=",")
     print("File Saved: " + paths["cleaned_profiles"]["STR"])
-    create_json(paths["cleaned_profiles"]["RES"], param,
-                ["region_name", "subregions_name", "year", "load"], paths,
-                ["profiles", "dict_daytype", "dict_season"])
+    create_json(
+        paths["cleaned_profiles"]["RES"],
+        param,
+        ["region_name", "subregions_name", "year", "load"],
+        paths,
+        ["profiles", "dict_daytype", "dict_season"],
+    )
     timecheck("End")
 
 
@@ -332,15 +336,6 @@ def clean_sector_shares_Eurostat(paths, param):
     
     :return: The result is saved directly in a CSV file in the desired path, along with its corresponding metadata.
     :rtype: None
-    
-    MOVE THIS TO DOCUMENTATION ABOUT RECOMMENDED INPUTS
-    For data from Eurostat, table: [nrg_105a]
-    GEO: Choose all countries, but not EU
-    INDIC_NRG: Choose all indices
-    PRODUCT: Electrical energy (code 6000)
-    TIME: Choose years
-    UNIT: GWh
-    Download in one single csv file
     """
     timecheck("Start")
 
@@ -676,7 +671,7 @@ def clean_GridKit_Europe(paths, param):
         count = len(grid_grouped.index)
         status = 0
         display_progress("Writing grid to shapefile: ", (count, status))
-        for i in grid_grouped.index:            
+        for i in grid_grouped.index:
             w.line([[grid_grouped.loc[i, ["V1_long", "V1_lat"]].astype(float), grid_grouped.loc[i, ["V2_long", "V2_lat"]].astype(float)]])
             w.record(grid_grouped.loc[i, "l_id"], grid_grouped.loc[i, "Capacity_MVA"], grid_grouped.loc[i, "tr_type"])
             status += 1
@@ -813,6 +808,13 @@ def distribute_renewable_capacities_IRENA(paths, param):
 
 def clean_names(text):
     """
+    This functions reads a string, removes non-ASCII characters, and shortens it to 64 characters.
+    
+    :param text: Input string (e.g. power plant name).
+    :type text: string
+    
+    :return text_short: The shortened name without non-ASCII characters.
+    :rtype: string
     """
     # Remove non-ASCII
     text_clean = "".join(i for i in text if ord(i) < 128)

@@ -3,7 +3,7 @@ pyPRIMA
 ========
 
 ------------------------------------------------------------------------
-**py**thon **PR**eprocessing of **I**nputs for **M**odel fr**A**meworks
+python PReprocessing of Inputs for Model frAmeworks
 ------------------------------------------------------------------------
 
 :Code developers: Kais Siala, Houssame Houmy

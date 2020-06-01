@@ -8,11 +8,11 @@ Installation
 
 First, clone the git repository in a directory of your choice using a Command Prompt window::
 
-	$ ~\directory-of-my-choice> git clone https://github.com/tum-ens/generate-models.git
+	$ ~\directory-of-my-choice> git clone https://github.com/tum-ens/pyPRIMA.git
 
 We recommend using conda and installing the environment from the file ``gen_mod.yml`` that you can find in the repository. In the Command Prompt window, type::
 
-	$ cd generate-models\env\
+	$ cd pyPRIMA\env\
 	$ conda env create -f gen_mod.yml
 
 Then activate the environment::
@@ -68,12 +68,26 @@ Recommended input sources
 -------------------------
 Load time series for countries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`ENTSO-E <https://www.entsoe.eu/data/power-stats/>`_ publishes (or used to publish - the service has been discontinued as of November 2019) hourly load profiles
+for each country in Europe that is part of ENTSO-E.
 
 Sectoral load profiles
 ^^^^^^^^^^^^^^^^^^^^^^
+The choice of the load profiles is not too critical, since the sectoral load profiles will be scaled according to their shares in the
+yearly demand, and their shapes edited to match the hourly load profile. Nevertheless, examples of load profiles for Germany
+can be obtained from the `BDEW <https://www.bdew.de/energie/standardlastprofile-strom/>`_.
 
 Sector shares (demand)
 ^^^^^^^^^^^^^^^^^^^^^^
+The sectoral shares of the annual electricity demand can be obtained from `Eurostat <https://ec.europa.eu/eurostat>`_.
+The table reference is *nrg_105a*. Follow these instructions to obtain the file as needed by the code:
+
+  * GEO: Choose all countries, but not EU
+  * INDIC_NRG: Choose all indices
+  * PRODUCT: Electrical energy (code 6000)
+  * TIME: Choose years
+  * UNIT: GWh
+  * Download in one single csv file
 
 Power plants and storage units
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -91,9 +105,15 @@ This dataset has a global coverage, however it does not provide the exact locati
 renewable capacities spatially.
 
 Renewable potential maps
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
+These maps are needed to distribute the renewable capacities spatially, since IRENA does not provide their exact locations.
+You can use any potential maps, provided that they have the same extent as the geographic scope. Adjust the resolution parameters
+in :mod:`config.py` accordingly. Such maps can be generated using the GitHub repository `tum-ens/pyGRETA <https://github.com/tum-ens/pyGRETA>`_.
 
-
+Renewable time series
+^^^^^^^^^^^^^^^^^^^^^^
+Similarly, the renewable time series can be generated using the GitHub repository `tum-ens/pyGRETA <https://github.com/tum-ens/pyGRETA>`_.
+This repository is particularly is the model regions are unconventional.
 
 Transmission lines
 ^^^^^^^^^^^^^^^^^^
@@ -102,10 +122,52 @@ OpenStreetMap as a primary data source.
 In this repository, we only use the file with the lines (links.csv).
 In general, the minimum requirements for any data source are that the coordinates for the line vertices and the voltage are provided.
 
-
 Other assumptions
 ^^^^^^^^^^^^^^^^^^
-
+Currently, other assumptions are provided in tables filled by the modelers. Ideally, machine-readable datasets providing the
+missing information are collected and new modules are written to read them and extract that information.
 
 Recommended workflow
 --------------------
+
+The script is designed to be modular and split into three main modules: :mod:`lib.correction_functions`, :mod:`lib.generate_intermediate_files`, and :mod:`lib.generate_models`. 
+
+.. WARNING:: The outputs of each module serve as inputs to the following module. Therefore, the user will have to run the script sequentially.
+
+The recommended use cases of each module will be presented in the order in which the user will have to run them. 
+
+1. :ref:`correctionFunctions`
+2. :ref:`generateIntermediateFiles`
+3. :ref:`generateModels`
+
+The use cases associated with each module are presented below.
+
+It is recommended to thoroughly read through the configuration file `config.py` and modify the input paths and 
+computation parameters before starting the `runme.py` script.
+Once the configuration file is set, open the `runme.py` file to define what use case you will be using the script for.
+
+.. _correctionFunctions:
+
+Correction and cleaning of raw input data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Each function in this module is designed for a specific data set (usually mentioned at the end of the function name).
+The pre-processing steps include filtering, filling in missing values, correcting/overwriting erronous values, aggregating and disaggregating entries,
+and deleting/converting/renaming the attributes.
+
+At this stage, the obtained files are valid for the whole geographic scope, and do not depend on the model regions.
+
+.. _generateIntermediateFiles:
+
+Generation of intermediate files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The functions in this module read the cleaned input data, and adapts it to the model regions. They also expand the attributes
+based on assumptions to cover all the data needs of all the supported models. The results are saved in individual CSV files that
+are model-independent. These files can be shared with modelers whose models are not supported, and they might be able to adjust them
+according to their model input requirements, and use them.
+
+.. _generateModels:
+
+Generation of model input files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Here, the input files are adapted to the requirements of the supported model frameworks (currently urbs and evrys).
+Input files as needed by the scripts of urbs and evrys are generated at the end of this step.

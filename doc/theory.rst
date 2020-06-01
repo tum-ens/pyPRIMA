@@ -1,8 +1,8 @@
 ******
 Theory
 ******
-Load time series
-================
+This chapters explains how the load time series are disaggregated spatially and according to sectors, then aggregated again
+according to the desired model regions.
 
 Purpose
 -------
@@ -15,9 +15,9 @@ any region.
 .. figure:: img/generate_load_TS.png
    :width: 100%
    :align: center
-   :alt: generate_load_timeseries() description
+   :alt: Description of lib.generate_intermediate_files.generate_load_timeseries
    
-   generate_load_timeseries() - Process description
+   Description of lib.generate_intermediate_files.generate_load_timeseries
 
 Inputs
 ------
@@ -31,7 +31,7 @@ The main inputs of this script are:
 * Load profiles of the different sectors 
 * Raster of the population and land use correspondent to the country or region 
 
-Sectorial disaggregation
+Sectoral disaggregation
 ------------------------
 
 The load is assumed to be perfectly divided into four distinct sectors (load sources):
@@ -44,11 +44,11 @@ The load is assumed to be perfectly divided into four distinct sectors (load sou
 .. figure:: img/sector_load_profiles.png
    :width: 80%
    :align: center
-   :alt: Sectorial load profiles
+   :alt: Sectoral load profiles
    
-   Sectorial load profiles
+   Sectoral load profiles
 
-Sector Load Shares:
+Sectoral load shares:
 
 .. tabularcolumns:: |l|c|c|c|c|
 	
@@ -63,22 +63,22 @@ Sector Load Shares:
 +---------+----------+----------+-------------+-------------+
 
 An hourly load profile for each sector has been predefined for one week, the same load profile is assumed to repeat over the year. These load profiles are 
-scaled and normalized based on sectorial load shares for each region(assumed to be constant throughout the spatial scope), by multiplying the load profiles by their 
+scaled and normalized based on sectoral load shares for each region(assumed to be constant throughout the spatial scope), by multiplying the load profiles by their 
 corresponding share and normalizing their hourly sum to be equal to 1.
 
-.. figure:: img/scaled_sectorial_load_profiles.png
+.. figure:: img/scaled_sectoral_load_profiles.png
    :width: 80%
    :align: center
-   :alt: Scaled sectorial load profiles
+   :alt: Scaled sectoral load profiles
    
-   Scaled sectorial load profiles
+   Scaled sectoral load profiles
   
-.. figure:: img/normalized_sectorial_load_profiles.png
+.. figure:: img/normalized_sectoral_load_profiles.png
    :width: 80%
    :align: center
-   :alt: Normalized Sectorial load profiles
+   :alt: Normalized sectoral load profiles
    
-   Normalized sectorial load profiles
+   Normalized sectoral load profiles
    
    
  
@@ -96,13 +96,13 @@ Once the load profiles are normalized, we can multiply them with the actual load
    :align: center
    :alt: Load per Sector
    
-   Sectorial Load time series
+   Sectoral load time series
    
 
 Spatial disaggregation
 ----------------------
 
-The next step is the spatial disaggregation, based on the land use and population concentration rasters. First, each land-use type is assigned a sectorial 
+The next step is the spatial disaggregation, based on the land use and population concentration rasters. First, each land-use type is assigned a sectoral 
 load percentage corresponding to the load components of the land use category. Then, the population concentration raster is used to calculate the population 
 of each pixel.
 
@@ -113,10 +113,10 @@ of each pixel.
    
    Example - Commerce sector spatial disaggregation
 
-Counting the pixels, and land use occurrences inside of region for which the sectorial load timeseries has been calculated, the sectorial load 
+Counting the pixels, and land use occurrences inside of region for which the sectoral load timeseries has been calculated, the sectoral load 
 for the Industry, commercial, and agricultural can be retrieved for each pixel of that region. Similarly, the residential load timeseries can 
 be assigned to each pixel based on the population contained in the said pixel. The spatial disaggregation results in the assignment to every pixel inside a 
-given region to be assigned a specific sectorial load timeseries.
+given region to be assigned a specific sectoral load timeseries.
 
 	
 .. figure:: img/sector_residence_disaggregation.png
@@ -129,6 +129,6 @@ given region to be assigned a specific sectorial load timeseries.
 Re-aggregation
 --------------
 
-The result of the sectorial and spatial disaggregation, performed in the first two sections can be used to retrieve the sectorial load timeseries and, 
+The result of the sectoral and spatial disaggregation, performed in the first two sections can be used to retrieve the sectoral load timeseries and, 
 therefore, the general load time series of any desired region by summing up the loads of every pixel contained within the region. If a subregion spans 
 more than one region or country, it is divided into subregions restrained to each of those countries. 

@@ -3,8 +3,18 @@ from lib.util import *
 
 def generate_urbs_model(paths, param):
     """
-    Read model's .csv files, and create relevant dataframes.
-    Writes dataframes to urbs input excel file.
+    This function reads all the intermediate CSV files, adapts the formatting to the structure of the urbs Excel input file,
+    and combines the datasets into one dataframe. It writes the dataframe into an urbs input Excel file.
+    The function would still run even if some files have not been generated. They will simply be skipped.
+    
+    :param paths: Dictionary including the paths to the intermediate files *sites_sub*, *commodities_regions*, *process_regions*,
+      *assumptions_flows*, *grid_completed*, *storage_regions*, *load_regions*, *potential_ren*, and to the output *urbs_model*.
+    :type paths: dict
+    :param param: Dictionary of user preferences, including *model_year* and *technology*.
+    :type param: dict
+    
+    :return: The XLSX model input file is saved directly in the desired path.
+    :rtype: None
     """
     timecheck("Start")
 
@@ -35,11 +45,25 @@ def generate_urbs_model(paths, param):
     # Read Processes
     if os.path.exists(paths["process_regions"]):
         proc = pd.read_csv(paths["process_regions"], sep=";", decimal=",")
-        proc.rename(columns={"Name": "Process",
-                             "min-fraction": "min-frac",
-                             "start-cost": "startup-cost"}, inplace=True)
-        proc = proc[["Site", "Process", "inst-cap", "cap-lo", "cap-up", "max-grad", "min-frac", "inv-cost", "fix-cost", "var-cost",
-                     "startup-cost", "wacc", "depreciation", "area-per-cap"]]
+        proc.rename(columns={"Name": "Process", "min-fraction": "min-frac", "start-cost": "startup-cost"}, inplace=True)
+        proc = proc[
+            [
+                "Site",
+                "Process",
+                "inst-cap",
+                "cap-lo",
+                "cap-up",
+                "max-grad",
+                "min-frac",
+                "inv-cost",
+                "fix-cost",
+                "var-cost",
+                "startup-cost",
+                "wacc",
+                "depreciation",
+                "area-per-cap",
+            ]
+        ]
         for col in range(2, proc.shape[1]):
             try:
                 proc.iloc[:, col] = proc.iloc[:, col].str.replace(".", "").astype("f")
@@ -65,8 +89,23 @@ def generate_urbs_model(paths, param):
     if os.path.exists(paths["grid_completed"]):
         grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
         grid.rename(columns={"tr_type": "Transmission"}, inplace=True)
-        grid = grid[['Site In', 'Site Out', 'Transmission', 'Commodity', 'eff', 'inv-cost', 'fix-cost', 'var-cost',
-                     'inst-cap', 'cap-lo', 'cap-up', 'wacc', 'depreciation']]
+        grid = grid[
+            [
+                "Site In",
+                "Site Out",
+                "Transmission",
+                "Commodity",
+                "eff",
+                "inv-cost",
+                "fix-cost",
+                "var-cost",
+                "inst-cap",
+                "cap-lo",
+                "cap-up",
+                "wacc",
+                "depreciation",
+            ]
+        ]
         for col in range(4, grid.shape[1]):
             try:
                 grid.iloc[:, col] = grid.iloc[:, col].str.replace(".", "").astype("f")
@@ -78,11 +117,34 @@ def generate_urbs_model(paths, param):
     # Read storage
     if os.path.exists(paths["storage_regions"]):
         sto = pd.read_csv(paths["storage_regions"], sep=";", decimal=",")
-        sto.rename(columns={"Type": "Storage",
-                            "inst-cap": "inst-cap-p"}, inplace=True)
-        
-        sto = sto[["Site", "Storage", "Commodity", "inst-cap-c", "cap-lo-c", "cap-up-c", "inst-cap-p", "cap-lo-p", "cap-up-p", "eff-in", "eff-out",
-                   "inv-cost-p", "inv-cost-c", "fix-cost-p", "fix-cost-c", "var-cost-p", "var-cost-c", "wacc", "depreciation", "init", "discharge", "ep-ratio"]]
+        sto.rename(columns={"Type": "Storage", "inst-cap": "inst-cap-p"}, inplace=True)
+
+        sto = sto[
+            [
+                "Site",
+                "Storage",
+                "Commodity",
+                "inst-cap-c",
+                "cap-lo-c",
+                "cap-up-c",
+                "inst-cap-p",
+                "cap-lo-p",
+                "cap-up-p",
+                "eff-in",
+                "eff-out",
+                "inv-cost-p",
+                "inv-cost-c",
+                "fix-cost-p",
+                "fix-cost-c",
+                "var-cost-p",
+                "var-cost-c",
+                "wacc",
+                "depreciation",
+                "init",
+                "discharge",
+                "ep-ratio",
+            ]
+        ]
         for col in range(3, sto.shape[1]):
             try:
                 sto.iloc[:, col] = sto.iloc[:, col].str.replace(".", "").astype("f")
@@ -138,8 +200,18 @@ def generate_urbs_model(paths, param):
 
 def generate_evrys_model(paths, param):
     """
-    Read model's .csv files, and create relevant dataframes.
-    Writes dataframes to evrys input excel file.
+    This function reads all the intermediate CSV files, adapts the formatting to the structure of the evrys Excel input file,
+    and combines the datasets into one dataframe. It writes the dataframe into an evrys input Excel file.
+    The function would still run even if some files have not been generated. They will simply be skipped.
+    
+    :param paths: Dictionary including the paths to the intermediate files *sites_sub*, *commodities_regions*, *process_regions*,
+      *grid_completed*, *storage_regions*, *load_regions*, *potential_ren*, and to the output *evrys_model*.
+    :type paths: dict
+    :param param: Dictionary of user preferences, including *model_year* and *technology*.
+    :type param: dict
+    
+    :return: The XLSX model input file is saved directly in the desired path.
+    :rtype: None
     """
     timecheck("Start")
 
@@ -164,41 +236,110 @@ def generate_evrys_model(paths, param):
     # Read Processes
     if os.path.exists(paths["process_regions"]):
         proc = pd.read_csv(paths["process_regions"], sep=";", decimal=",")
-        proc.rename(columns={"Name": "Pro",
-                             "Type": "CoIn",
-                             "Year": "year"}, inplace=True)
+        proc.rename(columns={"Name": "Pro", "Type": "CoIn", "Year": "year"}, inplace=True)
         proc["CoOut"] = "Elec"
-        proc = proc[["Site", "Pro", "CoIn", "CoOut", "inst-cap", "eff", "effmin", "act-lo", "act-up", "on-off",
-                     "start-cost", "reserve-cost", "ru", "rd", "rumax", "rdmax", "cotwo", "detail", "lambda", "heatmax",
-                     "maxdeltaT", "heatupcost", "su", "sd", "pdt", "hotstart", "pot", "prepow", "pretemp", "preheat",
-                     "prestate", "precaponline", "year"]]
+        proc = proc[
+            [
+                "Site",
+                "Pro",
+                "CoIn",
+                "CoOut",
+                "inst-cap",
+                "eff",
+                "effmin",
+                "act-lo",
+                "act-up",
+                "on-off",
+                "start-cost",
+                "reserve-cost",
+                "ru",
+                "rd",
+                "rumax",
+                "rdmax",
+                "cotwo",
+                "detail",
+                "lambda",
+                "heatmax",
+                "maxdeltaT",
+                "heatupcost",
+                "su",
+                "sd",
+                "pdt",
+                "hotstart",
+                "pot",
+                "prepow",
+                "pretemp",
+                "preheat",
+                "prestate",
+                "precaponline",
+                "year",
+            ]
+        ]
         evrys_model["Process"] = proc
         del proc
 
     # Read transmission
     if os.path.exists(paths["grid_completed"]):
         grid = pd.read_csv(paths["grid_completed"], sep=";", decimal=",")
-        grid.rename(columns={"Site In": "SitIn",
-                             "Site Out": "SitOut",
-                             "Commodity": "Co",
-                             "impedance": "reactance"}, inplace=True)
-        grid = grid[["SitIn", "SitOut", "Co", "var-cost", "inst-cap", "act-lo", "act-up", "reactance", "cap-up-therm",
-                     "angle-up", "length", "tr_type", "PSTmax", "idx"]]
+        grid.rename(columns={"Site In": "SitIn", "Site Out": "SitOut", "Commodity": "Co", "impedance": "reactance"}, inplace=True)
+        grid = grid[
+            [
+                "SitIn",
+                "SitOut",
+                "Co",
+                "var-cost",
+                "inst-cap",
+                "act-lo",
+                "act-up",
+                "reactance",
+                "cap-up-therm",
+                "angle-up",
+                "length",
+                "tr_type",
+                "PSTmax",
+                "idx",
+            ]
+        ]
         evrys_model["Transmission"] = grid
         del grid
 
     # Read storage
     if os.path.exists(paths["storage_regions"]):
         sto = pd.read_csv(paths["storage_regions"], sep=";", decimal=",")
-        sto.rename(columns={"Type": "Sto",
-                            "Commodity": "Co"}, inplace=True)
+        sto.rename(columns={"Type": "Sto", "Commodity": "Co"}, inplace=True)
         sto["inst-cap-pi"] = sto["inst-cap"]
         sto["inst-cap-po"] = sto["inst-cap"]
         sto["inst-cap-c"] = sto["inst-cap"] * sto["ep-ratio"]
         sto = sto[
-            ["Site", "Sto", "Co", "inst-cap-pi", "inst-cap-po", "inst-cap-c", "eff-in", "eff-out", "var-cost-pi",
-             "var-cost-po", "var-cost-c", "act-lo-pi", "act-up-pi", "act-lo-po", "act-up-po", "act-lo-c", "act-up-c",
-             "precont", "prepowin", "prepowout", "ru", "rd", "rumax", "rdmax", "seasonal", "ctr"]]
+            [
+                "Site",
+                "Sto",
+                "Co",
+                "inst-cap-pi",
+                "inst-cap-po",
+                "inst-cap-c",
+                "eff-in",
+                "eff-out",
+                "var-cost-pi",
+                "var-cost-po",
+                "var-cost-c",
+                "act-lo-pi",
+                "act-up-pi",
+                "act-lo-po",
+                "act-up-po",
+                "act-lo-c",
+                "act-up-c",
+                "precont",
+                "prepowin",
+                "prepowout",
+                "ru",
+                "rd",
+                "rumax",
+                "rdmax",
+                "seasonal",
+                "ctr",
+            ]
+        ]
         evrys_model["Storage"] = sto
         del sto
 

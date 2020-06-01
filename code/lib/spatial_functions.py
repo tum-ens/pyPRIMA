@@ -181,6 +181,7 @@ def calc_region(region, Crd_reg, res_desired, GeoRef):
         with memfile.open(**profile) as f:
             f.write(A_region, 1)
             out_image, out_transform = mask.mask(f, features, crop=False, nodata=0, all_touched=False, filled=True)
+
         A_region = out_image[0]
 
     return A_region
@@ -478,6 +479,16 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
 
 def get_sites(points_shp, param):
     """
+    This function reads a shapefile of points, then performs a spatial join with a shapefile of regions to associate the names
+    of the regions to the attributes of the points. It also removes duplicates and points that lie outside the subregions.
+    
+    :param points_shp: A shapefile of points (power plants, storage devices, etc.)
+    :type points_shp: Geopandas dataframe
+    :param param: Dictionary of user-defined parameters, including the shapefile *regions_sub*.
+    :type param: dict
+    
+    :return located: The shapefile of points that are located within the subregions, with the name of the subregion as an attribute.
+    :rtype: Geopandas dataframe
     """
     regions = param["regions_sub"]
 
