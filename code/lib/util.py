@@ -40,27 +40,13 @@ def get_sectoral_profiles(paths, param):
     profiles_paths = paths["cleaned_profiles"]
 
     # Prepare the dataframe for the yearly load per sector
-    profiles = pd.DataFrame(columns=param["load"]["sectors"])
+    
+    profiles = pd.DataFrame(columns=paths["profiles"].keys())
+    #import pdb; pdb.set_trace()
+    
+    for key in paths["profiles"].keys():
+        profiles[key] = pd.read_csv(profiles_paths[key], sep=";", decimal=",", header=[0], index_col=[0])[key]
 
-    # Residential load
-    if "RES" in param["load"]["sectors"]:
-        profiles["RES"] = pd.read_csv(profiles_paths["RES"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
-
-    # Industrial load
-    if "IND" in param["load"]["sectors"]:
-        profiles["IND"] = pd.read_csv(profiles_paths["IND"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
-
-    # Commercial load
-    if "COM" in param["load"]["sectors"]:
-        profiles["COM"] = pd.read_csv(profiles_paths["COM"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
-
-    # Agricultural load
-    if "AGR" in param["load"]["sectors"]:
-        profiles["AGR"] = pd.read_csv(profiles_paths["AGR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
-
-    # Street lights
-    if "STR" in param["load"]["sectors"]:
-        profiles["STR"] = pd.read_csv(profiles_paths["STR"], sep=";", decimal=",", header=[0], index=[0]).to_numpy()
     timecheck("End")
     return profiles
 

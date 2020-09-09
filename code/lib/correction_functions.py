@@ -20,7 +20,6 @@ def clean_residential_load_profile(paths, param):
     dict_daytype = pd.read_csv(paths["dict_daytype"], sep=";", decimal=",", index_col=["Week day"])["Type"].to_dict()
     dict_season = pd.read_csv(paths["dict_season"], sep=";", decimal=",", index_col=["Month"])["Season"].to_dict()
     list_sectors = list(pd.read_csv(paths["dict_sectors"], sep=";", decimal=",", index_col=["Model_sectors"]).index.dropna().unique())
-    profiles_paths = paths["profiles"]
 
     # Prepare the dataframe for the daily load
     start = datetime.datetime(param["year"], 1, 1)

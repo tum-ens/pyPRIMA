@@ -45,18 +45,18 @@ def general_settings():
     global root
 
     param = {}
-    param["author"] = "Kais Siala"  # the name of the person running the script
-    param["comment"] = "Europe"
+    param["author"] = "User"  # the name of the person running the script
+    param["comment"] = "Tutorial"
 
     paths = {}
     fs = os.path.sep
     current_folder = os.path.dirname(os.path.abspath(__file__))
-    root = str(Path(current_folder).parent.parent.parent)
+    root = str(Path(current_folder).parent.parent)
     # For use at TUM ENS
     if root[-1] != fs:
-        root = root + fs + "Database_KS" + fs
+        root = root + fs + "Database" + fs
     else:
-        root = root + "Database_KS" + fs
+        root = root + "Database" + fs
 
     return paths, param
 
@@ -92,13 +92,13 @@ def scope_paths_and_parameters(paths, param):
     """
 
     # Paths to the shapefiles
-    PathTemp = root + "02 Shapefiles for regions" + fs + "User-defined" + fs
-    paths["spatial_scope"] = PathTemp + "Europe_NUTS0_wo_Balkans_with_EEZ.shp"
-    paths["subregions"] = PathTemp + "Europe_NUTS1_wo_Balkans.shp"
+    PathTemp = root + "02 Shapefiles for regions" + fs 
+    paths["spatial_scope"] = PathTemp + "User-defined" + fs + "gadm36_AUT_0.shp"# "Europe_NUTS0_wo_Balkans_with_EEZ.shp" # #
+    paths["subregions"] = PathTemp + "Clustering outputs" + fs + "Austria" + fs + "Wind_FLH - Solar_FLH" + fs + "05 final_output" + fs + "final_result.shp"
 
     # Name tags for the scope and the subregions
-    param["region_name"] = "Europe"  # Name tag of the spatial scope
-    param["subregions_name"] = "Europe_wo_Balkans_NUTS1"  # Name tag of the subregions
+    param["region_name"] = "Austria"  # Name tag of the spatial scope
+    param["subregions_name"] = "Austria"  # Name tag of the subregions
 
     # Year
     param["year"] = 2015  # Data
@@ -107,7 +107,7 @@ def scope_paths_and_parameters(paths, param):
     # Technologies
     param["technology"] = {
         "Storage": ["Battery", "PumSt"],
-        "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOff", "WindOn"],
+        "Process": ["Bioenergy", "Coal", "Gas", "Geothermal", "Hydro", "Lignite", "Nuclear", "OilOther", "Solar", "WindOn"],
     }
 
     return paths, param
@@ -213,7 +213,7 @@ def processes_parameters(param):
     param["process"] = {"cohorts": 1}  # 5 means 5-year steps, if no cohorts needed type 1
 
     param["dist_ren"] = {
-        "units": {"Solar": 5, "WindOn": 10, "WindOff": 20, "Bioenergy": 10, "Hydro": 50},
+        "units": {"Solar": 5, "WindOn": 10, "Bioenergy": 10, "Hydro": 50},
         "randomness": 0.99,
         "default_pa_type": np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "default_pa_availability": np.array([1.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.25, 1.00, 1.00, 1.00, 1.00]),
@@ -513,9 +513,9 @@ def renewable_time_series_paths(paths, param):
     PathTemp = paths["region"] + "Renewable energy" + fs + "Regional analysis" + fs + subregions + fs + "Regression outputs" + fs
 
     paths["TS_ren"] = {
-        "WindOn": PathTemp + "Geothermal_WGC_WindOn_reg_TimeSeries_80_100_120_2015.csv",
+        "WindOn": PathTemp + "Austria_WindOn_reg_TimeSeries_80_2015.csv",
         "WindOff": PathTemp + "",
-        "PV": PathTemp + "Geothermal_WGC_PV_reg_TimeSeries_0_180_-90_90_2015.csv",
+        "PV": PathTemp + "Austria_PV_reg_TimeSeries_0_2015.csv",
         "CSP": PathTemp + "",
     }
 
@@ -565,14 +565,14 @@ def processes_input_paths(paths, param):
     PathTemp = root + "01 Raw inputs" + fs + "Renewable energy" + fs
     paths["IRENA"] = PathTemp + "IRENA" + fs + "IRENA_RE_electricity_statistics_allcountries_alltech_" + year + ".csv"
 
-    PathTemp = root + "03 Intermediate files" + fs + "Files Europe" + fs + "Renewable energy" + fs + "Potential" + fs
+    PathTemp = root + "03 Intermediate files" + fs + "Files Austria" + fs + "Renewable energy" + fs + "Potential" + fs
     paths["dist_ren"] = {
         "rasters": {
-            "Solar": PathTemp + "Europe_PV_0_FLH_mask_2015.tif",
-            "WindOn": PathTemp + "Europe_WindOn_100_FLH_mask_2015.tif",
-            "WindOff": PathTemp + "Europe_WindOff_80_FLH_mask_2015.tif",
-            "Bioenergy": PathTemp + "Europe_Bioenergy_potential_distribution.tif",
-            "Hydro": PathTemp + "Europe_Hydro_potential_distribution.tif",
+            "Solar": PathTemp + "Austria_PV_0_FLH_mask_2015.tif",
+            "WindOn": PathTemp + "Austria_WindOn_100_FLH_mask_2015.tif",
+            #"WindOff": PathTemp + "Austria_WindOff_80_FLH_mask_2015.tif",
+            "Bioenergy": PathTemp + "Austria_PV_0_FLH_mask_2015.tif",
+            "Hydro": PathTemp + "Austria_PV_0_FLH_mask_2015.tif",
         }
     }
 
@@ -758,7 +758,7 @@ def output_paths(paths, param):
     paths["locations_ren"] = {
         "Solar": paths["proc"] + "Solar.shp",
         "WindOn": paths["proc"] + "WindOn.shp",
-        "WindOff": paths["proc"] + "WindOff.shp",
+        #"WindOff": paths["proc"] + "WindOff.shp",
         "Bioenergy": paths["proc"] + "Bioenergy.shp",
         "Hydro": paths["proc"] + "Hydro.shp",
     }

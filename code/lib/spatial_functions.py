@@ -386,7 +386,6 @@ def create_shapefiles_of_ren_power_plants(paths, param, inst_cap, tech):
         with rasterio.open(paths["PA"]) as src:
             A_protect = np.flipud(src.read(1)).astype(int)
         raster = changem(A_protect, param["dist_ren"]["default_pa_availability"], param["dist_ren"]["default_pa_type"]).astype(float)
-
     status = 0
     ind_needed = {}
     x = y = p = c = []
