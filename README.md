@@ -1,7 +1,4 @@
 <div align="left">
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
 <img src="doc\img\pyPRIMA_logo.png" alt="pyPRIMA_logo" width="160px">
 </div>
 
@@ -29,19 +26,6 @@ This code is useful if:
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tr>
-    <td align="center"><a href="https://github.com/molarana"><img src="https://avatars.githubusercontent.com/u/19924540?v=4?s=100" width="100px;" alt=""/><br /><sub><b>molarana</b></sub></a><br /><a href="#design-molarana" title="Design">🎨</a></td>
-  </tr>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
@@ -49,6 +33,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
   <tr>
     <td align="center"><a href="https://github.com/kais-siala"><img src="https://avatars2.githubusercontent.com/u/21306297?v=4" width="100px;" alt="kais-siala"/><br /><sub><b>kais-siala</b></sub></a><br /><a href="#question-kais-siala" title="Answering Questions">💬</a> <a href="https://github.com/tum-ens/renewable-timeseries/issues?q=author%3Akais-siala" title="Bug reports">🐛</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Code">💻</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Documentation">📖</a> <a href="#ideas-kais-siala" title="Ideas, Planning, & Feedback">🤔</a> <a href="#maintenance-kais-siala" title="Maintenance">🚧</a> <a href="#review-kais-siala" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=kais-siala" title="Tests">⚠️</a> <a href="#talk-kais-siala" title="Talks">📢</a></td>
     <td align="center"><a href="https://github.com/HoussameH"><img src="https://avatars2.githubusercontent.com/u/48953960?v=4" width="100px;" alt="HoussameH"/><br /><sub><b>HoussameH</b></sub></a><br /> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=HoussameH" title="Code">💻</a> <a href="https://github.com/tum-ens/renewable-timeseries/commits?author=HoussameH" title="Documentation">📖</a></td>
+    <td align="center"><a href="https://github.com/molarana"><img src="https://avatars.githubusercontent.com/u/19924540?v=4?s=100" width="100px;" alt=""/><br /><sub><b>molarana</b></sub></a><br /><a href="#design-molarana" title="Design">🎨</a></td>
   </tr>
 </table>
 
