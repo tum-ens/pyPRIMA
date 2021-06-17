@@ -1,0 +1,24 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "molarana",
+      "name": "molarana",
+      "avatar_url": "https://avatars.githubusercontent.com/u/19924540?v=4",
+      "profile": "https://github.com/molarana",
+      "contributions": [
+        "design"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "projectName": "pyPRIMA",
+  "projectOwner": "tum-ens",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "skipCi": true
+}
