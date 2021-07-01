@@ -1,5 +1,5 @@
-from lib.input_maps import generate_protected_areas
-from lib.util import *
+from .input_maps import generate_protected_areas
+from .util import *
 
 
 def define_spatial_scope(scope_shp):

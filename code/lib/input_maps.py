@@ -1,4 +1,4 @@
-from lib.util import *
+from .util import *
 import lib.spatial_functions as spatial_functions
 
 

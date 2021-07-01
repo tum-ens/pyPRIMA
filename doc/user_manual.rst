@@ -10,7 +10,7 @@ First, clone the git repository in a directory of your choice using a Command Pr
 
 	$ ~\directory-of-my-choice> git clone https://github.com/tum-ens/pyPRIMA.git
 
-We recommend using conda and installing the environment from the file ``gen_mod.yml`` that you can find in the repository. In the Command Prompt window, type::
+We recommend using conda and installing the environment from the file ``pyPRIMA.yml`` that you can find in the repository. In the Command Prompt window, type::
 
 	$ cd pyPRIMA\env\
 	$ conda env create -f gen_mod.yml
