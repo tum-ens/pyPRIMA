@@ -2,6 +2,18 @@
 pyPRIMA
 ========
 
+.. figure:: img/pyPRIMA_logo.png
+   :width: 20%
+   :align: left
+   :alt: pyPRIMA_logo
+
+.. |br| raw:: html
+
+   <br />
+
+|br|
+
+|br|
 ------------------------------------------------------------------------
 python PReprocessing of Inputs for Model frAmeworks
 ------------------------------------------------------------------------
