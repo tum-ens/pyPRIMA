@@ -24,7 +24,7 @@ copyright = "ENS 2019"
 author = "Kais Siala, Houssame Houmy"
 
 # The full version, including alpha/beta/rc tags
-release = "1.0.0"
+release = "1.0.1"
 version = release
 
 # -- General configuration ---------------------------------------------------

@@ -63,30 +63,29 @@ def initialization():
         eez_shp["geometry"] = eez_shp["geometry"].buffer(0)
         eez_shp["geometry"] = eez_shp["geometry"].intersection(bounds_box)
         eez_shp = eez_shp[eez_shp.geometry.area > 0]
-        param["regions_sea"] = eez_shp
-        param["nRegions_sea"] = len(param["regions_sea"])
-        Crd_regions_sea = np.zeros((param["nRegions_sea"], 4))
-
-        for reg in range(0, param["nRegions_sea"]):
-            # Box coordinates for MERRA2 data
-            r = eez_shp.bounds.iloc[reg]
-            box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
-            Crd_regions_sea[reg, :] = crd_merra(box, res_weather)
-
-        # Saving parameters
-        param["Crd_regions"] = np.concatenate((Crd_regions_land, Crd_regions_sea), axis=0)
 
     except:
+        # If the file is missing, create an empty dataframe
+        eez_shp = gpd.GeoDataFrame()
         print("#############################################################")
         print("EEZ_global shapefile is missing in the database.")
         print("If you want to run this step, make sure, it is downloaded and at the defined path (check config.py).")
         print("For the tutorial, you can ignore this.")
         print("#############################################################")
 
-        # Saving parameters without sea
-        param["Crd_regions"] = np.concatenate((Crd_regions_land), axis=0)
 
+    param["regions_sea"] = eez_shp
+    param["nRegions_sea"] = len(param["regions_sea"])
+    Crd_regions_sea = np.zeros((param["nRegions_sea"], 4))
 
+    for reg in range(0, param["nRegions_sea"]):
+        # Box coordinates for MERRA2 data
+        r = eez_shp.bounds.iloc[reg]
+        box = np.array([r["maxy"], r["maxx"], r["miny"], r["minx"]])[np.newaxis]
+        Crd_regions_sea[reg, :] = crd_merra(box, res_weather)
+
+    # Saving parameters
+    param["Crd_regions"] = np.concatenate((Crd_regions_land, Crd_regions_sea), axis=0)
 
     timecheck("Read shapefile of subregions")
     # Read shapefile of regions

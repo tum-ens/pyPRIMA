@@ -13,11 +13,11 @@ First, clone the git repository in a directory of your choice using a Command Pr
 We recommend using conda and installing the environment from the file ``pyPRIMA.yml`` that you can find in the repository. In the Command Prompt window, type::
 
 	$ cd pyPRIMA\env\
-	$ conda env create -f gen_mod.yml
+	$ conda env create -f pyPRIMA.yml
 
 Then activate the environment::
 
-	$ conda activate gen_mod
+	$ conda activate pyPRIMA
 
 In the folder ``code``, you will find multiple files:
 

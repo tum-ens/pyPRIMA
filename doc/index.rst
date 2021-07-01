@@ -45,6 +45,11 @@ This code is useful if:
 
 Changes
 --------
+version 1.0.1
+^^^^^^^^^^^^^^
+* Adding logo for the tool.
+* Minor fixes and improvements.
+
 version 1.0.0
 ^^^^^^^^^^^^^^
 This is the initial version.
