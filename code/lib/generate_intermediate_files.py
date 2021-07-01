@@ -1,6 +1,6 @@
-from lib.correction_functions import get_sectoral_profiles, clean_names
-from lib.spatial_functions import *
-from lib.input_maps import *
+from .correction_functions import get_sectoral_profiles, clean_names
+from .spatial_functions import *
+from .input_maps import *
 
 
 def generate_sites_from_shapefile(paths, param):

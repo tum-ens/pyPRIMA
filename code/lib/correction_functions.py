@@ -1,5 +1,5 @@
-from lib.spatial_functions import create_shapefiles_of_ren_power_plants
-from lib.util import *
+from .spatial_functions import create_shapefiles_of_ren_power_plants
+from .util import *
 
 
 def clean_residential_load_profile(paths, param):

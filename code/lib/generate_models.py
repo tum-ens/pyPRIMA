@@ -1,4 +1,4 @@
-from lib.util import *
+from .util import *
 
 
 def generate_urbs_model(paths, param):

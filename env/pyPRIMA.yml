@@ -1,4 +1,4 @@
-name: gen_mod
+name: pyPRIMA
 channels:
   - defaults
   - conda-forge
@@ -20,5 +20,5 @@ dependencies:
   - scipy=1.3.1
   - shapely=1.6.4
   - xlrd=1.2.0
-prefix: D:\Miniconda3\envs\gen_mod
+# prefix: D:\Miniconda3\envs\pyPRIMA
 

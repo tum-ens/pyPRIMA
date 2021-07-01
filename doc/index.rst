@@ -2,6 +2,18 @@
 pyPRIMA
 ========
 
+.. figure:: img/pyPRIMA_logo.png
+   :width: 20%
+   :align: left
+   :alt: pyPRIMA_logo
+
+.. |br| raw:: html
+
+   <br />
+
+|br|
+
+|br|
 ------------------------------------------------------------------------
 python PReprocessing of Inputs for Model frAmeworks
 ------------------------------------------------------------------------
@@ -33,6 +45,11 @@ This code is useful if:
 
 Changes
 --------
+version 1.0.1
+^^^^^^^^^^^^^^
+* Adding logo for the tool.
+* Minor fixes and improvements.
+
 version 1.0.0
 ^^^^^^^^^^^^^^
 This is the initial version.
