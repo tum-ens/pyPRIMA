@@ -47,4 +47,4 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
 
 ## Please cite as:
-Kais Siala and Houssame Houmy. (2020, June 1). tum-ens/pyPRIMA: python PReprocessing of Inputs for Model frAmeworks (Version v1.0.0). Zenodo. http://doi.org/10.5281/zenodo.3872023
+Kais Siala and Houssame Houmy. (2020, June 1). tum-ens/pyPRIMA: python PReprocessing of Inputs for Model frAmeworks (Version v1.0.1). Zenodo. http://doi.org/10.5281/zenodo.3872023
